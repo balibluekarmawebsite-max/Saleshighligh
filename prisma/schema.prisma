@@ -136,7 +136,8 @@ model Property {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  periods ReportPeriod[]
+  periods       ReportPeriod[]
+  importHistory ImportHistory[]
 
   @@map("properties")
 }
@@ -525,6 +526,22 @@ model NarrativeContent {
 
   @@unique([periodId, section])
   @@map("narrative_content")
+}
+
+/// Audit log of monthly workbook imports (who, when, file, per-tab row counts).
+model ImportHistory {
+  id         String   @id @default(cuid())
+  propertyId String
+  period     DateTime @db.Date
+  fileName   String
+  uploadedBy String?
+  rowCounts  Json
+  createdAt  DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, period])
+  @@map("import_history")
 }
 
 /// Influencer / KOL collaborations for the month.

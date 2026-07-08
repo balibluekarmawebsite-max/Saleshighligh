@@ -181,8 +181,17 @@ reputation, social, booking pace, forecast, narrative, influencers.
 `lib/calculations.ts` (pure functions + vitest) holds every derived metric.
 Seed: the 3 properties + a fully-populated BKDS June 2026 demo period (real
 values where available). Migration + `seed.sql` generated.
-_Still to do:_ SheetJS parsers for the monthly workbooks and an upload flow
-with validation and row-level error reporting.
+
+**Ingestion system.** ✅ Template generator, upload/parse, validation, preview,
+and transactional import are live under `/admin/*`. One shared spec
+(`lib/import/schema.ts`) drives both the SheetJS template generator
+(`lib/import/template.ts`, route `/admin/template`) and the parser/validator
+(`lib/import/parse.ts` — Indonesian number handling, enum/negative checks,
+tab/property/period matching). `/admin/import` uploads → previews row counts +
+issues → confirms → transactional per-tab upsert (`lib/import/apply.ts`) with
+an `ImportHistory` audit row; FINAL periods are locked. Sample workbook in
+`/samples`. _Still to do:_ manual-entry forms (react-hook-form + zod), narrative
+rich-text (TipTap) + image upload, and admin auth for the draft→final control.
 
 **Phase 2 — Executive Summary & Rooms. 🚧 In progress.**
 Executive Summary vs Budget with variance KPIs (occupancy/ADR/RevPAR/revenue),

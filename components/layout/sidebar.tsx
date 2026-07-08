@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings } from "lucide-react";
+import { FileSpreadsheet, Upload } from "lucide-react";
 
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -60,12 +60,41 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="border-t border-border px-3 py-4">
-        <span className="flex cursor-default items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground">
-          <Settings className="h-4 w-4 shrink-0" />
-          <span>Settings</span>
-        </span>
+      {/* Footer — data admin */}
+      <div className="space-y-1 border-t border-border px-3 py-4">
+        <p className="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Admin
+        </p>
+        {[
+          { label: "Import Data", href: "/admin/import", icon: Upload },
+          { label: "Get Template", href: "/admin/template", icon: FileSpreadsheet },
+        ].map((item) => {
+          const Icon = item.icon;
+          const active = pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                active
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "h-4 w-0.5 rounded-full",
+                  active ? "bg-[hsl(var(--brand-gold))]" : "bg-transparent",
+                )}
+                aria-hidden
+              />
+              <Icon className="h-4 w-4 shrink-0" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
       </div>
     </aside>
   );
