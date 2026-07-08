@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * BK Sales Dashboard design system.
+ *
+ * Palette: white background, deep teal (#0F4C5C) primary, gold (#C9A227) accent.
+ * Tokens follow the shadcn/ui convention (HSL channels, no hsl() wrapper) so the
+ * Tailwind `bg-primary`, `text-muted-foreground`, etc. utilities resolve here.
+ */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 200 18% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 18% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 18% 14%;
+
+    /* Deep teal #0F4C5C */
+    --primary: 193 72% 21%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Soft teal tint used for subtle surfaces */
+    --secondary: 193 30% 96%;
+    --secondary-foreground: 193 72% 21%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 215 14% 45%;
+
+    /* Light teal for hover / active surfaces */
+    --accent: 193 42% 94%;
+    --accent-foreground: 193 72% 21%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: 193 72% 21%;
+
+    /* Gold #C9A227 — exposed for accent details (indicators, logo mark). */
+    --brand-gold: 46 67% 47%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 200 30% 8%;
+    --foreground: 0 0% 98%;
+
+    --card: 200 28% 11%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 200 28% 11%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 193 55% 55%;
+    --primary-foreground: 200 30% 8%;
+
+    --secondary: 200 20% 18%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 200 20% 18%;
+    --muted-foreground: 210 12% 65%;
+
+    --accent: 200 22% 20%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 200 18% 22%;
+    --input: 200 18% 22%;
+    --ring: 193 55% 55%;
+
+    --brand-gold: 46 67% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+}
