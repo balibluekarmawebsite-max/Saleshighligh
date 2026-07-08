@@ -35,7 +35,9 @@ export default function HomePage() {
             <h3 className="mt-2 text-base font-semibold text-foreground">
               {property.name}
             </h3>
-            <p className="text-sm text-muted-foreground">{property.location}</p>
+            <p className="text-sm text-muted-foreground">
+              {property.area} · {property.roomCount} rooms
+            </p>
             <dl className="mt-4 space-y-1 text-sm">
               <div className="flex justify-between">
                 <dt className="text-muted-foreground">Restaurant</dt>

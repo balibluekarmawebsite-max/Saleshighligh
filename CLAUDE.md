@@ -68,9 +68,13 @@ set up, prefer **`prisma migrate`** (versioned migration files under
 
 Conventions:
 
-- Money stored as integer IDR (use `BigInt` where values can exceed 2^31).
-- Native `enum` types and scalar arrays are now available (Postgres); introduce
-  them where they add clarity.
+- **Store only RAW inputs.** Every derived metric (variance, achievement %,
+  RevPAR, ADR, ROAS, average check, MoM, YTD accumulation) is computed in
+  `lib/calculations.ts` — never persisted.
+- Everything is keyed by **(propertyId, period)**, where `period` is the first
+  day of the month (`ReportPeriod` is the parent of a month's data).
+- Money and rates are **`Decimal`** (Postgres `numeric`); counts are `Int`;
+  ratios/percentages are `Decimal`. Native `enum` types are used throughout.
 
 ---
 
@@ -84,13 +88,20 @@ Conventions:
   /charts     Recharts chart components
   /tables     data-table components
 /lib
-  utils.ts    cn() class-name helper
-  format.ts   IDR / percentage / variance formatting
-  prisma.ts   Prisma client singleton
-  constants.ts  properties, outlets, report sections
-  /calculations  pure business calculations (variance, ADR, RevPAR, ROAS, …)
-  /parsers       SheetJS parsers for uploaded workbooks
-/prisma       schema.prisma
+  utils.ts          cn() class-name helper
+  format.ts         IDR / percentage / variance formatting
+  prisma.ts         Prisma client singleton
+  constants.ts      properties, report sections
+  calculations.ts   pure business calculations (+ calculations.test.ts, vitest)
+  /parsers          SheetJS parsers for uploaded workbooks (later phase)
+/prisma
+  schema.prisma     23 models + 13 enums (see roadmap)
+  seed-data.ts      shared demo data (single source of truth)
+  seed.ts           Prisma seed (npm run db:seed)
+  seed.sql          generated SQL seed (for the Supabase SQL editor)
+  gen-seed-sql.ts   regenerates seed.sql from seed-data.ts
+  verify.ts         post-seed sanity check (npm run db:verify)
+  /migrations       versioned SQL migrations
 /public       static assets
 ```
 
@@ -140,27 +151,38 @@ npm run dev         # start the dev server
 npm run build       # production build
 npm run lint        # eslint (next/core-web-vitals + next/typescript)
 npm run typecheck   # tsc --noEmit
+npm run test        # vitest (calculations unit tests)
 npm run format      # prettier
 
 npm run db:generate # prisma generate
 npm run db:migrate  # create + apply a versioned migration (preferred)
 npm run db:push     # push schema without a migration (prototyping only)
+npm run db:seed     # seed properties + BKDS June 2026 demo period
+npm run db:verify   # read the demo period back + print a derived example
 npm run db:studio   # Prisma Studio
+
+# Regenerate prisma/seed.sql after editing prisma/seed-data.ts:
+npx tsx prisma/gen-seed-sql.ts
 ```
 
 ---
 
 ## 6. Phase roadmap
 
-**Phase 0 — Scaffolding & design system (this commit).**
+**Phase 0 — Scaffolding & design system. ✅ Done.**
 Project setup, folder structure, Tailwind + shadcn design system, brand
-palette, formatting helpers, Prisma schema (foundational reference data),
-app shell (sidebar + topbar), CLAUDE.md. No dashboard pages yet.
+palette, formatting helpers, app shell (sidebar + topbar), CLAUDE.md.
+Supabase (Postgres) configured.
 
-**Phase 1 — Data model & ingestion.**
-Flesh out the Prisma schema for all report sections (rooms, F&B, spa, ads,
-reputation, forecasts). Build SheetJS parsers for the monthly workbooks and an
-upload flow with validation and row-level error reporting.
+**Phase 1 — Data model, calculations & seed. ✅ Done (schema).**
+Full Prisma schema (23 models + 13 enums) covering executive summary, rooms
+(segment, room type, nationality, LOS, accounts), digital ads, F&B, spa,
+reputation, social, booking pace, forecast, narrative, influencers.
+`lib/calculations.ts` (pure functions + vitest) holds every derived metric.
+Seed: the 3 properties + a fully-populated BKDS June 2026 demo period (real
+values where available). Migration + `seed.sql` generated.
+_Still to do:_ SheetJS parsers for the monthly workbooks and an upload flow
+with validation and row-level error reporting.
 
 **Phase 2 — Executive Summary & Rooms.**
 Executive Summary vs Budget with variance KPIs; Rooms Analytics (market

@@ -1,21 +1,18 @@
-// BK Sales Dashboard — Prisma schema
+// BK Sales Dashboard — Prisma schema (Phase 1)
 //
 // Database: Supabase (Postgres) for all environments.
-//   - DATABASE_URL: the Supabase connection pooler (Supavisor, port 6543,
-//     transaction mode) used by the app at runtime. Append `?pgbouncer=true`.
-//   - DIRECT_URL:   a direct/session connection (port 5432) used by Prisma
-//     Migrate and Introspect, which can't run through the transaction pooler.
-// See .env.example for the exact connection-string formats.
+//   - DATABASE_URL: transaction pooler (port 6543, ?pgbouncer=true) — runtime.
+//   - DIRECT_URL:   session/direct connection (port 5432) — Prisma Migrate.
 //
-// Conventions for this schema:
-//   - Money is stored in IDR as integers (the currency has no minor units in
-//     practice). Use BigInt where values may exceed 2^31.
-//   - Now that we're Postgres-only, native `enum` types and scalar arrays are
-//     available; introduce them in later phases where they add clarity.
-//
-// This is intentionally minimal for the scaffolding phase — only foundational
-// reference data (properties and their outlets) is modelled here. Analytics
-// tables are added in later phases (see CLAUDE.md roadmap).
+// Modelling principles (see CLAUDE.md):
+//   - Everything is keyed by (propertyId, period) where `period` is the first
+//     day of the month (a Date). ReportPeriod is the parent of a month's data.
+//   - Store only RAW inputs. All derived metrics (variance, achievement %,
+//     RevPAR, ROAS, average check, MoM, YTD accumulation) are computed in
+//     lib/calculations.ts — never persisted.
+//   - Money and rates are Decimal (Postgres numeric); counts are Int;
+//     ratios/percentages are Decimal. IDR values have no minor units in
+//     practice but Decimal keeps parsing/aggregation exact.
 
 generator client {
   provider = "prisma-client-js"
@@ -27,34 +24,521 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ─── Enums ────────────────────────────────────────────────────────────────
+
+enum ReportStatus {
+  DRAFT
+  FINAL
+}
+
+enum Scope {
+  MTD
+  YTD
+}
+
+enum Series {
+  ACTUAL
+  BUDGET
+  LAST_YEAR
+}
+
+enum Department {
+  OCCUPANCY
+  ADR
+  REVPAR
+  ROOM_REVENUE
+  FNB
+  SPA_WELLNESS
+  GALLERY
+  OOD
+  TOTAL_REVENUE
+}
+
+enum AccountType {
+  OTA
+  TA
+  CORPORATE
+  WHOLESALER
+}
+
+enum BusinessUnit {
+  HOTEL
+  RESTAURANT
+  SPA
+}
+
+enum AdsPlatform {
+  GOOGLE
+  META
+  CORPORATE
+}
+
+enum MealPeriod {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum FnbChannel {
+  WALK_IN
+  REPEATER
+  CHOPE
+  CATERING
+}
+
+enum SpaGuestSegment {
+  IN_HOUSE
+  OUTSIDE
+  INCLUSION
+}
+
+enum RankingPlatform {
+  BOOKING
+  EXPEDIA
+  TRIPADVISOR
+}
+
+enum SocialPlatform {
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  YOUTUBE
+}
+
+enum NarrativeSection {
+  SUMMARY
+  EXTERNAL_FACTORS
+  INTERNAL_FACTORS
+  ROOMTYPE_ANALYSIS
+  RESTAURANT_OVERVIEW
+  SPA_OVERVIEW
+  ACTION_PLAN
+  MARKETING_PLAN
+  SOCIAL_PLAN
+  CONSORTIA
+  MAGAZINE
+  PR
+  PROMOTIONS
+}
+
+// ─── Core ─────────────────────────────────────────────────────────────────
+
 /// The three Blue Karma properties.
 model Property {
-  id        String   @id @default(cuid())
+  id             String   @id @default(cuid())
   /// Short code: "BKDS", "BKDU", or "BKV".
-  code      String   @unique
-  name      String
-  location  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  code           String   @unique
+  name           String
+  restaurantName String
+  spaName        String
+  roomCount      Int
+  area           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  outlets Outlet[]
+  periods ReportPeriod[]
 
   @@map("properties")
 }
 
-/// Restaurant and spa outlets belonging to a property.
-model Outlet {
-  id         String   @id @default(cuid())
+/// One month of data for one property — the parent of every section below.
+model ReportPeriod {
+  id         String       @id @default(cuid())
   propertyId String
-  /// Outlet kind: "restaurant" or "spa".
-  kind       String
-  name       String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  /// First day of the reported month (e.g. 2026-06-01).
+  period     DateTime     @db.Date
+  status     ReportStatus @default(DRAFT)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  @@unique([propertyId, kind])
-  @@index([propertyId])
-  @@map("outlets")
+  revenueSummaries   RevenueSummary[]
+  segmentProduction  SegmentProduction[]
+  roomTypeProduction RoomTypeProduction[]
+  nationality        NationalityProduction[]
+  lengthOfStay       LengthOfStay[]
+  accountProduction  AccountProduction[]
+  adsPerformance     AdsPerformance[]
+  fnbSales           FnbSales[]
+  fnbSources         FnbSourceOfBooking[]
+  fnbAcquisition     FnbAcquisition[]
+  chopeReports       ChopeReport[]
+  gokaiReports       GokaiReport[]
+  spaSales           SpaSales[]
+  spaTreatments      SpaTreatment[]
+  platformRankings   PlatformRanking[]
+  tripadvisorMetrics TripadvisorMetrics[]
+  socialMediaMetrics SocialMediaMetrics[]
+  bookingPace        BookingPace[]
+  forecasts          Forecast[]
+  narrativeContent   NarrativeContent[]
+  influencerCollabs  InfluencerCollab[]
+
+  @@unique([propertyId, period])
+  @@map("report_periods")
+}
+
+// ─── Executive summary / rooms ──────────────────────────────────────────────
+
+/// Executive summary line items — actual vs budget vs last year, per department.
+/// OCCUPANCY/ADR/REVPAR are stored here too (as ratios/amounts) alongside revenue.
+model RevenueSummary {
+  id         String     @id @default(cuid())
+  periodId   String
+  department Department
+  actual     Decimal    @db.Decimal(18, 2)
+  budget     Decimal    @db.Decimal(18, 2)
+  lastYear   Decimal?   @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, department])
+  @@map("revenue_summaries")
+}
+
+/// Room production by market segment (MTD/YTD, actual/budget/last-year).
+model SegmentProduction {
+  id          String  @id @default(cuid())
+  periodId    String
+  scope       Scope
+  segmentName String
+  roomNights  Int
+  arr         Decimal @db.Decimal(18, 2)
+  roomRevenue Decimal @db.Decimal(18, 2)
+  series      Series
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, scope, segmentName, series])
+  @@map("segment_production")
+}
+
+/// Room production by room type (actual vs budget).
+model RoomTypeProduction {
+  id               String  @id @default(cuid())
+  periodId         String
+  roomTypeName     String
+  roomNightsActual Int
+  roomNightsBudget Int
+  adrActual        Decimal @db.Decimal(18, 2)
+  adrBudget        Decimal @db.Decimal(18, 2)
+  revenueActual    Decimal @db.Decimal(18, 2)
+  revenueBudget    Decimal @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, roomTypeName])
+  @@map("room_type_production")
+}
+
+/// Room production by guest nationality (MTD/YTD).
+model NationalityProduction {
+  id                 String  @id @default(cuid())
+  periodId           String
+  scope              Scope
+  countryCode        String?
+  countryName        String
+  roomNights         Int
+  guests             Int?
+  roomNightsLastYear Int?
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, scope, countryName])
+  @@map("nationality_production")
+}
+
+/// Length-of-stay distribution by nights bucket.
+model LengthOfStay {
+  id                 String @id @default(cuid())
+  periodId           String
+  /// "1", "2", "3", "4", "5", "6", "7+".
+  losBucket          String
+  bookings           Int
+  roomNights         Int
+  lastYearRoomNights Int?
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, losBucket])
+  @@map("length_of_stay")
+}
+
+/// Top account / channel production (YTD).
+model AccountProduction {
+  id          String      @id @default(cuid())
+  periodId    String
+  accountName String
+  accountType AccountType
+  roomNights  Int
+  revenue     Decimal     @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, accountName])
+  @@map("account_production")
+}
+
+// ─── Digital ads ─────────────────────────────────────────────────────────────
+
+/// Paid advertising performance per business unit and platform.
+model AdsPerformance {
+  id             String       @id @default(cuid())
+  periodId       String
+  unit           BusinessUnit
+  platform       AdsPlatform
+  spend          Decimal      @db.Decimal(18, 2)
+  impressions    Int
+  clicks         Int
+  reach          Int?
+  trackedRevenue Decimal      @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, unit, platform])
+  @@map("ads_performance")
+}
+
+// ─── Food & Beverage ─────────────────────────────────────────────────────────
+
+/// Restaurant covers and revenue by meal period (actual vs budget).
+model FnbSales {
+  id            String     @id @default(cuid())
+  periodId      String
+  mealPeriod    MealPeriod
+  coversActual  Int
+  coversBudget  Int
+  revenueActual Decimal    @db.Decimal(18, 2)
+  revenueBudget Decimal    @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, mealPeriod])
+  @@map("fnb_sales")
+}
+
+/// Restaurant covers/revenue by source of booking (e.g. Chope, Grab, in-house).
+model FnbSourceOfBooking {
+  id         String  @id @default(cuid())
+  periodId   String
+  sourceName String
+  persons    Int
+  revenue    Decimal @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, sourceName])
+  @@map("fnb_source_of_booking")
+}
+
+/// Restaurant acquisition mix (share of bookings/covers by channel).
+model FnbAcquisition {
+  id          String     @id @default(cuid())
+  periodId    String
+  channel     FnbChannel
+  bookingsPct Decimal    @db.Decimal(9, 4)
+  coversPct   Decimal    @db.Decimal(9, 4)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, channel])
+  @@map("fnb_acquisition")
+}
+
+/// Chope reservation-platform report (one per period).
+model ChopeReport {
+  id                String  @id @default(cuid())
+  periodId          String
+  fulfilledBookings Int
+  fulfilledCovers   Int
+  cancelledBookings Int
+  cancelledCovers   Int
+  noShows           Int
+  revenue           Decimal @db.Decimal(18, 2)
+  platformBookings  Int
+  directBookings    Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId])
+  @@map("chope_reports")
+}
+
+/// Gokai CRM / upsell report per business unit.
+model GokaiReport {
+  id                  String       @id @default(cuid())
+  periodId            String
+  unit                BusinessUnit
+  signups             Int
+  openRatePct         Decimal      @db.Decimal(9, 4)
+  ctrPct              Decimal      @db.Decimal(9, 4)
+  surveyCompletionPct Decimal      @db.Decimal(9, 4)
+  productViews        Int
+  upsellSales         Int
+  upsellRevenue       Decimal      @db.Decimal(18, 2)
+  refunds             Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, unit])
+  @@map("gokai_reports")
+}
+
+// ─── Spa & Wellness ──────────────────────────────────────────────────────────
+
+/// Spa covers and revenue by guest segment (actual vs budget).
+model SpaSales {
+  id            String          @id @default(cuid())
+  periodId      String
+  guestSegment  SpaGuestSegment
+  coversActual  Int
+  coversBudget  Int
+  revenueActual Decimal         @db.Decimal(18, 2)
+  revenueBudget Decimal         @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, guestSegment])
+  @@map("spa_sales")
+}
+
+/// Top spa treatments by revenue.
+model SpaTreatment {
+  id             String  @id @default(cuid())
+  periodId       String
+  treatmentName  String
+  treatmentCount Int
+  revenue        Decimal @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, treatmentName])
+  @@map("spa_treatments")
+}
+
+// ─── Online reputation ───────────────────────────────────────────────────────
+
+/// OTA / review-platform ranking within the property's market.
+model PlatformRanking {
+  id            String          @id @default(cuid())
+  periodId      String
+  platform      RankingPlatform
+  rank          Int
+  totalInMarket Int?
+  rating        Decimal?        @db.Decimal(3, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, platform])
+  @@map("platform_rankings")
+}
+
+/// Tripadvisor engagement metrics per business unit.
+model TripadvisorMetrics {
+  id            String       @id @default(cuid())
+  periodId      String
+  unit          BusinessUnit
+  impressions   Int
+  pageVisitors  Int
+  newReviews    Int
+  avgRating     Decimal      @db.Decimal(3, 2)
+  websiteClicks Int
+  phoneCalls    Int
+  menuViews     Int?
+  mapViews      Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, unit])
+  @@map("tripadvisor_metrics")
+}
+
+// ─── Social media ────────────────────────────────────────────────────────────
+
+/// Organic social-media metrics per business unit and platform.
+model SocialMediaMetrics {
+  id              String         @id @default(cuid())
+  periodId        String
+  unit            BusinessUnit
+  platform        SocialPlatform
+  impressions     Int
+  reach           Int
+  interactions    Int
+  linkClicks      Int
+  profileVisits   Int
+  followersGained Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, unit, platform])
+  @@map("social_media_metrics")
+}
+
+// ─── Market intelligence & forecast ──────────────────────────────────────────
+
+/// Booking-pace snapshots: occupancy on the books for a target month.
+model BookingPace {
+  id                  String   @id @default(cuid())
+  periodId            String
+  snapshotDate        DateTime @db.Date
+  targetMonth         DateTime @db.Date
+  occupancyOnBooks    Decimal  @db.Decimal(9, 4)
+  previousSnapshotOcc Decimal? @db.Decimal(9, 4)
+  marketDemandPct     Decimal? @db.Decimal(9, 4)
+  note                String
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, targetMonth, snapshotDate])
+  @@map("booking_pace")
+}
+
+/// Six-month forward forecast per target month.
+model Forecast {
+  id              String   @id @default(cuid())
+  periodId        String
+  targetMonth     DateTime @db.Date
+  forecastOccPct  Decimal  @db.Decimal(9, 4)
+  lastYearOccPct  Decimal? @db.Decimal(9, 4)
+  marketDemandPct Decimal? @db.Decimal(9, 4)
+  forecastRevenue Decimal? @db.Decimal(18, 2)
+  budgetRevenue   Decimal? @db.Decimal(18, 2)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, targetMonth])
+  @@map("forecasts")
+}
+
+// ─── Narrative & partnerships ────────────────────────────────────────────────
+
+/// Free-text report narrative per section (may be AI-generated).
+model NarrativeContent {
+  id          String           @id @default(cuid())
+  periodId    String
+  section     NarrativeSection
+  content     String           @db.Text
+  aiGenerated Boolean          @default(false)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, section])
+  @@map("narrative_content")
+}
+
+/// Influencer / KOL collaborations for the month.
+model InfluencerCollab {
+  id        String  @id @default(cuid())
+  periodId  String
+  handle    String
+  name      String
+  followers Int
+  origin    String
+  notes     String?
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, handle])
+  @@map("influencer_collabs")
 }

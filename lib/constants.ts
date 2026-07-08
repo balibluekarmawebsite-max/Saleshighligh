@@ -11,32 +11,36 @@ export type PropertyCode = "BKDS" | "BKDU" | "BKV";
 export interface PropertyInfo {
   code: PropertyCode;
   name: string;
-  location: string;
+  area: string;
   restaurant: string;
   spa: string;
+  roomCount: number;
 }
 
 export const PROPERTIES: readonly PropertyInfo[] = [
   {
     code: "BKDS",
     name: "Blue Karma Dijiwa Seminyak",
-    location: "Seminyak, Bali",
+    area: "Seminyak",
     restaurant: "BKeto",
     spa: "Mudara",
+    roomCount: 18,
   },
   {
     code: "BKDU",
     name: "Blue Karma Dijiwa Ubud",
-    location: "Ubud, Bali",
+    area: "Ubud",
     restaurant: "Botanist",
     spa: "Flying Bamboo",
+    roomCount: 20,
   },
   {
     code: "BKV",
     name: "Blue Karma Village",
-    location: "Bali",
+    area: "Umalas",
     restaurant: "Hiiragi",
     spa: "Heiwa",
+    roomCount: 15,
   },
 ] as const;
 

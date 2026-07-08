@@ -22,6 +22,8 @@ npm install
 cp .env.example .env      # then fill in DATABASE_URL + DIRECT_URL from Supabase
 npm run db:generate       # generate the Prisma client
 npm run db:migrate        # create + apply the initial migration
+npm run db:seed           # seed properties + BKDS June 2026 demo period
+npm run db:verify         # sanity-check: prints a derived example
 
 # 3. Run the dev server
 npm run dev               # http://localhost:3000
@@ -40,9 +42,12 @@ Database → Connection string**. See `.env.example` for the exact formats.
 | `npm run start`      | Start the production server          |
 | `npm run lint`       | ESLint                               |
 | `npm run typecheck`  | `tsc --noEmit`                       |
+| `npm run test`       | Vitest (calculation unit tests)      |
 | `npm run format`     | Prettier                             |
 | `npm run db:generate`| Generate the Prisma client           |
 | `npm run db:migrate` | Create + apply a versioned migration |
+| `npm run db:seed`    | Seed properties + demo period        |
+| `npm run db:verify`  | Read demo data back + derived example|
 | `npm run db:studio`  | Open Prisma Studio                   |
 
 ## Database

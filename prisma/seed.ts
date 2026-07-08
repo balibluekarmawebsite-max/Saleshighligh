@@ -1,49 +1,91 @@
 import { PrismaClient } from "@prisma/client";
 
-import { PROPERTIES } from "../lib/constants";
+import * as data from "./seed-data";
 
 const prisma = new PrismaClient();
 
 /**
- * Seed foundational reference data: the three Blue Karma properties and their
- * restaurant + spa outlets. Idempotent — safe to run repeatedly (upserts on the
- * unique `code` / `[propertyId, kind]` keys).
+ * Seed the three properties and one fully-populated demo ReportPeriod
+ * (BKDS, June 2026). Idempotent: properties are upserted, and the demo
+ * period's child rows are cleared and re-created on each run.
  */
 async function main() {
-  for (const property of PROPERTIES) {
-    const record = await prisma.property.upsert({
+  // 1) Properties
+  for (const property of data.properties) {
+    const { id, ...rest } = property;
+    await prisma.property.upsert({
       where: { code: property.code },
-      update: { name: property.name, location: property.location },
-      create: {
-        code: property.code,
-        name: property.name,
-        location: property.location,
-      },
+      update: rest,
+      create: property,
     });
-
-    const outlets = [
-      { kind: "restaurant", name: property.restaurant },
-      { kind: "spa", name: property.spa },
-    ];
-
-    for (const outlet of outlets) {
-      await prisma.outlet.upsert({
-        where: {
-          propertyId_kind: { propertyId: record.id, kind: outlet.kind },
-        },
-        update: { name: outlet.name },
-        create: {
-          propertyId: record.id,
-          kind: outlet.kind,
-          name: outlet.name,
-        },
-      });
-    }
-
-    console.log(
-      `Seeded ${property.code} (${property.name}) with outlets: ${property.restaurant}, ${property.spa}`,
-    );
   }
+  console.log(`Seeded ${data.properties.length} properties.`);
+
+  // 2) The demo report period (BKDS, June 2026)
+  const period = await prisma.reportPeriod.upsert({
+    where: { id: data.BKDS_JUNE_PERIOD_ID },
+    update: { status: "FINAL" },
+    create: {
+      id: data.BKDS_JUNE_PERIOD_ID,
+      propertyId: data.BKDS_ID,
+      period: new Date(data.BKDS_JUNE_PERIOD),
+      status: "FINAL",
+    },
+  });
+  const periodId = period.id;
+
+  // 3) Replace all child rows for this period (clear then insert)
+  await Promise.all([
+    prisma.revenueSummary.deleteMany({ where: { periodId } }),
+    prisma.segmentProduction.deleteMany({ where: { periodId } }),
+    prisma.roomTypeProduction.deleteMany({ where: { periodId } }),
+    prisma.nationalityProduction.deleteMany({ where: { periodId } }),
+    prisma.lengthOfStay.deleteMany({ where: { periodId } }),
+    prisma.accountProduction.deleteMany({ where: { periodId } }),
+    prisma.adsPerformance.deleteMany({ where: { periodId } }),
+    prisma.fnbSales.deleteMany({ where: { periodId } }),
+    prisma.fnbSourceOfBooking.deleteMany({ where: { periodId } }),
+    prisma.fnbAcquisition.deleteMany({ where: { periodId } }),
+    prisma.chopeReport.deleteMany({ where: { periodId } }),
+    prisma.gokaiReport.deleteMany({ where: { periodId } }),
+    prisma.spaSales.deleteMany({ where: { periodId } }),
+    prisma.spaTreatment.deleteMany({ where: { periodId } }),
+    prisma.platformRanking.deleteMany({ where: { periodId } }),
+    prisma.tripadvisorMetrics.deleteMany({ where: { periodId } }),
+    prisma.socialMediaMetrics.deleteMany({ where: { periodId } }),
+    prisma.bookingPace.deleteMany({ where: { periodId } }),
+    prisma.forecast.deleteMany({ where: { periodId } }),
+    prisma.narrativeContent.deleteMany({ where: { periodId } }),
+    prisma.influencerCollab.deleteMany({ where: { periodId } }),
+  ]);
+
+  const withPeriod = <T>(rows: T[]) => rows.map((r) => ({ ...r, periodId }));
+
+  await prisma.revenueSummary.createMany({ data: withPeriod(data.revenueSummaries) });
+  await prisma.segmentProduction.createMany({ data: withPeriod(data.segmentProduction) });
+  await prisma.roomTypeProduction.createMany({ data: withPeriod(data.roomTypeProduction) });
+  await prisma.nationalityProduction.createMany({ data: withPeriod(data.nationalityProduction) });
+  await prisma.lengthOfStay.createMany({ data: withPeriod(data.lengthOfStay) });
+  await prisma.accountProduction.createMany({ data: withPeriod(data.accountProduction) });
+  await prisma.adsPerformance.createMany({ data: withPeriod(data.adsPerformance) });
+  await prisma.fnbSales.createMany({ data: withPeriod(data.fnbSales) });
+  await prisma.fnbSourceOfBooking.createMany({ data: withPeriod(data.fnbSources) });
+  await prisma.fnbAcquisition.createMany({ data: withPeriod(data.fnbAcquisition) });
+  await prisma.chopeReport.createMany({ data: withPeriod([data.chopeReport]) });
+  await prisma.gokaiReport.createMany({ data: withPeriod(data.gokaiReports) });
+  await prisma.spaSales.createMany({ data: withPeriod(data.spaSales) });
+  await prisma.spaTreatment.createMany({ data: withPeriod(data.spaTreatments) });
+  await prisma.platformRanking.createMany({ data: withPeriod(data.platformRankings) });
+  await prisma.tripadvisorMetrics.createMany({ data: withPeriod(data.tripadvisorMetrics) });
+  await prisma.socialMediaMetrics.createMany({ data: withPeriod(data.socialMediaMetrics) });
+  await prisma.bookingPace.createMany({ data: withPeriod(data.bookingPace) });
+  await prisma.forecast.createMany({ data: withPeriod(data.forecasts) });
+  await prisma.narrativeContent.createMany({ data: withPeriod(data.narrativeContent) });
+  await prisma.influencerCollab.createMany({ data: withPeriod(data.influencerCollabs) });
+
+  console.log(
+    `Seeded demo period BKDS ${data.BKDS_JUNE_PERIOD} (id=${periodId}) across all sections.`,
+  );
 }
 
 main()
