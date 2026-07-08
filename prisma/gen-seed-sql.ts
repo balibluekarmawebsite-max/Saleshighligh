@@ -25,7 +25,13 @@ function childBlock(
   periodId: string = PID,
 ): string {
   if (rows.length === 0) return "";
-  const withPid = rows.map((r) => ({ periodId, ...r }));
+  // Child `id` columns default to cuid() at the Prisma layer, which does not
+  // exist in raw SQL — so emit an explicit, deterministic id per row.
+  const withPid = rows.map((r, i) => ({
+    id: `${table}_${periodId}_${i}`,
+    periodId,
+    ...r,
+  }));
   const columns: string[] = [];
   for (const row of withPid) {
     for (const key of Object.keys(row)) {
