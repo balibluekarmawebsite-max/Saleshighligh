@@ -184,10 +184,14 @@ values where available). Migration + `seed.sql` generated.
 _Still to do:_ SheetJS parsers for the monthly workbooks and an upload flow
 with validation and row-level error reporting.
 
-**Phase 2 — Executive Summary & Rooms.**
-Executive Summary vs Budget with variance KPIs; Rooms Analytics (market
-segment, room type, nationality, geography, length of stay, account
-production) with Recharts visualizations and data tables.
+**Phase 2 — Executive Summary & Rooms. 🚧 In progress.**
+Executive Summary vs Budget with variance KPIs (occupancy/ADR/RevPAR/revenue),
+revenue-by-department, and Rooms market-segment charts + tables are live on the
+Overview page (`app/page.tsx`) with a property switcher, reading real data via
+`lib/dashboard-data.ts`. Charts in `components/charts`, KPI/switcher in
+`components/dashboard`, tables in `components/tables`.
+_Still to do:_ room type, nationality, geography, length of stay, and account
+production views; month switcher.
 
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
