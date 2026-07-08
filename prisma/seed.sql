@@ -180,3 +180,72 @@ DELETE FROM "influencer_collabs" WHERE "periodId" = 'rp_bkds_2026_06';
 INSERT INTO "influencer_collabs" ("periodId", "handle", "name", "followers", "origin", "notes") VALUES
   ('rp_bkds_2026_06', '@baliwanderer', 'Bali Wanderer', 125000, 'Australia', '3-night stay, reel + stories'),
   ('rp_bkds_2026_06', '@thetravelduo', 'The Travel Duo', 89000, 'United Kingdom', 'Spa feature at Mudara');
+
+-- Real report period: prop_bkdu 2026-06-01
+INSERT INTO "report_periods" ("id","propertyId","period","status","createdAt","updatedAt") VALUES
+  ('rp_bkdu_2026_06', 'prop_bkdu', '2026-06-01', 'FINAL', now(), now())
+ON CONFLICT ("propertyId","period") DO UPDATE SET "status"=EXCLUDED."status", "updatedAt"=now();
+
+DELETE FROM "revenue_summaries" WHERE "periodId" = 'rp_bkdu_2026_06';
+INSERT INTO "revenue_summaries" ("periodId", "department", "actual", "budget") VALUES
+  ('rp_bkdu_2026_06', 'OCCUPANCY', 0.95, 0.93),
+  ('rp_bkdu_2026_06', 'ADR', 2000632, 2105180),
+  ('rp_bkdu_2026_06', 'REVPAR', 1897266, 1852184),
+  ('rp_bkdu_2026_06', 'ROOM_REVENUE', 1138359532, 1176795454),
+  ('rp_bkdu_2026_06', 'FNB', 485666349, 577683094),
+  ('rp_bkdu_2026_06', 'SPA_WELLNESS', 142258156, 182403294),
+  ('rp_bkdu_2026_06', 'GALLERY', 0, 23535909),
+  ('rp_bkdu_2026_06', 'OOD', 27355065, 54720987),
+  ('rp_bkdu_2026_06', 'TOTAL_REVENUE', 1793639102, 2015138738);
+
+DELETE FROM "segment_production" WHERE "periodId" = 'rp_bkdu_2026_06';
+INSERT INTO "segment_production" ("periodId", "scope", "series", "segmentName", "roomNights", "arr", "roomRevenue") VALUES
+  ('rp_bkdu_2026_06', 'MTD', 'ACTUAL', 'Direct Booking', 45, 1973562.64, 88810319),
+  ('rp_bkdu_2026_06', 'MTD', 'ACTUAL', 'Website', 47, 1897093.89, 89163413),
+  ('rp_bkdu_2026_06', 'MTD', 'ACTUAL', 'OTA (Online Travel Agent)', 179, 1930556.02, 345569528),
+  ('rp_bkdu_2026_06', 'MTD', 'ACTUAL', 'Local TA', 156, 1681457.94, 262307438),
+  ('rp_bkdu_2026_06', 'MTD', 'ACTUAL', 'B2B', 35, 1433249.37, 50163728),
+  ('rp_bkdu_2026_06', 'MTD', 'ACTUAL', 'Group Wellness', 107, 2825655.2, 302345106),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'Walk In', 2, 2147818, 4295636),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'Direct Booking', 32, 1957688.44, 62646030),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'Website', 116, 1929354.54, 223805127),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'OTA (Online Travel Agent)', 243, 2256565.29, 548345365),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'OTA (Wellness)', 8, 1856590.88, 14852727),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'Local TA', 88, 1793820.66, 157856218),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'Overseas TA', 12, 2065702.5, 24788430),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'B2B', 14, 2090337.21, 29264721),
+  ('rp_bkdu_2026_06', 'MTD', 'BUDGET', 'Group Wellness', 44, 2521390.91, 110941200);
+
+-- Real report period: prop_bkv 2026-06-01
+INSERT INTO "report_periods" ("id","propertyId","period","status","createdAt","updatedAt") VALUES
+  ('rp_bkv_2026_06', 'prop_bkv', '2026-06-01', 'FINAL', now(), now())
+ON CONFLICT ("propertyId","period") DO UPDATE SET "status"=EXCLUDED."status", "updatedAt"=now();
+
+DELETE FROM "revenue_summaries" WHERE "periodId" = 'rp_bkv_2026_06';
+INSERT INTO "revenue_summaries" ("periodId", "department", "actual", "budget") VALUES
+  ('rp_bkv_2026_06', 'OCCUPANCY', 0.83, 0.9),
+  ('rp_bkv_2026_06', 'ADR', 2242597, 2670173),
+  ('rp_bkv_2026_06', 'REVPAR', 1858864, 2409089),
+  ('rp_bkv_2026_06', 'ROOM_REVENUE', 836488607, 1084090162),
+  ('rp_bkv_2026_06', 'FNB', 430558073, 513130002),
+  ('rp_bkv_2026_06', 'SPA_WELLNESS', 101791608, 150688532),
+  ('rp_bkv_2026_06', 'GALLERY', 0, 31438615),
+  ('rp_bkv_2026_06', 'OOD', 20524115, 19513623),
+  ('rp_bkv_2026_06', 'TOTAL_REVENUE', 1389362403, 1798860934);
+
+DELETE FROM "segment_production" WHERE "periodId" = 'rp_bkv_2026_06';
+INSERT INTO "segment_production" ("periodId", "scope", "series", "segmentName", "roomNights", "arr", "roomRevenue") VALUES
+  ('rp_bkv_2026_06', 'MTD', 'ACTUAL', 'Direct Booking', 20, 2285553.1, 45711062),
+  ('rp_bkv_2026_06', 'MTD', 'ACTUAL', 'Website', 71, 2160155.28, 153371025),
+  ('rp_bkv_2026_06', 'MTD', 'ACTUAL', 'OTA (Online Travel Agent)', 243, 2333554.56, 567053759),
+  ('rp_bkv_2026_06', 'MTD', 'ACTUAL', 'Local TA', 15, 2110646.2, 31659693),
+  ('rp_bkv_2026_06', 'MTD', 'ACTUAL', 'Overseas TA', 4, 1150945, 4603780),
+  ('rp_bkv_2026_06', 'MTD', 'ACTUAL', 'B2B', 20, 1704464.4, 34089288),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'Walk In', 2, 2178688.5, 4357377),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'Direct Booking', 47, 2437596.7, 114567045),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'Website', 48, 2621802.48, 125846519),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'OTA (Online Travel Agent)', 229, 2831976.86, 648522701),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'Local TA', 18, 2317585.11, 41716532),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'Overseas TA', 32, 2425052.06, 77601666),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'B2B', 10, 2686675.6, 26866756),
+  ('rp_bkv_2026_06', 'MTD', 'BUDGET', 'Group Wellness', 20, 2230578.5, 44611570);

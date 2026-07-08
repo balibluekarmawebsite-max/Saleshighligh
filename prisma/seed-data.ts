@@ -234,3 +234,88 @@ export const influencerCollabs: NoPeriod<Prisma.InfluencerCollabCreateManyInput>
     { handle: "@baliwanderer", name: "Bali Wanderer", followers: 125000, origin: "Australia", notes: "3-night stay, reel + stories" },
     { handle: "@thetravelduo", name: "The Travel Duo", followers: 89000, origin: "United Kingdom", notes: "Spa feature at Mudara" },
   ];
+
+// ─── Real June 2026 data for BKDU and BKV ────────────────────────────────────
+// Executive Summary (RevenueSummary) + Market Segment (SegmentProduction, MTD)
+// transcribed from the source workbooks. SPA + Wellness are combined into
+// SPA_WELLNESS to match the schema. These give all three properties real
+// numbers for the two Phase 2 dashboard sections.
+
+export const BKDU_JUNE_PERIOD_ID = "rp_bkdu_2026_06";
+export const BKV_JUNE_PERIOD_ID = "rp_bkv_2026_06";
+
+export interface ExtraPeriodSeed {
+  periodId: string;
+  propertyId: string;
+  period: string;
+  revenueSummaries: NoPeriod<Prisma.RevenueSummaryCreateManyInput>[];
+  segmentProduction: NoPeriod<Prisma.SegmentProductionCreateManyInput>[];
+}
+
+export const extraPeriods: ExtraPeriodSeed[] = [
+  {
+    periodId: BKDU_JUNE_PERIOD_ID,
+    propertyId: BKDU_ID,
+    period: BKDS_JUNE_PERIOD,
+    revenueSummaries: [
+      { department: "OCCUPANCY", actual: 0.95, budget: 0.93 },
+      { department: "ADR", actual: 2000632, budget: 2105180 },
+      { department: "REVPAR", actual: 1897266, budget: 1852184 },
+      { department: "ROOM_REVENUE", actual: 1138359532, budget: 1176795454 },
+      { department: "FNB", actual: 485666349, budget: 577683094 },
+      { department: "SPA_WELLNESS", actual: 142258156, budget: 182403294 },
+      { department: "GALLERY", actual: 0, budget: 23535909 },
+      { department: "OOD", actual: 27355065, budget: 54720987 },
+      { department: "TOTAL_REVENUE", actual: 1793639102, budget: 2015138738 },
+    ],
+    segmentProduction: [
+      { scope: "MTD", series: "ACTUAL", segmentName: "Direct Booking", roomNights: 45, arr: 1973562.64, roomRevenue: 88810319 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "Website", roomNights: 47, arr: 1897093.89, roomRevenue: 89163413 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "OTA (Online Travel Agent)", roomNights: 179, arr: 1930556.02, roomRevenue: 345569528 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "Local TA", roomNights: 156, arr: 1681457.94, roomRevenue: 262307438 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "B2B", roomNights: 35, arr: 1433249.37, roomRevenue: 50163728 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "Group Wellness", roomNights: 107, arr: 2825655.2, roomRevenue: 302345106 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Walk In", roomNights: 2, arr: 2147818, roomRevenue: 4295636 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Direct Booking", roomNights: 32, arr: 1957688.44, roomRevenue: 62646030 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Website", roomNights: 116, arr: 1929354.54, roomRevenue: 223805127 },
+      { scope: "MTD", series: "BUDGET", segmentName: "OTA (Online Travel Agent)", roomNights: 243, arr: 2256565.29, roomRevenue: 548345365 },
+      { scope: "MTD", series: "BUDGET", segmentName: "OTA (Wellness)", roomNights: 8, arr: 1856590.88, roomRevenue: 14852727 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Local TA", roomNights: 88, arr: 1793820.66, roomRevenue: 157856218 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Overseas TA", roomNights: 12, arr: 2065702.5, roomRevenue: 24788430 },
+      { scope: "MTD", series: "BUDGET", segmentName: "B2B", roomNights: 14, arr: 2090337.21, roomRevenue: 29264721 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Group Wellness", roomNights: 44, arr: 2521390.91, roomRevenue: 110941200 },
+    ],
+  },
+  {
+    periodId: BKV_JUNE_PERIOD_ID,
+    propertyId: BKV_ID,
+    period: BKDS_JUNE_PERIOD,
+    revenueSummaries: [
+      { department: "OCCUPANCY", actual: 0.83, budget: 0.9 },
+      { department: "ADR", actual: 2242597, budget: 2670173 },
+      { department: "REVPAR", actual: 1858864, budget: 2409089 },
+      { department: "ROOM_REVENUE", actual: 836488607, budget: 1084090162 },
+      { department: "FNB", actual: 430558073, budget: 513130002 },
+      { department: "SPA_WELLNESS", actual: 101791608, budget: 150688532 },
+      { department: "GALLERY", actual: 0, budget: 31438615 },
+      { department: "OOD", actual: 20524115, budget: 19513623 },
+      { department: "TOTAL_REVENUE", actual: 1389362403, budget: 1798860934 },
+    ],
+    segmentProduction: [
+      { scope: "MTD", series: "ACTUAL", segmentName: "Direct Booking", roomNights: 20, arr: 2285553.1, roomRevenue: 45711062 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "Website", roomNights: 71, arr: 2160155.28, roomRevenue: 153371025 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "OTA (Online Travel Agent)", roomNights: 243, arr: 2333554.56, roomRevenue: 567053759 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "Local TA", roomNights: 15, arr: 2110646.2, roomRevenue: 31659693 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "Overseas TA", roomNights: 4, arr: 1150945, roomRevenue: 4603780 },
+      { scope: "MTD", series: "ACTUAL", segmentName: "B2B", roomNights: 20, arr: 1704464.4, roomRevenue: 34089288 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Walk In", roomNights: 2, arr: 2178688.5, roomRevenue: 4357377 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Direct Booking", roomNights: 47, arr: 2437596.7, roomRevenue: 114567045 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Website", roomNights: 48, arr: 2621802.48, roomRevenue: 125846519 },
+      { scope: "MTD", series: "BUDGET", segmentName: "OTA (Online Travel Agent)", roomNights: 229, arr: 2831976.86, roomRevenue: 648522701 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Local TA", roomNights: 18, arr: 2317585.11, roomRevenue: 41716532 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Overseas TA", roomNights: 32, arr: 2425052.06, roomRevenue: 77601666 },
+      { scope: "MTD", series: "BUDGET", segmentName: "B2B", roomNights: 10, arr: 2686675.6, roomRevenue: 26866756 },
+      { scope: "MTD", series: "BUDGET", segmentName: "Group Wellness", roomNights: 20, arr: 2230578.5, roomRevenue: 44611570 },
+    ],
+  },
+];

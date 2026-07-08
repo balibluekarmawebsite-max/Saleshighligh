@@ -86,6 +86,31 @@ async function main() {
   console.log(
     `Seeded demo period BKDS ${data.BKDS_JUNE_PERIOD} (id=${periodId}) across all sections.`,
   );
+
+  // 4) Real June 2026 data for BKDU and BKV (executive summary + market segment)
+  for (const extra of data.extraPeriods) {
+    await prisma.reportPeriod.upsert({
+      where: { id: extra.periodId },
+      update: { status: "FINAL" },
+      create: {
+        id: extra.periodId,
+        propertyId: extra.propertyId,
+        period: new Date(extra.period),
+        status: "FINAL",
+      },
+    });
+    await prisma.revenueSummary.deleteMany({ where: { periodId: extra.periodId } });
+    await prisma.segmentProduction.deleteMany({ where: { periodId: extra.periodId } });
+    await prisma.revenueSummary.createMany({
+      data: extra.revenueSummaries.map((r) => ({ ...r, periodId: extra.periodId })),
+    });
+    await prisma.segmentProduction.createMany({
+      data: extra.segmentProduction.map((r) => ({ ...r, periodId: extra.periodId })),
+    });
+    console.log(
+      `Seeded real period ${extra.propertyId} ${extra.period} (executive summary + market segment).`,
+    );
+  }
 }
 
 main()

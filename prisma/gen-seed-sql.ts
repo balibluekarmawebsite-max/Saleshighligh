@@ -18,10 +18,14 @@ function sqlValue(v: unknown): string {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-/** DELETE then INSERT the child rows of a table for the demo period. */
-function childBlock(table: string, rows: Record<string, unknown>[]): string {
+/** DELETE then INSERT the child rows of a table for a given period. */
+function childBlock(
+  table: string,
+  rows: Record<string, unknown>[],
+  periodId: string = PID,
+): string {
   if (rows.length === 0) return "";
-  const withPid = rows.map((r) => ({ periodId: PID, ...r }));
+  const withPid = rows.map((r) => ({ periodId, ...r }));
   const columns: string[] = [];
   for (const row of withPid) {
     for (const key of Object.keys(row)) {
@@ -36,7 +40,7 @@ function childBlock(table: string, rows: Record<string, unknown>[]): string {
     )
     .join(",\n");
   return [
-    `DELETE FROM "${table}" WHERE "periodId" = '${PID}';`,
+    `DELETE FROM "${table}" WHERE "periodId" = '${periodId}';`,
     `INSERT INTO "${table}" (${colList}) VALUES`,
     `${values};`,
     "",
@@ -93,6 +97,19 @@ out.push(childBlock("booking_pace", data.bookingPace));
 out.push(childBlock("forecasts", data.forecasts));
 out.push(childBlock("narrative_content", data.narrativeContent));
 out.push(childBlock("influencer_collabs", data.influencerCollabs));
+
+// Real June 2026 periods for BKDU and BKV (executive summary + market segment)
+for (const extra of data.extraPeriods) {
+  out.push(
+    `-- Real report period: ${extra.propertyId} ${extra.period}`,
+    `INSERT INTO "report_periods" ("id","propertyId","period","status","createdAt","updatedAt") VALUES`,
+    `  ('${extra.periodId}', '${extra.propertyId}', '${extra.period}', 'FINAL', now(), now())`,
+    `ON CONFLICT ("propertyId","period") DO UPDATE SET "status"=EXCLUDED."status", "updatedAt"=now();`,
+    "",
+  );
+  out.push(childBlock("revenue_summaries", extra.revenueSummaries, extra.periodId));
+  out.push(childBlock("segment_production", extra.segmentProduction, extra.periodId));
+}
 
 const target = join(__dirname, "seed.sql");
 writeFileSync(target, out.join("\n"));
