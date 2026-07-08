@@ -46,21 +46,31 @@ Each property produces a monthly Sales Highlight with these sections:
 - **Next.js 14+** (App Router) + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui** components
 - **Recharts** for charts
-- **Prisma ORM** — **SQLite** for local dev; schema is **Postgres-compatible**
-  so production can switch the datasource to Postgres (see below)
+- **Prisma ORM** on **Supabase (Postgres)** — all environments
 - **SheetJS (`xlsx`)** for Excel parsing
 - **lucide-react** for icons
 
-### Database portability
+### Database (Supabase / Postgres)
 
-Local dev runs on SQLite (`DATABASE_URL="file:./dev.db"`). To move to Postgres,
-change `datasource db { provider }` in `prisma/schema.prisma` to `"postgresql"`
-and point `DATABASE_URL` at Postgres — **no model changes required**. To keep it
-portable, the schema avoids features SQLite/Prisma can't share:
+The database is Supabase Postgres for every environment (no SQLite). Prisma
+connects through two URLs (Supabase's recommended setup):
 
-- No native `enum` types → use `String` with a documented allowed-value set.
-- No Postgres-only scalar arrays (`String[]`) or native column types.
+- **`DATABASE_URL`** — the app's runtime connection via the **Transaction
+  pooler** (Supavisor, `...pooler.supabase.com:6543`) with `?pgbouncer=true`.
+- **`DIRECT_URL`** — used by Prisma Migrate/Introspect (they can't run over the
+  transaction pooler) via the **Session pooler** (port `5432`) or the direct
+  connection.
+
+Both are configured in `prisma/schema.prisma`'s `datasource` block. See
+`.env.example` for the exact formats. Because the GitHub↔Supabase integration is
+set up, prefer **`prisma migrate`** (versioned migration files under
+`prisma/migrations/`) over `db push` so schema changes are tracked and can sync.
+
+Conventions:
+
 - Money stored as integer IDR (use `BigInt` where values can exceed 2^31).
+- Native `enum` types and scalar arrays are now available (Postgres); introduce
+  them where they add clarity.
 
 ---
 
@@ -133,9 +143,9 @@ npm run typecheck   # tsc --noEmit
 npm run format      # prettier
 
 npm run db:generate # prisma generate
-npm run db:push     # push schema to the local SQLite db
+npm run db:migrate  # create + apply a versioned migration (preferred)
+npm run db:push     # push schema without a migration (prototyping only)
 npm run db:studio   # Prisma Studio
-npm run db:migrate  # create a dev migration
 ```
 
 ---

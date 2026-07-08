@@ -10,7 +10,7 @@ phase roadmap.
 ## Stack
 
 Next.js 14 (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Recharts ·
-Prisma (SQLite for dev, Postgres-ready) · SheetJS (`xlsx`) · lucide-react.
+Prisma on Supabase (Postgres) · SheetJS (`xlsx`) · lucide-react.
 
 ## Getting started
 
@@ -18,14 +18,18 @@ Prisma (SQLite for dev, Postgres-ready) · SheetJS (`xlsx`) · lucide-react.
 # 1. Install dependencies
 npm install
 
-# 2. Set up the local database
-cp .env.example .env      # DATABASE_URL defaults to SQLite (file:./dev.db)
+# 2. Configure the database (Supabase / Postgres)
+cp .env.example .env      # then fill in DATABASE_URL + DIRECT_URL from Supabase
 npm run db:generate       # generate the Prisma client
-npm run db:push           # create the local SQLite database
+npm run db:migrate        # create + apply the initial migration
 
 # 3. Run the dev server
 npm run dev               # http://localhost:3000
 ```
+
+Get `DATABASE_URL` (Transaction pooler, port 6543, `?pgbouncer=true`) and
+`DIRECT_URL` (Session pooler, port 5432) from **Supabase → Project Settings →
+Database → Connection string**. See `.env.example` for the exact formats.
 
 ## Scripts
 
@@ -38,11 +42,11 @@ npm run dev               # http://localhost:3000
 | `npm run typecheck`  | `tsc --noEmit`                       |
 | `npm run format`     | Prettier                             |
 | `npm run db:generate`| Generate the Prisma client           |
-| `npm run db:push`    | Push the schema to the local DB      |
+| `npm run db:migrate` | Create + apply a versioned migration |
 | `npm run db:studio`  | Open Prisma Studio                   |
 
-## Production database
+## Database
 
-The Prisma schema is Postgres-compatible. To deploy on Postgres, change the
-`datasource` provider in `prisma/schema.prisma` to `postgresql` and set
-`DATABASE_URL` accordingly — no model changes required.
+Supabase Postgres for all environments. Prisma uses two URLs: `DATABASE_URL`
+(transaction pooler, runtime) and `DIRECT_URL` (session/direct, migrations). See
+`CLAUDE.md` for details.

@@ -1,16 +1,17 @@
 // BK Sales Dashboard — Prisma schema
 //
-// Local development uses SQLite (see DATABASE_URL in .env). The schema is kept
-// Postgres-compatible: to move to production, change the datasource `provider`
-// below to "postgresql" and point DATABASE_URL at your Postgres instance — no
-// model changes required.
+// Database: Supabase (Postgres) for all environments.
+//   - DATABASE_URL: the Supabase connection pooler (Supavisor, port 6543,
+//     transaction mode) used by the app at runtime. Append `?pgbouncer=true`.
+//   - DIRECT_URL:   a direct/session connection (port 5432) used by Prisma
+//     Migrate and Introspect, which can't run through the transaction pooler.
+// See .env.example for the exact connection-string formats.
 //
-// Portability rules for this schema:
-//   - No native `enum` types (unsupported on SQLite). Use String fields with a
-//     documented set of allowed values instead.
-//   - No Postgres-only scalar arrays or native types (e.g. no `String[]`).
+// Conventions for this schema:
 //   - Money is stored in IDR as integers (the currency has no minor units in
 //     practice). Use BigInt where values may exceed 2^31.
+//   - Now that we're Postgres-only, native `enum` types and scalar arrays are
+//     available; introduce them in later phases where they add clarity.
 //
 // This is intentionally minimal for the scaffolding phase — only foundational
 // reference data (properties and their outlets) is modelled here. Analytics
@@ -21,8 +22,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 /// The three Blue Karma properties.
