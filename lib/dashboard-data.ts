@@ -81,6 +81,19 @@ export async function getProperties(): Promise<PropertyOption[]> {
   return properties;
 }
 
+/** Resolve a requested property code to a valid one, falling back sensibly. */
+export function resolveActiveCode(
+  properties: PropertyOption[],
+  requested: string | string[] | undefined,
+): string {
+  const code = typeof requested === "string" ? requested : undefined;
+  return (
+    properties.find((p) => p.code === code)?.code ??
+    properties[0]?.code ??
+    "BKDS"
+  );
+}
+
 /**
  * Executive summary for a property's most recent report period. Returns `null`
  * if the property code is unknown.
@@ -186,5 +199,169 @@ export async function getExecutiveSummary(
     totalRevenue: byDept.get("TOTAL_REVENUE") ?? null,
     departments,
     segments,
+  };
+}
+
+// ─── Rooms ───────────────────────────────────────────────────────────────────
+
+export interface RoomTypeRow {
+  roomTypeName: string;
+  roomNightsActual: number;
+  roomNightsBudget: number;
+  adrActual: number;
+  adrBudget: number;
+  revenueActual: number;
+  revenueBudget: number;
+}
+
+export interface NationalityRow {
+  rank: number;
+  countryName: string;
+  countryCode: string | null;
+  roomNights: number;
+}
+
+export interface LosRow {
+  losBucket: string;
+  bookings: number;
+  roomNights: number;
+}
+
+export interface AccountRow {
+  accountName: string;
+  accountType: string;
+  roomNights: number;
+  revenue: number;
+}
+
+export interface RoomsSummary {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: Date | null;
+  segments: SegmentRow[];
+  roomTypes: RoomTypeRow[];
+  nationalities: NationalityRow[];
+  lengthOfStay: LosRow[];
+  accounts: AccountRow[];
+}
+
+const LOS_ORDER = ["1", "2", "3", "4", "5", "6", "7+"];
+
+/** Rooms analytics for a property's most recent report period. */
+export async function getRoomsSummary(
+  propertyCode: string,
+): Promise<RoomsSummary | null> {
+  noStore();
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        orderBy: { period: "desc" },
+        take: 1,
+        include: {
+          segmentProduction: { where: { scope: "MTD" } },
+          roomTypeProduction: true,
+          nationality: { where: { scope: "MTD" }, orderBy: { roomNights: "desc" } },
+          lengthOfStay: true,
+          accountProduction: { orderBy: { revenue: "desc" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+  };
+
+  const period = property.periods[0];
+  if (!period) {
+    return {
+      ...base,
+      period: null,
+      segments: [],
+      roomTypes: [],
+      nationalities: [],
+      lengthOfStay: [],
+      accounts: [],
+    };
+  }
+
+  // Segments (fold ACTUAL/BUDGET into one row).
+  const segMap = new Map<string, SegmentRow>();
+  for (const row of period.segmentProduction) {
+    const existing =
+      segMap.get(row.segmentName) ??
+      ({
+        segmentName: row.segmentName,
+        actualRoomNights: 0,
+        budgetRoomNights: 0,
+        actualRevenue: 0,
+        budgetRevenue: 0,
+      } satisfies SegmentRow);
+    if (row.series === "ACTUAL") {
+      existing.actualRoomNights = row.roomNights;
+      existing.actualRevenue = row.roomRevenue.toNumber();
+    } else if (row.series === "BUDGET") {
+      existing.budgetRoomNights = row.roomNights;
+      existing.budgetRevenue = row.roomRevenue.toNumber();
+    }
+    segMap.set(row.segmentName, existing);
+  }
+  const segments = [...segMap.values()].sort(
+    (a, b) =>
+      Math.max(b.actualRevenue, b.budgetRevenue) -
+      Math.max(a.actualRevenue, a.budgetRevenue),
+  );
+
+  const roomTypes: RoomTypeRow[] = period.roomTypeProduction
+    .map((r) => ({
+      roomTypeName: r.roomTypeName,
+      roomNightsActual: r.roomNightsActual,
+      roomNightsBudget: r.roomNightsBudget,
+      adrActual: r.adrActual.toNumber(),
+      adrBudget: r.adrBudget.toNumber(),
+      revenueActual: r.revenueActual.toNumber(),
+      revenueBudget: r.revenueBudget.toNumber(),
+    }))
+    .sort((a, b) => b.revenueActual - a.revenueActual);
+
+  const nationalities: NationalityRow[] = period.nationality.map((n, i) => ({
+    rank: i + 1,
+    countryName: n.countryName,
+    countryCode: n.countryCode,
+    roomNights: n.roomNights,
+  }));
+
+  const lengthOfStay: LosRow[] = [...period.lengthOfStay]
+    .sort(
+      (a, b) => LOS_ORDER.indexOf(a.losBucket) - LOS_ORDER.indexOf(b.losBucket),
+    )
+    .map((l) => ({
+      losBucket: l.losBucket,
+      bookings: l.bookings,
+      roomNights: l.roomNights,
+    }));
+
+  const accounts: AccountRow[] = period.accountProduction.map((a) => ({
+    accountName: a.accountName,
+    accountType: a.accountType,
+    roomNights: a.roomNights,
+    revenue: a.revenue.toNumber(),
+  }));
+
+  return {
+    ...base,
+    period: period.period,
+    segments,
+    roomTypes,
+    nationalities,
+    lengthOfStay,
+    accounts,
   };
 }

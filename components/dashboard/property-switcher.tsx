@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import type { PropertyOption } from "@/lib/dashboard-data";
 import { cn } from "@/lib/utils";
 
-/** Segmented control that switches the active property via a query param. */
+/** Segmented control that switches the active property, staying on the current page. */
 export function PropertySwitcher({
   properties,
   activeCode,
@@ -11,12 +14,14 @@ export function PropertySwitcher({
   properties: PropertyOption[];
   activeCode: string;
 }) {
+  const pathname = usePathname();
+
   return (
     <div className="inline-flex rounded-md border border-border bg-card p-1">
       {properties.map((p) => (
         <Link
           key={p.code}
-          href={`/?property=${p.code}`}
+          href={`${pathname}?property=${p.code}`}
           aria-current={p.code === activeCode ? "page" : undefined}
           title={p.name}
           className={cn(

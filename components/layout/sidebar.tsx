@@ -1,46 +1,19 @@
-import {
-  LayoutDashboard,
-  BedDouble,
-  Megaphone,
-  Star,
-  UtensilsCrossed,
-  Flower2,
-  LineChart,
-  CalendarRange,
-  Share2,
-  ListChecks,
-  Tag,
-  Settings,
-} from "lucide-react";
+"use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Settings } from "lucide-react";
+
+import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-/**
- * Placeholder left navigation. Routes are wired up in later phases; for now the
- * items are non-interactive and mirror the monthly Sales Highlight sections.
- */
-
-interface NavItem {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  active?: boolean;
+function isActive(pathname: string, href: string): boolean {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
 
-const PRIMARY_NAV: NavItem[] = [
-  { label: "Overview", icon: LayoutDashboard, active: true },
-  { label: "Rooms", icon: BedDouble },
-  { label: "Digital Ads & ROAS", icon: Megaphone },
-  { label: "Online Reputation", icon: Star },
-  { label: "Restaurant", icon: UtensilsCrossed },
-  { label: "Spa", icon: Flower2 },
-  { label: "Market Intelligence", icon: LineChart },
-  { label: "Forecast", icon: CalendarRange },
-  { label: "Social Media", icon: Share2 },
-  { label: "Action Plans", icon: ListChecks },
-  { label: "Promotions", icon: Tag },
-];
-
 export function Sidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-white lg:flex">
       {/* Brand */}
@@ -58,32 +31,31 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {PRIMARY_NAV.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
+          const active = isActive(pathname, item.href);
           return (
-            <span
-              key={item.label}
-              aria-current={item.active ? "page" : undefined}
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex cursor-default items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                item.active
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                active
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
               )}
             >
-              {/* Gold active indicator */}
               <span
                 className={cn(
                   "h-4 w-0.5 rounded-full",
-                  item.active
-                    ? "bg-[hsl(var(--brand-gold))]"
-                    : "bg-transparent",
+                  active ? "bg-[hsl(var(--brand-gold))]" : "bg-transparent",
                 )}
                 aria-hidden
               />
               <Icon className="h-4 w-4 shrink-0" />
               <span>{item.label}</span>
-            </span>
+            </Link>
           );
         })}
       </nav>
