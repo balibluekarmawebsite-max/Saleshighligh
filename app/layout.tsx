@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import { Sidebar } from "@/components/layout/sidebar";
-import { Topbar } from "@/components/layout/topbar";
 import "./globals.css";
 
 const inter = Inter({
@@ -24,17 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="font-sans">
-        <div className="flex h-screen overflow-hidden bg-muted/30">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar />
-            <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-              {children}
-            </main>
-          </div>
-        </div>
-      </body>
+      <body className="font-sans">{children}</body>
     </html>
   );
 }

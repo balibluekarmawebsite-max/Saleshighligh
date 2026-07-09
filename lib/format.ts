@@ -86,6 +86,21 @@ export function varianceColorClass(value: number | null | undefined): string {
   return value > 0 ? "text-variance-positive" : "text-variance-negative";
 }
 
+/** Alias matching the Phase 3 naming — same as {@link formatPercent}. */
+export const formatPct = formatPercent;
+
+/** Alias matching the Phase 3 naming — compact IDR (e.g. "Rp 1.4 B"). */
+export const formatCompact = formatIDRCompact;
+
+/**
+ * Format a 0–1 ratio (e.g. occupancy 0.9483) as a percentage to 2 dp
+ * ("94.83%"). Pass `null` for a placeholder.
+ */
+export function formatRatioPct(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${(value * 100).toFixed(2)}%`;
+}
+
 /**
  * Percentage variance of `actual` against `budget`, expressed as percent.
  * Returns null when budget is 0/undefined to avoid divide-by-zero.

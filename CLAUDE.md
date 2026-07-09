@@ -193,14 +193,24 @@ an `ImportHistory` audit row; FINAL periods are locked. Sample workbook in
 `/samples`. _Still to do:_ manual-entry forms (react-hook-form + zod), narrative
 rich-text (TipTap) + image upload, and admin auth for the draft→final control.
 
-**Phase 2 — Executive Summary & Rooms. 🚧 In progress.**
+**Phase 2 — Executive Summary & Rooms. ✅ Done.**
 Executive Summary vs Budget with variance KPIs (occupancy/ADR/RevPAR/revenue),
-revenue-by-department, and Rooms market-segment charts + tables are live on the
-Overview page (`app/page.tsx`) with a property switcher, reading real data via
-`lib/dashboard-data.ts`. Charts in `components/charts`, KPI/switcher in
-`components/dashboard`, tables in `components/tables`.
-_Still to do:_ room type, nationality, geography, length of stay, and account
-production views; month switcher.
+revenue-by-department, and all Rooms views (market segment, room types,
+nationality, length of stay, account production), reading real data via
+`lib/dashboard-data.ts`.
+
+**Phase 3 — App shell, navigation & global filters. ✅ Done.**
+URL-driven routing under `/dashboard/[property]/[yyyy-mm]/…` (shareable links),
+a persistent context bar (property switcher incl. Group, month picker showing
+only real periods with draft/final badge, MTD/YTD toggle, Export placeholder),
+a grouped sidebar with the Rooms submenu, mobile section nav, per-section
+loading skeletons + error boundary. Shared components in `components/dashboard`
+(`KpiCard`, `MoMBadge`, `SectionCard`, `EmptyState`, `Sparkline`) and
+`components/tables/VarianceTable`; nav model in `lib/nav.ts`; `/admin/*` has its
+own shell. Format helpers `formatPct`/`formatCompact`/`formatRatioPct` in
+`lib/format.ts`.
+_Still to do:_ consolidated Group pages; wiring the remaining sections
+(Digital Ads, Restaurant, Spa, Market & Forecast, Social & PR, Action Plans).
 
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA

@@ -1,44 +1,72 @@
 import {
   BedDouble,
-  CalendarRange,
   Flower2,
   LayoutDashboard,
   LineChart,
   ListChecks,
   Megaphone,
   Share2,
-  Star,
-  Tag,
   UtensilsCrossed,
+  type LucideIcon,
 } from "lucide-react";
 
-/** Shared navigation model used by the sidebar and topbar. */
-export interface NavItem {
+/** A section link, relative to /dashboard/[property]/[period]/. */
+export interface DashNavItem {
+  label: string;
+  /** Path relative to the period root ("" = Executive Summary). */
+  href: string;
+  icon: LucideIcon;
+  children?: { label: string; href: string }[];
+}
+
+export const DASHBOARD_NAV: DashNavItem[] = [
+  { label: "Executive Summary", href: "", icon: LayoutDashboard },
+  {
+    label: "Rooms Analytics",
+    href: "rooms",
+    icon: BedDouble,
+    children: [
+      { label: "Market Segment", href: "rooms/market-segment" },
+      { label: "Room Types", href: "rooms/room-types" },
+      { label: "Nationality & Geography", href: "rooms/nationality-geography" },
+      { label: "Length of Stay", href: "rooms/length-of-stay" },
+      { label: "Account Production", href: "rooms/account-production" },
+    ],
+  },
+  { label: "Digital Ads & Reputation", href: "digital-ads", icon: Megaphone },
+  { label: "Restaurant", href: "restaurant", icon: UtensilsCrossed },
+  { label: "Spa & Wellness", href: "spa", icon: Flower2 },
+  { label: "Market & Forecast", href: "market-forecast", icon: LineChart },
+  { label: "Social Media & PR", href: "social-pr", icon: Share2 },
+  { label: "Action Plans & Promotions", href: "action-plans", icon: ListChecks },
+];
+
+export interface AdminNavItem {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /** True once the target section has a real page (vs a "coming soon" stub). */
   ready: boolean;
 }
 
-export const NAV_ITEMS: NavItem[] = [
-  { label: "Overview", href: "/", icon: LayoutDashboard, ready: true },
-  { label: "Rooms", href: "/rooms", icon: BedDouble, ready: true },
-  { label: "Digital Ads & ROAS", href: "/digital-ads", icon: Megaphone, ready: false },
-  { label: "Online Reputation", href: "/reputation", icon: Star, ready: false },
-  { label: "Restaurant", href: "/restaurant", icon: UtensilsCrossed, ready: false },
-  { label: "Spa", href: "/spa", icon: Flower2, ready: false },
-  { label: "Market Intelligence", href: "/market-intelligence", icon: LineChart, ready: false },
-  { label: "Forecast", href: "/forecast", icon: CalendarRange, ready: false },
-  { label: "Social Media", href: "/social", icon: Share2, ready: false },
-  { label: "Action Plans", href: "/action-plans", icon: ListChecks, ready: false },
-  { label: "Promotions", href: "/promotions", icon: Tag, ready: false },
+export const ADMIN_NAV: AdminNavItem[] = [
+  { label: "Import", href: "/admin/import", ready: true },
+  { label: "Templates", href: "/admin/template", ready: true },
+  { label: "Manual Entry", href: "/admin/data", ready: false },
+  { label: "Users", href: "/admin/users", ready: false },
 ];
 
-/** Resolve the nav item for a pathname (longest matching href wins). */
-export function activeNavItem(pathname: string): NavItem | undefined {
-  if (pathname === "/") return NAV_ITEMS[0];
-  return NAV_ITEMS.filter((i) => i.href !== "/").find((i) =>
-    pathname.startsWith(i.href),
-  );
+/** Build an absolute dashboard href from a property, period and relative path. */
+export function dashHref(property: string, period: string, rel: string): string {
+  const base = `/dashboard/${property}/${period}`;
+  return rel ? `${base}/${rel}` : base;
+}
+
+/** Human title for a section, given the path relative to the period root. */
+export function sectionTitle(rel: string): string {
+  if (rel === "") return "Executive Summary";
+  for (const item of DASHBOARD_NAV) {
+    if (item.href === rel) return item.label;
+    const child = item.children?.find((c) => c.href === rel);
+    if (child) return `${item.label} — ${child.label}`;
+  }
+  return "Dashboard";
 }

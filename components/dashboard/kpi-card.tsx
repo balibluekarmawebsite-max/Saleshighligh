@@ -1,42 +1,56 @@
-import { variancePct } from "@/lib/calculations";
-import type { MetricAB } from "@/lib/dashboard-data";
-import {
-  formatIDR,
-  formatPercent,
-  formatVariancePercent,
-  varianceColorClass,
-} from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { MoMBadge } from "@/components/dashboard/mom-badge";
+import { Sparkline } from "@/components/dashboard/sparkline";
 import { Card, CardContent } from "@/components/ui/card";
+import { varianceColorClass, formatVariancePercent } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-interface KpiCardProps {
+export interface KpiCardProps {
   label: string;
-  metric: MetricAB | null;
-  /** "currency" → IDR; "percent" → ratio stored 0–1, shown as %. */
-  kind: "currency" | "percent";
+  /** Preformatted headline value (IDR or %). */
+  value: string;
+  /** Signed variance % vs budget (drives the arrow chip). */
+  deltaPct: number | null;
+  /** Preformatted budget value, e.g. "Rp 1.089.643.475" or "90.19%". */
+  budgetValue?: string;
+  /** Optional signed variance % vs last year. */
+  lastYearDeltaPct?: number | null;
+  /** Optional trend series for a small sparkline. */
+  spark?: number[];
 }
 
-function display(value: number, kind: KpiCardProps["kind"]): string {
-  return kind === "currency" ? formatIDR(value) : formatPercent(value * 100);
-}
-
-export function KpiCard({ label, metric, kind }: KpiCardProps) {
-  const variance = metric ? variancePct(metric.actual, metric.budget) : null;
-
+export function KpiCard({
+  label,
+  value,
+  deltaPct,
+  budgetValue,
+  lastYearDeltaPct,
+  spark,
+}: KpiCardProps) {
   return (
     <Card>
       <CardContent className="p-5">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          {spark && spark.length > 1 && <Sparkline data={spark} />}
+        </div>
         <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
-          {metric ? display(metric.actual, kind) : "—"}
+          {value}
         </p>
-        <div className="mt-2 flex items-center gap-2 text-xs">
-          <span className={cn("font-medium", varianceColorClass(variance))}>
-            {formatVariancePercent(variance)}
-          </span>
-          <span className="text-muted-foreground">
-            vs budget {metric ? display(metric.budget, kind) : "—"}
-          </span>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <MoMBadge value={deltaPct} />
+          {budgetValue && (
+            <span className="text-muted-foreground">vs budget {budgetValue}</span>
+          )}
+          {lastYearDeltaPct !== undefined && lastYearDeltaPct !== null && (
+            <span
+              className={cn(
+                "border-l border-border pl-2",
+                varianceColorClass(lastYearDeltaPct),
+              )}
+            >
+              {formatVariancePercent(lastYearDeltaPct)} vs LY
+            </span>
+          )}
         </div>
       </CardContent>
     </Card>

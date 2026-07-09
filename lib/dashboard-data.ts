@@ -94,18 +94,96 @@ export function resolveActiveCode(
   );
 }
 
+export const GROUP_CODE = "GROUP";
+
+/** "2026-06" → Date at UTC midnight of the first of that month. */
+export function periodToDate(period: string): Date {
+  return new Date(`${period}-01T00:00:00.000Z`);
+}
+
+/** Date → "2026-06". */
+export function dateToPeriod(date: Date): string {
+  return date.toISOString().slice(0, 7);
+}
+
+export interface PeriodOption {
+  period: string; // "yyyy-mm"
+  status: string;
+}
+
+/** The report periods that exist for a property (newest first). */
+export async function getPropertyPeriods(
+  propertyCode: string,
+): Promise<PeriodOption[]> {
+  noStore();
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    select: {
+      periods: { orderBy: { period: "desc" }, select: { period: true, status: true } },
+    },
+  });
+  return (
+    property?.periods.map((p) => ({
+      period: dateToPeriod(p.period),
+      status: p.status,
+    })) ?? []
+  );
+}
+
+export interface ShellData {
+  properties: PropertyOption[];
+  periodsByProperty: Record<string, PeriodOption[]>;
+  defaultPath: string;
+}
+
+/** Everything the persistent shell (sidebar + context bar) needs, in one query. */
+export async function getShellData(): Promise<ShellData> {
+  noStore();
+  const properties = await prisma.property.findMany({
+    orderBy: { code: "asc" },
+    select: {
+      code: true,
+      name: true,
+      periods: { orderBy: { period: "desc" }, select: { period: true, status: true } },
+    },
+  });
+
+  const periodsByProperty: Record<string, PeriodOption[]> = {};
+  for (const p of properties) {
+    periodsByProperty[p.code] = p.periods.map((rp) => ({
+      period: dateToPeriod(rp.period),
+      status: rp.status,
+    }));
+  }
+
+  // Default: first property that has data, at its latest period.
+  let defaultPath = "/admin/import";
+  const withData = properties.find((p) => p.periods.length > 0);
+  if (withData) {
+    defaultPath = `/dashboard/${withData.code}/${dateToPeriod(withData.periods[0]!.period)}`;
+  }
+
+  return {
+    properties: properties.map((p) => ({ code: p.code, name: p.name })),
+    periodsByProperty,
+    defaultPath,
+  };
+}
+
 /**
  * Executive summary for a property's most recent report period. Returns `null`
  * if the property code is unknown.
  */
 export async function getExecutiveSummary(
   propertyCode: string,
+  period?: string,
 ): Promise<ExecutiveSummary | null> {
   noStore();
   const property = await prisma.property.findUnique({
     where: { code: propertyCode },
     include: {
       periods: {
+        where: period ? { period: periodToDate(period) } : undefined,
         orderBy: { period: "desc" },
         take: 1,
         include: {
@@ -129,8 +207,8 @@ export async function getExecutiveSummary(
     },
   };
 
-  const period = property.periods[0];
-  if (!period) {
+  const rp = property.periods[0];
+  if (!rp) {
     return {
       ...base,
       period: null,
@@ -146,7 +224,7 @@ export async function getExecutiveSummary(
 
   // Index revenue lines by department.
   const byDept = new Map<string, MetricAB>();
-  for (const row of period.revenueSummaries) {
+  for (const row of rp.revenueSummaries) {
     byDept.set(row.department, {
       actual: row.actual.toNumber(),
       budget: row.budget.toNumber(),
@@ -164,7 +242,7 @@ export async function getExecutiveSummary(
 
   // Fold segment rows (ACTUAL/BUDGET) into one row per segment.
   const segMap = new Map<string, SegmentRow>();
-  for (const row of period.segmentProduction) {
+  for (const row of rp.segmentProduction) {
     const existing =
       segMap.get(row.segmentName) ??
       ({
@@ -191,8 +269,8 @@ export async function getExecutiveSummary(
 
   return {
     ...base,
-    period: period.period,
-    status: period.status,
+    period: rp.period,
+    status: rp.status,
     occupancy: byDept.get("OCCUPANCY") ?? null,
     adr: byDept.get("ADR") ?? null,
     revpar: byDept.get("REVPAR") ?? null,
@@ -249,18 +327,21 @@ const LOS_ORDER = ["1", "2", "3", "4", "5", "6", "7+"];
 /** Rooms analytics for a property's most recent report period. */
 export async function getRoomsSummary(
   propertyCode: string,
+  period?: string,
+  scope: "MTD" | "YTD" = "MTD",
 ): Promise<RoomsSummary | null> {
   noStore();
   const property = await prisma.property.findUnique({
     where: { code: propertyCode },
     include: {
       periods: {
+        where: period ? { period: periodToDate(period) } : undefined,
         orderBy: { period: "desc" },
         take: 1,
         include: {
-          segmentProduction: { where: { scope: "MTD" } },
+          segmentProduction: { where: { scope } },
           roomTypeProduction: true,
-          nationality: { where: { scope: "MTD" }, orderBy: { roomNights: "desc" } },
+          nationality: { where: { scope }, orderBy: { roomNights: "desc" } },
           lengthOfStay: true,
           accountProduction: { orderBy: { revenue: "desc" } },
         },
@@ -279,8 +360,8 @@ export async function getRoomsSummary(
     },
   };
 
-  const period = property.periods[0];
-  if (!period) {
+  const rp = property.periods[0];
+  if (!rp) {
     return {
       ...base,
       period: null,
@@ -294,7 +375,7 @@ export async function getRoomsSummary(
 
   // Segments (fold ACTUAL/BUDGET into one row).
   const segMap = new Map<string, SegmentRow>();
-  for (const row of period.segmentProduction) {
+  for (const row of rp.segmentProduction) {
     const existing =
       segMap.get(row.segmentName) ??
       ({
@@ -319,7 +400,7 @@ export async function getRoomsSummary(
       Math.max(a.actualRevenue, a.budgetRevenue),
   );
 
-  const roomTypes: RoomTypeRow[] = period.roomTypeProduction
+  const roomTypes: RoomTypeRow[] = rp.roomTypeProduction
     .map((r) => ({
       roomTypeName: r.roomTypeName,
       roomNightsActual: r.roomNightsActual,
@@ -331,14 +412,14 @@ export async function getRoomsSummary(
     }))
     .sort((a, b) => b.revenueActual - a.revenueActual);
 
-  const nationalities: NationalityRow[] = period.nationality.map((n, i) => ({
+  const nationalities: NationalityRow[] = rp.nationality.map((n, i) => ({
     rank: i + 1,
     countryName: n.countryName,
     countryCode: n.countryCode,
     roomNights: n.roomNights,
   }));
 
-  const lengthOfStay: LosRow[] = [...period.lengthOfStay]
+  const lengthOfStay: LosRow[] = [...rp.lengthOfStay]
     .sort(
       (a, b) => LOS_ORDER.indexOf(a.losBucket) - LOS_ORDER.indexOf(b.losBucket),
     )
@@ -348,7 +429,7 @@ export async function getRoomsSummary(
       roomNights: l.roomNights,
     }));
 
-  const accounts: AccountRow[] = period.accountProduction.map((a) => ({
+  const accounts: AccountRow[] = rp.accountProduction.map((a) => ({
     accountName: a.accountName,
     accountType: a.accountType,
     roomNights: a.roomNights,
@@ -357,7 +438,7 @@ export async function getRoomsSummary(
 
   return {
     ...base,
-    period: period.period,
+    period: rp.period,
     segments,
     roomTypes,
     nationalities,
