@@ -221,6 +221,16 @@ stubbed "Generate with AI" button (`/api/ai/narrative`), and a two-column
 factors section (External accordion + Internal factors with a 6-month forecast
 occupancy preview). Aggregated fetch `getSummaryPageData`; "data as of" caption.
 
+**Phase 5 — Rooms: Market Segment & Account Production. ✅ Done.**
+`/dashboard/[property]/[period]/rooms/segments` (respects the MTD/YTD toggle;
+old `market-segment`/`account-production` routes redirect here). Grouped-column
+`SegmentPerformanceTable` (This Year / Budget / Last Year × RN·ARR·Revenue +
+variance + achievement, blended-ARR total), a horizontal Actual/Budget/LY
+revenue bar, a room-nights donut, and computed insight chips. Account
+Production (YTD): a single-axis Pareto (share + cumulative %) and a
+sortable, type-filterable table. Charts export to PNG via `ExportableCard`
+(html-to-image). Aggregated fetch `getSegmentsPageData`.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

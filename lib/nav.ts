@@ -26,11 +26,10 @@ export const DASHBOARD_NAV: DashNavItem[] = [
     href: "rooms",
     icon: BedDouble,
     children: [
-      { label: "Market Segment", href: "rooms/market-segment" },
+      { label: "Market & Accounts", href: "rooms/segments" },
       { label: "Room Types", href: "rooms/room-types" },
       { label: "Nationality & Geography", href: "rooms/nationality-geography" },
       { label: "Length of Stay", href: "rooms/length-of-stay" },
-      { label: "Account Production", href: "rooms/account-production" },
     ],
   },
   { label: "Digital Ads & Reputation", href: "digital-ads", icon: Megaphone },

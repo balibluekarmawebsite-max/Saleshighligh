@@ -7,5 +7,5 @@ export default function RoomsIndex({
 }: {
   params: { property: string; period: string };
 }) {
-  redirect(`/dashboard/${params.property}/${params.period}/rooms/market-segment`);
+  redirect(`/dashboard/${params.property}/${params.period}/rooms/segments`);
 }

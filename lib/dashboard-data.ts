@@ -477,6 +477,153 @@ export async function getSummaryPageData(
   };
 }
 
+// ─── Rooms — Segments & Accounts page (aggregated) ───────────────────────────
+
+export interface SeriesTriple {
+  rn: number;
+  arr: number;
+  revenue: number;
+}
+
+export interface SegmentRowFull {
+  name: string;
+  actual: SeriesTriple;
+  budget: SeriesTriple;
+  lastYear: SeriesTriple | null;
+}
+
+export interface AccountRowFull {
+  rank: number;
+  accountName: string;
+  accountType: string;
+  roomNights: number;
+  revenue: number;
+  pctOfRevenue: number;
+}
+
+export interface SegmentsPageData {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: string;
+  scope: "MTD" | "YTD";
+  hasData: boolean;
+  status: string | null;
+  segments: SegmentRowFull[];
+  totals: { actual: SeriesTriple; budget: SeriesTriple; lastYear: SeriesTriple | null };
+  accounts: AccountRowFull[];
+  accountsTotalRevenue: number;
+}
+
+const ZERO_TRIPLE: SeriesTriple = { rn: 0, arr: 0, revenue: 0 };
+
+function blendedArr(revenue: number, rn: number): number {
+  return rn > 0 ? revenue / rn : 0;
+}
+
+/** Aggregated data for the Rooms → Market Segment & Account Production page. */
+export async function getSegmentsPageData(
+  propertyCode: string,
+  period: string,
+  scope: "MTD" | "YTD" = "MTD",
+): Promise<SegmentsPageData | null> {
+  noStore();
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: periodToDate(period) },
+        take: 1,
+        include: {
+          segmentProduction: { where: { scope } },
+          accountProduction: { orderBy: { revenue: "desc" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+    period,
+    scope,
+  };
+
+  const rp = property.periods[0];
+  if (!rp) {
+    return {
+      ...base,
+      hasData: false,
+      status: null,
+      segments: [],
+      totals: { actual: ZERO_TRIPLE, budget: ZERO_TRIPLE, lastYear: null },
+      accounts: [],
+      accountsTotalRevenue: 0,
+    };
+  }
+
+  const segMap = new Map<string, SegmentRowFull>();
+  for (const row of rp.segmentProduction) {
+    const entry =
+      segMap.get(row.segmentName) ??
+      ({ name: row.segmentName, actual: { ...ZERO_TRIPLE }, budget: { ...ZERO_TRIPLE }, lastYear: null } satisfies SegmentRowFull);
+    const triple: SeriesTriple = {
+      rn: row.roomNights,
+      arr: row.arr.toNumber(),
+      revenue: row.roomRevenue.toNumber(),
+    };
+    if (row.series === "ACTUAL") entry.actual = triple;
+    else if (row.series === "BUDGET") entry.budget = triple;
+    else if (row.series === "LAST_YEAR") entry.lastYear = triple;
+    segMap.set(row.segmentName, entry);
+  }
+  const segments = [...segMap.values()].sort(
+    (a, b) => b.actual.revenue - a.actual.revenue || b.budget.revenue - a.budget.revenue,
+  );
+
+  const sumTriple = (pick: (s: SegmentRowFull) => SeriesTriple | null): SeriesTriple => {
+    const rn = segments.reduce((t, s) => t + (pick(s)?.rn ?? 0), 0);
+    const revenue = segments.reduce((t, s) => t + (pick(s)?.revenue ?? 0), 0);
+    return { rn, revenue, arr: blendedArr(revenue, rn) };
+  };
+  const hasLastYear = segments.some((s) => s.lastYear !== null);
+  const totals = {
+    actual: sumTriple((s) => s.actual),
+    budget: sumTriple((s) => s.budget),
+    lastYear: hasLastYear ? sumTriple((s) => s.lastYear) : null,
+  };
+
+  const accountsTotalRevenue = rp.accountProduction.reduce(
+    (t, a) => t + a.revenue.toNumber(),
+    0,
+  );
+  const accounts: AccountRowFull[] = rp.accountProduction.map((a, i) => {
+    const revenue = a.revenue.toNumber();
+    return {
+      rank: i + 1,
+      accountName: a.accountName,
+      accountType: a.accountType,
+      roomNights: a.roomNights,
+      revenue,
+      pctOfRevenue: accountsTotalRevenue > 0 ? (revenue / accountsTotalRevenue) * 100 : 0,
+    };
+  });
+
+  return {
+    ...base,
+    hasData: true,
+    status: rp.status,
+    segments,
+    totals,
+    accounts,
+    accountsTotalRevenue,
+  };
+}
+
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {
