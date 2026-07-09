@@ -1,6 +1,8 @@
 import { unstable_noStore as noStore } from "next/cache";
 
+import { cpc, ctr, momChange } from "@/lib/calculations";
 import { prisma } from "@/lib/prisma";
+import { periodMonthShort } from "@/lib/labels";
 
 /**
  * Server-side data access for the dashboard. Reads RAW rows from Postgres and
@@ -824,6 +826,216 @@ export async function getGuestsPageData(
     share3Plus: totalLosRN > 0 ? (threePlus / totalLosRN) * 100 : null,
     dominantBucket: dominant ? dominant.losBucket : null,
   };
+}
+
+// ─── Marketing (Digital Ads & Online Reputation) page ───────────────────────
+
+export interface AdsPlatformRow {
+  platform: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  reach: number | null;
+  trackedRevenue: number;
+  ctr: number | null;
+  cpc: number | null;
+}
+
+export interface RoasPoint {
+  month: string;
+  roasPct: number | null;
+}
+
+export interface RankCard {
+  platform: string;
+  rank: number | null;
+  totalInMarket: number | null;
+  change: number | null; // prevRank - rank (+ = improved, lower is better)
+}
+
+export interface RankTrendPoint {
+  month: string;
+  BOOKING: number | null;
+  EXPEDIA: number | null;
+  TRIPADVISOR: number | null;
+}
+
+export interface TripMetric {
+  key: string;
+  label: string;
+  value: number;
+  mom: number | null;
+}
+
+export interface MarketingPageData {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: string;
+  hasData: boolean;
+  ads: {
+    totalSpend: number;
+    trackedRevenue: number;
+    roasPct: number | null;
+    roasRatio: number | null;
+    totalClicks: number;
+    platforms: AdsPlatformRow[];
+  } | null;
+  roasTrend: RoasPoint[];
+  spendRevenue: { platform: string; spend: number; revenue: number }[];
+  rankCards: RankCard[];
+  rankTrend: RankTrendPoint[];
+  tripadvisor: {
+    rank: number | null;
+    totalInMarket: number | null;
+    rating: number | null;
+    area: string;
+    metrics: TripMetric[];
+  } | null;
+}
+
+const ADS_PLATFORM_ORDER = ["GOOGLE", "META", "CORPORATE"];
+const RANK_PLATFORMS = ["BOOKING", "EXPEDIA", "TRIPADVISOR"] as const;
+
+/** Aggregated data for the Marketing (ads + reputation) page. */
+export async function getMarketingPageData(
+  propertyCode: string,
+  period: string,
+): Promise<MarketingPageData | null> {
+  noStore();
+  const selectedDate = periodToDate(period);
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: { lte: selectedDate } },
+        orderBy: { period: "desc" },
+        take: 12,
+        include: {
+          adsPerformance: { where: { unit: "HOTEL" } },
+          platformRankings: true,
+          tripadvisorMetrics: { where: { unit: "HOTEL" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+    period,
+  };
+
+  const current = property.periods.find(
+    (p) => p.period.getTime() === selectedDate.getTime(),
+  );
+  if (!current) {
+    return {
+      ...base,
+      hasData: false,
+      ads: null,
+      roasTrend: [],
+      spendRevenue: [],
+      rankCards: [],
+      rankTrend: [],
+      tripadvisor: null,
+    };
+  }
+  const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
+
+  // Ads
+  const hotelAds = [...current.adsPerformance].sort(
+    (a, b) => ADS_PLATFORM_ORDER.indexOf(a.platform) - ADS_PLATFORM_ORDER.indexOf(b.platform),
+  );
+  let ads: MarketingPageData["ads"] = null;
+  let spendRevenue: MarketingPageData["spendRevenue"] = [];
+  if (hotelAds.length > 0) {
+    const totalSpend = hotelAds.reduce((s, a) => s + a.spend.toNumber(), 0);
+    const trackedRevenue = hotelAds.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+    const totalClicks = hotelAds.reduce((s, a) => s + a.clicks, 0);
+    const roasRatio = totalSpend > 0 ? trackedRevenue / totalSpend : null;
+    ads = {
+      totalSpend,
+      trackedRevenue,
+      roasRatio,
+      roasPct: roasRatio !== null ? roasRatio * 100 : null,
+      totalClicks,
+      platforms: hotelAds.map((a) => ({
+        platform: a.platform,
+        spend: a.spend.toNumber(),
+        impressions: a.impressions,
+        clicks: a.clicks,
+        reach: a.reach,
+        trackedRevenue: a.trackedRevenue.toNumber(),
+        ctr: ctr(a.clicks, a.impressions),
+        cpc: cpc(a.spend.toNumber(), a.clicks),
+      })),
+    };
+    spendRevenue = hotelAds.map((a) => ({
+      platform: a.platform,
+      spend: a.spend.toNumber(),
+      revenue: a.trackedRevenue.toNumber(),
+    }));
+  }
+
+  // Trends (oldest → newest)
+  const asc = [...property.periods].reverse();
+  const roasTrend: RoasPoint[] = asc.slice(-6).map((p) => {
+    const spend = p.adsPerformance.reduce((s, a) => s + a.spend.toNumber(), 0);
+    const rev = p.adsPerformance.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+    return { month: periodMonthShort(dateToPeriod(p.period)), roasPct: spend > 0 ? (rev / spend) * 100 : null };
+  });
+  const rankTrend: RankTrendPoint[] = asc.slice(-12).map((p) => {
+    const find = (pl: string) => p.platformRankings.find((r) => r.platform === pl)?.rank ?? null;
+    return {
+      month: periodMonthShort(dateToPeriod(p.period)),
+      BOOKING: find("BOOKING"),
+      EXPEDIA: find("EXPEDIA"),
+      TRIPADVISOR: find("TRIPADVISOR"),
+    };
+  });
+
+  // Rank cards
+  const rankCards: RankCard[] = RANK_PLATFORMS.map((pl) => {
+    const cur = current.platformRankings.find((r) => r.platform === pl);
+    const prev = previous?.platformRankings.find((r) => r.platform === pl);
+    return {
+      platform: pl,
+      rank: cur?.rank ?? null,
+      totalInMarket: cur?.totalInMarket ?? null,
+      change: cur && prev ? prev.rank - cur.rank : null,
+    };
+  });
+
+  // Tripadvisor
+  const tm = current.tripadvisorMetrics[0];
+  const prevTm = previous?.tripadvisorMetrics[0];
+  let tripadvisor: MarketingPageData["tripadvisor"] = null;
+  if (tm) {
+    const taRank = current.platformRankings.find((r) => r.platform === "TRIPADVISOR");
+    const mom = (cur: number, prev: number | undefined) =>
+      prev === undefined ? null : momChange(cur, prev);
+    tripadvisor = {
+      rank: taRank?.rank ?? null,
+      totalInMarket: taRank?.totalInMarket ?? null,
+      rating: tm.avgRating.toNumber(),
+      area: property.area,
+      metrics: [
+        { key: "impressions", label: "Listing Impressions", value: tm.impressions, mom: mom(tm.impressions, prevTm?.impressions) },
+        { key: "pageVisitors", label: "Page Visitors", value: tm.pageVisitors, mom: mom(tm.pageVisitors, prevTm?.pageVisitors) },
+        { key: "newReviews", label: "New Reviews", value: tm.newReviews, mom: mom(tm.newReviews, prevTm?.newReviews) },
+        { key: "websiteClicks", label: "Website Clicks", value: tm.websiteClicks, mom: mom(tm.websiteClicks, prevTm?.websiteClicks) },
+        { key: "mapViews", label: "Map Views", value: tm.mapViews, mom: mom(tm.mapViews, prevTm?.mapViews) },
+        { key: "phoneCalls", label: "Phone Calls", value: tm.phoneCalls, mom: mom(tm.phoneCalls, prevTm?.phoneCalls) },
+      ],
+    };
+  }
+
+  return { ...base, hasData: true, ads, roasTrend, spendRevenue, rankCards, rankTrend, tripadvisor };
 }
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────

@@ -1,10 +1,11 @@
-import { ComingSoon } from "@/components/dashboard/coming-soon";
+import { redirect } from "next/navigation";
 
-export default function DigitalAdsPage() {
-  return (
-    <ComingSoon
-      title="Digital Ads & Reputation"
-      description="Paid campaign ROAS plus OTA rankings and Tripadvisor performance."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default function DigitalAdsRedirect({
+  params,
+}: {
+  params: { property: string; period: string };
+}) {
+  redirect(`/dashboard/${params.property}/${params.period}/marketing`);
 }

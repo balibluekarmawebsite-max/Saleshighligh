@@ -249,6 +249,15 @@ with a react-simple-maps choropleth (world-atlas; `lib/geo.ts` alpha-2→numeric
 section (column chart + KPI chips: avg LOS, 3+ share, dominant bucket + table).
 Aggregated fetch `getGuestsPageData`.
 
+**Phase 8 — Digital Ads & Online Reputation. ✅ Done.**
+`/dashboard/[property]/[period]/marketing` (old `digital-ads` route redirects
+here). Ads (unit=HOTEL): spend/revenue/ROAS/clicks KPIs, per-platform cards
+(CTR/CPC computed), spend-by-platform + spend-vs-revenue charts, 6-month ROAS
+trend. OTA ranking: three rank cards with MoM change (lower is better) and a
+12-month inverted-axis rank trend. Tripadvisor: rank/rating hero + metrics grid
+with auto MoM vs the previous period. Multi-period aggregated fetch
+`getMarketingPageData` (all trends/MoM computed from DB, never entered).
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

@@ -31,7 +31,7 @@ export const DASHBOARD_NAV: DashNavItem[] = [
       { label: "Guests & Geography", href: "rooms/guests" },
     ],
   },
-  { label: "Digital Ads & Reputation", href: "digital-ads", icon: Megaphone },
+  { label: "Digital Ads & Reputation", href: "marketing", icon: Megaphone },
   { label: "Restaurant", href: "restaurant", icon: UtensilsCrossed },
   { label: "Spa & Wellness", href: "spa", icon: Flower2 },
   { label: "Market & Forecast", href: "market-forecast", icon: LineChart },
