@@ -57,7 +57,7 @@ type NoPeriod<T> = Omit<T, "periodId">;
 
 export const revenueSummaries: NoPeriod<Prisma.RevenueSummaryCreateManyInput>[] =
   [
-    { department: "OCCUPANCY", actual: 0.84, budget: 0.9 },
+    { department: "OCCUPANCY", actual: 0.8407, budget: 0.9019 },
     { department: "ADR", actual: 1866289, budget: 2237461 },
     { department: "REVPAR", actual: 1569065, budget: 2017858 },
     { department: "ROOM_REVENUE", actual: 847295151, budget: 1089643475 },
@@ -258,7 +258,7 @@ export const extraPeriods: ExtraPeriodSeed[] = [
     propertyId: BKDU_ID,
     period: BKDS_JUNE_PERIOD,
     revenueSummaries: [
-      { department: "OCCUPANCY", actual: 0.95, budget: 0.93 },
+      { department: "OCCUPANCY", actual: 0.9483, budget: 0.9317 },
       { department: "ADR", actual: 2000632, budget: 2105180 },
       { department: "REVPAR", actual: 1897266, budget: 1852184 },
       { department: "ROOM_REVENUE", actual: 1138359532, budget: 1176795454 },
@@ -291,7 +291,7 @@ export const extraPeriods: ExtraPeriodSeed[] = [
     propertyId: BKV_ID,
     period: BKDS_JUNE_PERIOD,
     revenueSummaries: [
-      { department: "OCCUPANCY", actual: 0.83, budget: 0.9 },
+      { department: "OCCUPANCY", actual: 0.8289, budget: 0.9022 },
       { department: "ADR", actual: 2242597, budget: 2670173 },
       { department: "REVPAR", actual: 1858864, budget: 2409089 },
       { department: "ROOM_REVENUE", actual: 836488607, budget: 1084090162 },

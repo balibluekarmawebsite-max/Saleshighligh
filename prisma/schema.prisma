@@ -188,9 +188,11 @@ model RevenueSummary {
   id         String     @id @default(cuid())
   periodId   String
   department Department
-  actual     Decimal    @db.Decimal(18, 2)
-  budget     Decimal    @db.Decimal(18, 2)
-  lastYear   Decimal?   @db.Decimal(18, 2)
+  // (18,4): money needs 2 dp; OCCUPANCY/ratios stored here need 4 dp so a
+  // percentage renders to 2 dp precisely (e.g. 0.9483 → 94.83%).
+  actual     Decimal    @db.Decimal(18, 4)
+  budget     Decimal    @db.Decimal(18, 4)
+  lastYear   Decimal?   @db.Decimal(18, 4)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

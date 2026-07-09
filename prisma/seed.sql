@@ -22,7 +22,7 @@ ON CONFLICT ("propertyId","period") DO UPDATE SET "status"=EXCLUDED."status", "u
 
 DELETE FROM "revenue_summaries" WHERE "periodId" = 'rp_bkds_2026_06';
 INSERT INTO "revenue_summaries" ("id", "periodId", "department", "actual", "budget") VALUES
-  ('revenue_summaries_rp_bkds_2026_06_0', 'rp_bkds_2026_06', 'OCCUPANCY', 0.84, 0.9),
+  ('revenue_summaries_rp_bkds_2026_06_0', 'rp_bkds_2026_06', 'OCCUPANCY', 0.8407, 0.9019),
   ('revenue_summaries_rp_bkds_2026_06_1', 'rp_bkds_2026_06', 'ADR', 1866289, 2237461),
   ('revenue_summaries_rp_bkds_2026_06_2', 'rp_bkds_2026_06', 'REVPAR', 1569065, 2017858),
   ('revenue_summaries_rp_bkds_2026_06_3', 'rp_bkds_2026_06', 'ROOM_REVENUE', 847295151, 1089643475),
@@ -188,7 +188,7 @@ ON CONFLICT ("propertyId","period") DO UPDATE SET "status"=EXCLUDED."status", "u
 
 DELETE FROM "revenue_summaries" WHERE "periodId" = 'rp_bkdu_2026_06';
 INSERT INTO "revenue_summaries" ("id", "periodId", "department", "actual", "budget") VALUES
-  ('revenue_summaries_rp_bkdu_2026_06_0', 'rp_bkdu_2026_06', 'OCCUPANCY', 0.95, 0.93),
+  ('revenue_summaries_rp_bkdu_2026_06_0', 'rp_bkdu_2026_06', 'OCCUPANCY', 0.9483, 0.9317),
   ('revenue_summaries_rp_bkdu_2026_06_1', 'rp_bkdu_2026_06', 'ADR', 2000632, 2105180),
   ('revenue_summaries_rp_bkdu_2026_06_2', 'rp_bkdu_2026_06', 'REVPAR', 1897266, 1852184),
   ('revenue_summaries_rp_bkdu_2026_06_3', 'rp_bkdu_2026_06', 'ROOM_REVENUE', 1138359532, 1176795454),
@@ -223,7 +223,7 @@ ON CONFLICT ("propertyId","period") DO UPDATE SET "status"=EXCLUDED."status", "u
 
 DELETE FROM "revenue_summaries" WHERE "periodId" = 'rp_bkv_2026_06';
 INSERT INTO "revenue_summaries" ("id", "periodId", "department", "actual", "budget") VALUES
-  ('revenue_summaries_rp_bkv_2026_06_0', 'rp_bkv_2026_06', 'OCCUPANCY', 0.83, 0.9),
+  ('revenue_summaries_rp_bkv_2026_06_0', 'rp_bkv_2026_06', 'OCCUPANCY', 0.8289, 0.9022),
   ('revenue_summaries_rp_bkv_2026_06_1', 'rp_bkv_2026_06', 'ADR', 2242597, 2670173),
   ('revenue_summaries_rp_bkv_2026_06_2', 'rp_bkv_2026_06', 'REVPAR', 1858864, 2409089),
   ('revenue_summaries_rp_bkv_2026_06_3', 'rp_bkv_2026_06', 'ROOM_REVENUE', 836488607, 1084090162),
