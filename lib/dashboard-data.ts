@@ -1573,6 +1573,229 @@ export async function getSpaPageData(
   };
 }
 
+// ─── Market Intelligence & Forecast page (aggregated) ────────────────────────
+
+export interface PaceRow {
+  targetMonth: string; // yyyy-mm
+  monthLabel: string; // "Jul"
+  otbOcc: number; // percent (latest snapshot)
+  prevOcc: number | null; // percent (previous snapshot)
+  pickup: number | null; // points (otb − prev)
+  marketDemand: number | null; // percent
+  note: string;
+  snapshotDate: string; // ISO date
+}
+
+export interface RevenueForecastRow {
+  month: string;
+  monthLabel: string;
+  forecastRevenue: number | null;
+  budgetRevenue: number | null;
+  gap: number | null;
+  cumulativeGap: number | null;
+}
+
+export interface MarketSupplyCard {
+  areaName: string;
+  propertiesCount: number;
+  propertiesCountLastYear: number | null;
+  yoyPct: number | null;
+  trend: number[];
+}
+
+export interface MarketAlert {
+  kind: "below_demand" | "negative_pickup";
+  month: string;
+  message: string;
+}
+
+export interface MarketPageData {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: string;
+  hasData: boolean;
+  status: string | null;
+  pace: PaceRow[];
+  paceAsOf: string | null;
+  forecasts: ForecastPoint[];
+  revenueForecast: RevenueForecastRow[];
+  revenueForecastCumulativeGap: number | null;
+  supply: MarketSupplyCard[];
+  demandRange: { min: number; max: number } | null;
+  narrative: NarrativeBlock | null;
+  alerts: MarketAlert[];
+}
+
+/** Aggregated data for the Market Intelligence & Forecast page. */
+export async function getMarketPageData(
+  propertyCode: string,
+  period: string,
+): Promise<MarketPageData | null> {
+  noStore();
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: periodToDate(period) },
+        take: 1,
+        include: {
+          bookingPace: true,
+          forecasts: { orderBy: { targetMonth: "asc" }, take: 6 },
+          marketSupply: { orderBy: { areaName: "asc" } },
+          narrativeContent: { where: { section: "MARKET_INTEL" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+    period,
+  };
+
+  const rp = property.periods[0];
+  if (!rp) {
+    return {
+      ...base,
+      hasData: false,
+      status: null,
+      pace: [],
+      paceAsOf: null,
+      forecasts: [],
+      revenueForecast: [],
+      revenueForecastCumulativeGap: null,
+      supply: [],
+      demandRange: null,
+      narrative: null,
+      alerts: [],
+    };
+  }
+
+  // Booking pace — keep the latest snapshot per target month, next 6 months.
+  const paceByMonth = new Map<string, (typeof rp.bookingPace)[number]>();
+  for (const bp of rp.bookingPace) {
+    const key = dateToPeriod(bp.targetMonth);
+    const existing = paceByMonth.get(key);
+    if (!existing || bp.snapshotDate.getTime() > existing.snapshotDate.getTime()) {
+      paceByMonth.set(key, bp);
+    }
+  }
+  const pace: PaceRow[] = [...paceByMonth.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .slice(0, 6)
+    .map(([key, bp]) => {
+      const otbOcc = bp.occupancyOnBooks.toNumber() * 100;
+      const prevOcc = bp.previousSnapshotOcc ? bp.previousSnapshotOcc.toNumber() * 100 : null;
+      const marketDemand = bp.marketDemandPct ? bp.marketDemandPct.toNumber() * 100 : null;
+      return {
+        targetMonth: key,
+        monthLabel: periodMonthShort(key),
+        otbOcc,
+        prevOcc,
+        pickup: prevOcc !== null ? otbOcc - prevOcc : null,
+        marketDemand,
+        note: bp.note,
+        snapshotDate: bp.snapshotDate.toISOString(),
+      };
+    });
+  const paceAsOf = pace.length
+    ? pace.reduce((m, r) => (r.snapshotDate > m ? r.snapshotDate : m), pace[0]!.snapshotDate)
+    : null;
+
+  // 6-month occupancy forecast
+  const forecasts: ForecastPoint[] = rp.forecasts.map((f) => ({
+    month: dateToPeriod(f.targetMonth),
+    forecastOcc: f.forecastOccPct ? f.forecastOccPct.toNumber() * 100 : null,
+    lastYearOcc: f.lastYearOccPct ? f.lastYearOccPct.toNumber() * 100 : null,
+    marketDemand: f.marketDemandPct ? f.marketDemandPct.toNumber() * 100 : null,
+  }));
+
+  // Revenue forecast vs budget (with running cumulative gap)
+  let cum = 0;
+  const revenueForecast: RevenueForecastRow[] = rp.forecasts
+    .filter((f) => f.forecastRevenue !== null || f.budgetRevenue !== null)
+    .map((f) => {
+      const fr = f.forecastRevenue ? f.forecastRevenue.toNumber() : null;
+      const br = f.budgetRevenue ? f.budgetRevenue.toNumber() : null;
+      const gap = fr !== null && br !== null ? fr - br : null;
+      if (gap !== null) cum += gap;
+      const monthKey = dateToPeriod(f.targetMonth);
+      return {
+        month: monthKey,
+        monthLabel: periodMonthShort(monthKey),
+        forecastRevenue: fr,
+        budgetRevenue: br,
+        gap,
+        cumulativeGap: gap !== null ? cum : null,
+      };
+    });
+  const revenueForecastCumulativeGap = revenueForecast.length ? cum : null;
+
+  // Demand range across forecast + pace
+  const demandVals = [
+    ...forecasts.map((f) => f.marketDemand),
+    ...pace.map((p) => p.marketDemand),
+  ].filter((v): v is number => v !== null);
+  const demandRange = demandVals.length
+    ? { min: Math.min(...demandVals), max: Math.max(...demandVals) }
+    : null;
+
+  // Supply context
+  const supply: MarketSupplyCard[] = rp.marketSupply.map((m) => {
+    const ly = m.propertiesCountLastYear;
+    return {
+      areaName: m.areaName,
+      propertiesCount: m.propertiesCount,
+      propertiesCountLastYear: ly ?? null,
+      yoyPct: ly !== null && ly > 0 ? momChange(m.propertiesCount, ly) : null,
+      trend: ly !== null ? [ly, m.propertiesCount] : [m.propertiesCount],
+    };
+  });
+
+  // Rule-based alerts
+  const alerts: MarketAlert[] = [];
+  for (const p of pace) {
+    if (p.marketDemand !== null && p.marketDemand - p.otbOcc > 15) {
+      alerts.push({
+        kind: "below_demand",
+        month: p.monthLabel,
+        message: `${p.monthLabel}: on-the-books ${p.otbOcc.toFixed(0)}% is ${(p.marketDemand - p.otbOcc).toFixed(0)} pts below market demand (${p.marketDemand.toFixed(0)}%)`,
+      });
+    }
+    if (p.pickup !== null && p.pickup < 0) {
+      alerts.push({
+        kind: "negative_pickup",
+        month: p.monthLabel,
+        message: `${p.monthLabel}: pickup ${p.pickup.toFixed(1)} pts since the last snapshot`,
+      });
+    }
+  }
+
+  const narr = rp.narrativeContent[0];
+  const narrative = narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null;
+
+  return {
+    ...base,
+    hasData: true,
+    status: rp.status,
+    pace,
+    paceAsOf,
+    forecasts,
+    revenueForecast,
+    revenueForecastCumulativeGap,
+    supply,
+    demandRange,
+    narrative,
+    alerts,
+  };
+}
+
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {

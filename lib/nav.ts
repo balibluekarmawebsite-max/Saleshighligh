@@ -34,7 +34,7 @@ export const DASHBOARD_NAV: DashNavItem[] = [
   { label: "Digital Ads & Reputation", href: "marketing", icon: Megaphone },
   { label: "Restaurant", href: "restaurant", icon: UtensilsCrossed },
   { label: "Spa & Wellness", href: "spa", icon: Flower2 },
-  { label: "Market & Forecast", href: "market-forecast", icon: LineChart },
+  { label: "Market & Forecast", href: "market", icon: LineChart },
   { label: "Social Media & PR", href: "social-pr", icon: Share2 },
   { label: "Action Plans & Promotions", href: "action-plans", icon: ListChecks },
 ];

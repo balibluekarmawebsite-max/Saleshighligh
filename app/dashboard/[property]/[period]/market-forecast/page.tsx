@@ -1,10 +1,11 @@
-import { ComingSoon } from "@/components/dashboard/coming-soon";
+import { redirect } from "next/navigation";
 
-export default function MarketForecastPage() {
-  return (
-    <ComingSoon
-      title="Market & Forecast"
-      description="Booking pace, market demand and the 6-month forward forecast."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default function MarketForecastRedirect({
+  params,
+}: {
+  params: { property: string; period: string };
+}) {
+  redirect(`/dashboard/${params.property}/${params.period}/market`);
 }

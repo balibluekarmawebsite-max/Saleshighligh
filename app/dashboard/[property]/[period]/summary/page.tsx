@@ -196,7 +196,7 @@ export default async function SummaryPage({
               <p className="text-sm text-muted-foreground">No forecast data for this period.</p>
             )}
             <Link
-              href={`/dashboard/${params.property}/${params.period}/market-forecast`}
+              href={`/dashboard/${params.property}/${params.period}/market`}
               className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
             >
               Full Market &amp; Forecast <ArrowRight className="h-4 w-4" />

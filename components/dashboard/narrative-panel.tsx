@@ -16,11 +16,13 @@ export function NarrativePanel({
   section,
   property,
   period,
+  emptyText = "No executive summary written for this period yet.",
 }: {
   block: NarrativeBlock | null;
   section: string;
   property: string;
   period: string;
+  emptyText?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,9 +71,7 @@ export function NarrativePanel({
           ))}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          No executive summary written for this period yet.
-        </p>
+        <p className="text-sm text-muted-foreground">{emptyText}</p>
       )}
 
       {draft && (

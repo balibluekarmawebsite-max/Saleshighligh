@@ -112,6 +112,7 @@ enum NarrativeSection {
   ROOMTYPE_ANALYSIS
   RESTAURANT_OVERVIEW
   SPA_OVERVIEW
+  MARKET_INTEL
   ACTION_PLAN
   MARKETING_PLAN
   SOCIAL_PLAN
@@ -173,6 +174,7 @@ model ReportPeriod {
   socialMediaMetrics SocialMediaMetrics[]
   bookingPace        BookingPace[]
   forecasts          Forecast[]
+  marketSupply       MarketSupply[]
   narrativeContent   NarrativeContent[]
   influencerCollabs  InfluencerCollab[]
 
@@ -512,6 +514,20 @@ model Forecast {
 
   @@unique([periodId, targetMonth])
   @@map("forecasts")
+}
+
+/// Competitive supply context for the property's market area.
+model MarketSupply {
+  id                      String  @id @default(cuid())
+  periodId                String
+  areaName                String
+  propertiesCount         Int
+  propertiesCountLastYear Int?
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, areaName])
+  @@map("market_supply")
 }
 
 // ─── Narrative & partnerships ────────────────────────────────────────────────

@@ -289,6 +289,23 @@ SPA unit, falls back to HOTEL); and a SPA_OVERVIEW narrative in the same
 `NarrativeColumns` three-column style. Aggregated fetch `getSpaPageData`;
 empty-safe per section.
 
+**Phase 11 — Market Intelligence & Forecast. ✅ Done.**
+`/dashboard/[property]/[period]/market` (nav href now `market`; old
+`market-forecast` route redirects here). A rule-based amber **alert strip** (OTB
+>15 pts below market demand, or negative pickup). Booking Pace / On-the-Books:
+table (Target Month · prev OTB · OTB today · Pickup pts · Market Demand · Note)
+with a "Data as of {snapshotDate}" caption, plus `MarketPaceChart` (bars = on
+the books, dashed marker line = market demand). 6-Month Forecast: reused
+`ForecastOccupancyChart` (Forecast vs Last Year vs Market Demand) + a Revenue
+Forecast-vs-Budget table with a running cumulative-gap column and total. Market
+Supply & Demand: per-area supply cards (count, YoY MoMBadge, mini `Sparkline`),
+a demand-range card, and an editable MARKET_INTEL narrative (`NarrativePanel`,
+new `emptyText` prop). Aggregated fetch `getMarketPageData`.
+_Schema:_ adds a `MarketSupply` model (period · areaName · propertiesCount ·
+propertiesCountLastYear) and a `MARKET_INTEL` value on `NarrativeSection` —
+migration `20260709090000_add_market_supply` (run its `migration.sql` in the
+Supabase SQL editor before the page will load).
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).
