@@ -1,10 +1,11 @@
-import { ComingSoon } from "@/components/dashboard/coming-soon";
+import { redirect } from "next/navigation";
 
-export default function SocialPrPage() {
-  return (
-    <ComingSoon
-      title="Social Media & PR"
-      description="Organic reach, engagement, follower growth and influencer collaborations."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default function SocialPrRedirect({
+  params,
+}: {
+  params: { property: string; period: string };
+}) {
+  redirect(`/dashboard/${params.property}/${params.period}/social`);
 }

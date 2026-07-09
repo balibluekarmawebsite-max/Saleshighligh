@@ -306,6 +306,27 @@ propertiesCountLastYear) and a `MARKET_INTEL` value on `NarrativeSection` —
 migration `20260709090000_add_market_supply` (run its `migration.sql` in the
 Supabase SQL editor before the page will load).
 
+**Phase 12 — Social Media & PR + Action Plans & Promotions. ✅ Done.**
+Two pages. **Social** `/dashboard/[property]/[period]/social` (nav href now
+`social`; old `social-pr` redirects here): unit tabs (Hotel / Restaurant / Spa)
+via `SocialUnitTabs`, each showing Instagram + Facebook then TikTok + YouTube
+cards from `SocialMediaMetrics` (Impressions / Reach / Interactions / Link Clicks
+/ Profile Visits / Followers Gained — each with auto MoMBadge + a 6-month
+`Sparkline`), a rule-based per-unit summary ("Strong month: reach +…; watch:
+profile visits −…"), and an Influencer Collaborations table (linked handle,
+name, compact followers, origin, notes). Aggregated fetch `getSocialPageData`.
+**Plans** `/dashboard/[property]/[period]/plans` (nav href now `plans`; old
+`action-plans` redirects here): content-managed sections from `NarrativeContent`
+(Action Plan, Sales Strategy per Segment, Marketing Plan, Social Plan, Consortia
++ partner cards, Magazine, Media/PR, Promotions + per-unit image-gallery
+scaffolds) via a new `PlanSectionPanel` (rich-text display, AI-draft stub, and a
+"Carry forward from last month" action seeded from the previous period).
+Aggregated fetch `getPlansPageData` (current + previous). Edit-in-place, image
+upload and drag-to-reorder are scaffolded and land with the admin/auth phase.
+_Schema:_ adds a `SALES_STRATEGY` value on `NarrativeSection` — migration
+`20260709100000_add_sales_strategy_section` (run its `migration.sql` in the
+Supabase SQL editor before the Plans page will load).
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

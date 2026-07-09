@@ -1,10 +1,11 @@
-import { ComingSoon } from "@/components/dashboard/coming-soon";
+import { redirect } from "next/navigation";
 
-export default function ActionPlansPage() {
-  return (
-    <ComingSoon
-      title="Action Plans & Promotions"
-      description="Narrative action items, marketing plans and active promotions."
-    />
-  );
+export const dynamic = "force-dynamic";
+
+export default function ActionPlansRedirect({
+  params,
+}: {
+  params: { property: string; period: string };
+}) {
+  redirect(`/dashboard/${params.property}/${params.period}/plans`);
 }

@@ -1796,6 +1796,249 @@ export async function getMarketPageData(
   };
 }
 
+// ─── Social Media & PR page (aggregated) ─────────────────────────────────────
+
+type SocialMetricKey =
+  | "impressions"
+  | "reach"
+  | "interactions"
+  | "linkClicks"
+  | "profileVisits"
+  | "followersGained";
+
+export interface SocialMetricCell {
+  key: SocialMetricKey;
+  label: string;
+  value: number;
+  mom: number | null;
+  trend: number[];
+}
+
+export interface SocialPlatformCard {
+  platform: string;
+  hasData: boolean;
+  metrics: SocialMetricCell[];
+}
+
+export interface SocialUnitData {
+  unit: string;
+  hasData: boolean;
+  platforms: SocialPlatformCard[];
+  summary: string | null;
+}
+
+export interface InfluencerRow {
+  handle: string;
+  name: string;
+  followers: number;
+  origin: string;
+  notes: string | null;
+}
+
+export interface SocialPageData {
+  property: { code: string; name: string; area: string; restaurantName: string; spaName: string };
+  period: string;
+  hasData: boolean;
+  units: SocialUnitData[];
+  influencers: InfluencerRow[];
+}
+
+const SOCIAL_UNITS = ["HOTEL", "RESTAURANT", "SPA"] as const;
+const SOCIAL_PLATFORMS = ["INSTAGRAM", "FACEBOOK", "TIKTOK", "YOUTUBE"] as const;
+const SOCIAL_METRICS: { key: SocialMetricKey; label: string }[] = [
+  { key: "impressions", label: "Impressions" },
+  { key: "reach", label: "Reach" },
+  { key: "interactions", label: "Interactions" },
+  { key: "linkClicks", label: "Link Clicks" },
+  { key: "profileVisits", label: "Profile Visits" },
+  { key: "followersGained", label: "Followers Gained" },
+];
+const SUMMARY_UP: SocialMetricKey[] = ["reach", "interactions", "followersGained"];
+const SUMMARY_WATCH: SocialMetricKey[] = ["profileVisits", "linkClicks"];
+const METRIC_PHRASE: Record<SocialMetricKey, string> = {
+  impressions: "impressions",
+  reach: "reach",
+  interactions: "interactions",
+  linkClicks: "link clicks",
+  profileVisits: "profile visits",
+  followersGained: "followers",
+};
+
+/** Aggregated data for the Social Media & PR page. */
+export async function getSocialPageData(
+  propertyCode: string,
+  period: string,
+): Promise<SocialPageData | null> {
+  noStore();
+  const selectedDate = periodToDate(period);
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: { lte: selectedDate } },
+        orderBy: { period: "desc" },
+        take: 6,
+        include: {
+          socialMediaMetrics: true,
+          influencerCollabs: true,
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      restaurantName: property.restaurantName,
+      spaName: property.spaName,
+    },
+    period,
+  };
+
+  const current = property.periods.find((p) => p.period.getTime() === selectedDate.getTime());
+  if (!current) {
+    return { ...base, hasData: false, units: [], influencers: [] };
+  }
+  const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
+  const asc = [...property.periods].reverse();
+
+  const pctStr = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+
+  const units: SocialUnitData[] = SOCIAL_UNITS.map((unit) => {
+    const platforms: SocialPlatformCard[] = SOCIAL_PLATFORMS.map((platform) => {
+      const cur = current.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform);
+      const prev = previous?.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform);
+      const metrics: SocialMetricCell[] = SOCIAL_METRICS.map(({ key, label }) => {
+        const value = cur ? cur[key] : 0;
+        const prevVal = prev ? prev[key] : undefined;
+        const trend = asc
+          .map((p) => p.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform)?.[key])
+          .filter((v): v is number => v !== undefined);
+        return {
+          key,
+          label,
+          value,
+          mom: cur && prevVal !== undefined ? momChange(value, prevVal) : null,
+          trend,
+        };
+      });
+      return { platform, hasData: !!cur, metrics };
+    });
+
+    // Rule-based unit summary from platform-aggregated MoM.
+    const curRows = current.socialMediaMetrics.filter((m) => m.unit === unit);
+    const prevRows = previous?.socialMediaMetrics.filter((m) => m.unit === unit) ?? [];
+    let summary: string | null = null;
+    if (curRows.length > 0 && prevRows.length > 0) {
+      const momOf = (key: SocialMetricKey): number | null => {
+        const c = curRows.reduce((s, m) => s + m[key], 0);
+        const p = prevRows.reduce((s, m) => s + m[key], 0);
+        return p > 0 ? momChange(c, p) : null;
+      };
+      const ups = SUMMARY_UP.map((k) => ({ k, mom: momOf(k) }))
+        .filter((x): x is { k: SocialMetricKey; mom: number } => x.mom !== null && x.mom > 0)
+        .sort((a, b) => b.mom - a.mom)
+        .slice(0, 2);
+      const downs = SUMMARY_WATCH.map((k) => ({ k, mom: momOf(k) }))
+        .filter((x): x is { k: SocialMetricKey; mom: number } => x.mom !== null && x.mom < 0)
+        .sort((a, b) => a.mom - b.mom)
+        .slice(0, 2);
+      const parts: string[] = [];
+      if (ups.length) parts.push(`Strong month: ${ups.map((x) => `${METRIC_PHRASE[x.k]} ${pctStr(x.mom)}`).join(", ")}`);
+      if (downs.length) parts.push(`watch: ${downs.map((x) => `${METRIC_PHRASE[x.k]} ${pctStr(x.mom)}`).join(", ")}`);
+      summary = parts.length ? `${parts.join("; ")}.` : null;
+    }
+
+    return { unit, hasData: platforms.some((pl) => pl.hasData), platforms, summary };
+  });
+
+  const influencers: InfluencerRow[] = [...current.influencerCollabs]
+    .sort((a, b) => b.followers - a.followers)
+    .map((c) => ({ handle: c.handle, name: c.name, followers: c.followers, origin: c.origin, notes: c.notes ?? null }));
+
+  return { ...base, hasData: true, units, influencers };
+}
+
+// ─── Action Plans & Promotions page (aggregated) ─────────────────────────────
+
+export interface PlanSectionBlocks {
+  current: NarrativeBlock | null;
+  previous: NarrativeBlock | null;
+}
+
+export interface PlansPageData {
+  property: { code: string; name: string; area: string; restaurantName: string; spaName: string };
+  period: string;
+  hasData: boolean;
+  sections: Record<string, PlanSectionBlocks>;
+}
+
+const PLAN_SECTIONS = [
+  "ACTION_PLAN",
+  "SALES_STRATEGY",
+  "MARKETING_PLAN",
+  "SOCIAL_PLAN",
+  "CONSORTIA",
+  "MAGAZINE",
+  "PR",
+  "PROMOTIONS",
+] as const;
+
+/** Aggregated data for the Action Plans & Promotions page (current + previous). */
+export async function getPlansPageData(
+  propertyCode: string,
+  period: string,
+): Promise<PlansPageData | null> {
+  noStore();
+  const selectedDate = periodToDate(period);
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: { lte: selectedDate } },
+        orderBy: { period: "desc" },
+        take: 2,
+        include: {
+          narrativeContent: { where: { section: { in: [...PLAN_SECTIONS] } } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      restaurantName: property.restaurantName,
+      spaName: property.spaName,
+    },
+    period,
+  };
+
+  const current = property.periods.find((p) => p.period.getTime() === selectedDate.getTime());
+  const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
+
+  const toBlock = (n: { content: string; aiGenerated: boolean } | undefined): NarrativeBlock | null =>
+    n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
+
+  const sections: Record<string, PlanSectionBlocks> = {};
+  for (const sec of PLAN_SECTIONS) {
+    sections[sec] = {
+      current: toBlock(current?.narrativeContent.find((n) => n.section === sec)),
+      previous: toBlock(previous?.narrativeContent.find((n) => n.section === sec)),
+    };
+  }
+
+  return { ...base, hasData: !!current, sections };
+}
+
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {

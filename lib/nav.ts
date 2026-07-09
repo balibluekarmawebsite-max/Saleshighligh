@@ -35,8 +35,8 @@ export const DASHBOARD_NAV: DashNavItem[] = [
   { label: "Restaurant", href: "restaurant", icon: UtensilsCrossed },
   { label: "Spa & Wellness", href: "spa", icon: Flower2 },
   { label: "Market & Forecast", href: "market", icon: LineChart },
-  { label: "Social Media & PR", href: "social-pr", icon: Share2 },
-  { label: "Action Plans & Promotions", href: "action-plans", icon: ListChecks },
+  { label: "Social Media & PR", href: "social", icon: Share2 },
+  { label: "Action Plans & Promotions", href: "plans", icon: ListChecks },
 ];
 
 export interface AdminNavItem {
