@@ -1385,6 +1385,194 @@ export async function getRestaurantPageData(
   };
 }
 
+// ─── Spa & Wellness page (aggregated) ────────────────────────────────────────
+
+export interface SpaSegmentRow {
+  segment: string; // IN_HOUSE | OUTSIDE | INCLUSION
+  coversActual: number;
+  coversBudget: number;
+  revenueActual: number;
+  revenueBudget: number;
+  avgCheckActual: number | null;
+  avgCheckBudget: number | null;
+}
+
+export interface SpaTreatmentRow {
+  rank: number;
+  treatmentName: string;
+  count: number;
+  revenue: number;
+  avgPrice: number | null;
+}
+
+export interface SpaPageData {
+  property: { code: string; name: string; area: string; spaName: string };
+  period: string;
+  hasData: boolean;
+  status: string | null;
+  overview: {
+    covers: MetricAB;
+    revenue: MetricAB;
+    avgCheckActual: number | null;
+    avgCheckBudget: number | null;
+    revenueAchievementPct: number | null;
+  } | null;
+  segments: SpaSegmentRow[];
+  treatments: SpaTreatmentRow[];
+  ads: AdsSummary | null;
+  spendRevenue: { platform: string; spend: number; revenue: number }[];
+  roasTrend: RoasPoint[];
+  gokai: GokaiSummary | null;
+  narrative: NarrativeBlock | null;
+}
+
+const SPA_SEGMENT_ORDER = ["IN_HOUSE", "OUTSIDE", "INCLUSION"];
+
+/** Aggregated data for the Spa & Wellness page (ads scoped to SPA). */
+export async function getSpaPageData(
+  propertyCode: string,
+  period: string,
+): Promise<SpaPageData | null> {
+  noStore();
+  const selectedDate = periodToDate(period);
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: { lte: selectedDate } },
+        orderBy: { period: "desc" },
+        take: 6,
+        include: {
+          spaSales: true,
+          spaTreatments: { orderBy: { revenue: "desc" } },
+          gokaiReports: true,
+          adsPerformance: { where: { unit: "SPA" } },
+          narrativeContent: { where: { section: "SPA_OVERVIEW" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      spaName: property.spaName,
+    },
+    period,
+  };
+
+  const current = property.periods.find(
+    (p) => p.period.getTime() === selectedDate.getTime(),
+  );
+  if (!current) {
+    return {
+      ...base,
+      hasData: false,
+      status: null,
+      overview: null,
+      segments: [],
+      treatments: [],
+      ads: null,
+      spendRevenue: [],
+      roasTrend: [],
+      gokai: null,
+      narrative: null,
+    };
+  }
+  const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
+
+  // Guest-segment performance
+  const segSorted = [...current.spaSales].sort(
+    (a, b) => SPA_SEGMENT_ORDER.indexOf(a.guestSegment) - SPA_SEGMENT_ORDER.indexOf(b.guestSegment),
+  );
+  const segments: SpaSegmentRow[] = segSorted.map((s) => {
+    const revenueActual = s.revenueActual.toNumber();
+    const revenueBudget = s.revenueBudget.toNumber();
+    return {
+      segment: s.guestSegment,
+      coversActual: s.coversActual,
+      coversBudget: s.coversBudget,
+      revenueActual,
+      revenueBudget,
+      avgCheckActual: avgCheck(revenueActual, s.coversActual),
+      avgCheckBudget: avgCheck(revenueBudget, s.coversBudget),
+    };
+  });
+
+  const coversActual = segments.reduce((s, r) => s + r.coversActual, 0);
+  const coversBudget = segments.reduce((s, r) => s + r.coversBudget, 0);
+  const revenueActual = segments.reduce((s, r) => s + r.revenueActual, 0);
+  const revenueBudget = segments.reduce((s, r) => s + r.revenueBudget, 0);
+  const overview =
+    segments.length > 0
+      ? {
+          covers: { actual: coversActual, budget: coversBudget },
+          revenue: { actual: revenueActual, budget: revenueBudget },
+          avgCheckActual: avgCheck(revenueActual, coversActual),
+          avgCheckBudget: avgCheck(revenueBudget, coversBudget),
+          revenueAchievementPct: achievementPct(revenueActual, revenueBudget),
+        }
+      : null;
+
+  // Top treatments
+  const treatments: SpaTreatmentRow[] = current.spaTreatments.slice(0, 10).map((t, i) => {
+    const revenue = t.revenue.toNumber();
+    return {
+      rank: i + 1,
+      treatmentName: t.treatmentName,
+      count: t.treatmentCount,
+      revenue,
+      avgPrice: avgCheck(revenue, t.treatmentCount),
+    };
+  });
+
+  // Ads (unit=SPA)
+  const asc = [...property.periods].reverse();
+  const { ads, spendRevenue, roasTrend } = buildAdsBlock(current.adsPerformance, asc);
+
+  // Gokai (prefer SPA unit, fall back to HOTEL) — product/upsell focus
+  const pickGokai = (p: typeof current | undefined) =>
+    p?.gokaiReports.find((g) => g.unit === "SPA") ??
+    p?.gokaiReports.find((g) => g.unit === "HOTEL");
+  const gCur = pickGokai(current);
+  let gokai: GokaiSummary | null = null;
+  if (gCur) {
+    const gPrev = previous?.gokaiReports.find((g) => g.unit === gCur.unit);
+    const mom = (cur: number, prev: number | undefined) =>
+      prev === undefined ? null : momChange(cur, prev);
+    gokai = {
+      unit: gCur.unit,
+      metrics: [
+        { key: "productViews", label: "Product Views", value: gCur.productViews, format: "number", mom: mom(gCur.productViews, gPrev?.productViews) },
+        { key: "upsellSales", label: "Upsell Sales", value: gCur.upsellSales, format: "number", mom: mom(gCur.upsellSales, gPrev?.upsellSales) },
+        { key: "upsellRevenue", label: "Upsell Revenue", value: gCur.upsellRevenue.toNumber(), format: "idr", mom: mom(gCur.upsellRevenue.toNumber(), gPrev?.upsellRevenue.toNumber()) },
+        { key: "refunds", label: "Refunds", value: gCur.refunds, format: "number", mom: mom(gCur.refunds, gPrev?.refunds) },
+      ],
+    };
+  }
+
+  const narr = current.narrativeContent[0];
+  const narrative = narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null;
+
+  return {
+    ...base,
+    hasData: true,
+    status: current.status,
+    overview,
+    segments,
+    treatments,
+    ads,
+    spendRevenue,
+    roasTrend,
+    gokai,
+    narrative,
+  };
+}
+
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {

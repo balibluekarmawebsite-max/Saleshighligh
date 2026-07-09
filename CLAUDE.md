@@ -275,6 +275,20 @@ RESTAURANT); and a RESTAURANT_OVERVIEW narrative rendered as 😊 / ☹️ / �
 columns (`NarrativeColumns`) with the AI-generate stub. Aggregated fetch
 `getRestaurantPageData`; empty-safe per section.
 
+**Phase 10 — Spa & Wellness. ✅ Done.**
+`/dashboard/[property]/[period]/spa` (title = property `spaName`). KPI strip
+(covers / revenue vs budget, average check with a gold highlight ring when above
+budget, revenue achievement %); Guest Segment Performance (`SpaSegmentTable` —
+In-House / Outside / Inclusion with Covers & Average Check as Actual·Budget·% and
+Revenue as Actual·Budget·Diff·% + blended TOTAL, a revenue-vs-budget grouped bar,
+and a "beat budget and why" auto-insight from covers vs avg-check variance); Top
+10 Treatments (CSS horizontal revenue bars with counts + a Rank/Count/Revenue/
+Avg-price table); Spa Ads (reusable `AdsBlock`, unit=SPA); a Gokai panel (product
+views / upsell sales / upsell revenue / refunds, each with auto MoMBadge; prefers
+SPA unit, falls back to HOTEL); and a SPA_OVERVIEW narrative in the same
+`NarrativeColumns` three-column style. Aggregated fetch `getSpaPageData`;
+empty-safe per section.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).
