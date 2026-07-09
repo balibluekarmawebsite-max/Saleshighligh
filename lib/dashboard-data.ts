@@ -624,6 +624,77 @@ export async function getSegmentsPageData(
   };
 }
 
+// ─── Rooms — Room Types page (aggregated) ────────────────────────────────────
+
+export interface RoomTypePageData {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: string;
+  hasData: boolean;
+  status: string | null;
+  roomTypes: RoomTypeRow[];
+  narrative: NarrativeBlock | null;
+}
+
+/** Aggregated data for the Rooms → Room Types page. */
+export async function getRoomTypesPageData(
+  propertyCode: string,
+  period: string,
+): Promise<RoomTypePageData | null> {
+  noStore();
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: periodToDate(period) },
+        take: 1,
+        include: {
+          roomTypeProduction: true,
+          narrativeContent: { where: { section: "ROOMTYPE_ANALYSIS" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+    period,
+  };
+
+  const rp = property.periods[0];
+  if (!rp) {
+    return { ...base, hasData: false, status: null, roomTypes: [], narrative: null };
+  }
+
+  const roomTypes: RoomTypeRow[] = rp.roomTypeProduction
+    .map((r) => ({
+      roomTypeName: r.roomTypeName,
+      roomNightsActual: r.roomNightsActual,
+      roomNightsBudget: r.roomNightsBudget,
+      adrActual: r.adrActual.toNumber(),
+      adrBudget: r.adrBudget.toNumber(),
+      revenueActual: r.revenueActual.toNumber(),
+      revenueBudget: r.revenueBudget.toNumber(),
+    }))
+    .sort((a, b) => b.revenueActual - a.revenueActual);
+
+  const narr = rp.narrativeContent[0];
+
+  return {
+    ...base,
+    hasData: true,
+    status: rp.status,
+    roomTypes,
+    narrative: narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null,
+  };
+}
+
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {

@@ -231,6 +231,15 @@ Production (YTD): a single-axis Pareto (share + cumulative %) and a
 sortable, type-filterable table. Charts export to PNG via `ExportableCard`
 (html-to-image). Aggregated fetch `getSegmentsPageData`.
 
+**Phase 6 — Rooms: Room Types. ✅ Done.**
+`/dashboard/[property]/[period]/rooms/room-types`: full `RoomTypeTable`
+(RN/ADR/Revenue actual vs budget + variance + achievement + total), a
+bullet-style revenue-vs-budget chart, an RN×ADR achievement quadrant scatter
+(bubble = revenue; Star / Volume-driven / Rate-driven / Underperforming), a
+rule-based auto-insight panel (best performer, largest deficit with RN & ADR
+drivers, total gap + top-2 contributors), and the ROOMTYPE_ANALYSIS narrative
+panel. Aggregated fetch `getRoomTypesPageData`.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).
