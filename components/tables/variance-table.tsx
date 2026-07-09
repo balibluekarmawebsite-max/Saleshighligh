@@ -3,22 +3,35 @@ import {
   formatIDR,
   formatNumber,
   formatPercent,
+  formatRatioPct,
   formatVariancePercent,
   varianceColorClass,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+export type ValueFormat = "idr" | "number" | "ratio";
 
 export interface VarianceRow {
   label: string;
   actual: number;
   budget: number;
   lastYear?: number | null;
+  /** Overrides the table-level format for this row (e.g. occupancy = "ratio"). */
+  format?: ValueFormat;
+}
+
+function fmtValue(v: number | null | undefined, format: ValueFormat): string {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—";
+  if (format === "idr") return formatIDR(v);
+  if (format === "number") return formatNumber(v);
+  return formatRatioPct(v); // ratio (0–1) → "94.83%"
 }
 
 /**
- * Generic actual-vs-budget table. Auto-renders Variance % and Achievement %
- * (red/green), an optional Last Year column, and a TOTAL row (summed from the
- * rows unless an explicit `total` is provided).
+ * Generic actual-vs-budget table. Auto-renders Variance and Achievement %
+ * (red/green), an optional Last Year column, and a TOTAL row (summed unless an
+ * explicit `total` is given or `total={false}`). Per-row `format` allows mixed
+ * units; "ratio" rows show the variance as percentage points.
  */
 export function VarianceTable({
   rows,
@@ -30,13 +43,11 @@ export function VarianceTable({
 }: {
   rows: VarianceRow[];
   firstColumnHeader?: string;
-  valueFormat?: "idr" | "number";
+  valueFormat?: ValueFormat;
   showLastYear?: boolean;
   total?: VarianceRow | false;
   totalLabel?: string;
 }) {
-  const fmt = valueFormat === "idr" ? formatIDR : formatNumber;
-
   const computedTotal: VarianceRow | null =
     total === false
       ? null
@@ -50,8 +61,27 @@ export function VarianceTable({
         });
 
   const renderRow = (row: VarianceRow, isTotal: boolean) => {
-    const v = variancePct(row.actual, row.budget);
-    const a = achievementPct(row.actual, row.budget);
+    const format = row.format ?? valueFormat;
+    const isRatio = format === "ratio";
+    const varianceNode = isRatio
+      ? (() => {
+          const pts = (row.actual - row.budget) * 100;
+          return (
+            <span className={varianceColorClass(pts)}>
+              {`${pts > 0 ? "+" : ""}${pts.toFixed(2)} pts`}
+            </span>
+          );
+        })()
+      : (() => {
+          const v = variancePct(row.actual, row.budget);
+          return (
+            <span className={varianceColorClass(v)}>
+              {formatVariancePercent(v)}
+            </span>
+          );
+        })();
+    const ach = achievementPct(row.actual, row.budget);
+
     return (
       <tr
         key={row.label}
@@ -62,23 +92,19 @@ export function VarianceTable({
       >
         <td className="py-2 pr-4 text-foreground">{row.label}</td>
         <td className="py-2 pr-4 text-right tabular-nums text-foreground">
-          {fmt(row.actual)}
+          {fmtValue(row.actual, format)}
         </td>
         <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">
-          {fmt(row.budget)}
+          {fmtValue(row.budget, format)}
         </td>
         {showLastYear && (
           <td className="py-2 pr-4 text-right tabular-nums text-muted-foreground">
-            {row.lastYear === null || row.lastYear === undefined
-              ? "—"
-              : fmt(row.lastYear)}
+            {fmtValue(row.lastYear, format)}
           </td>
         )}
-        <td className={cn("py-2 pr-4 text-right tabular-nums", varianceColorClass(v))}>
-          {formatVariancePercent(v)}
-        </td>
+        <td className="py-2 pr-4 text-right tabular-nums">{varianceNode}</td>
         <td className="py-2 text-right tabular-nums text-muted-foreground">
-          {a === null ? "—" : formatPercent(a)}
+          {ach === null ? "—" : formatPercent(ach)}
         </td>
       </tr>
     );
@@ -95,7 +121,7 @@ export function VarianceTable({
             {showLastYear && (
               <th className="py-2 pr-4 text-right font-medium">Last Year</th>
             )}
-            <th className="py-2 pr-4 text-right font-medium">Var %</th>
+            <th className="py-2 pr-4 text-right font-medium">Variance</th>
             <th className="py-2 text-right font-medium">Ach %</th>
           </tr>
         </thead>

@@ -212,6 +212,15 @@ own shell. Format helpers `formatPct`/`formatCompact`/`formatRatioPct` in
 _Still to do:_ consolidated Group pages; wiring the remaining sections
 (Digital Ads, Restaurant, Spa, Market & Forecast, Social & PR, Action Plans).
 
+**Phase 4 — Executive Summary page. ✅ Done.**
+`/dashboard/[property]/[period]/summary` (base route redirects here): hero KPI
+row (Occupancy/ADR/RevPAR/Total & Room Revenue with achievement chips), the
+achievement `VarianceTable` (Actual/Budget/Last Year/Variance/Achievement %,
+occupancy in points), a revenue-mix donut, the SUMMARY narrative panel with a
+stubbed "Generate with AI" button (`/api/ai/narrative`), and a two-column
+factors section (External accordion + Internal factors with a 6-month forecast
+occupancy preview). Aggregated fetch `getSummaryPageData`; "data as of" caption.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

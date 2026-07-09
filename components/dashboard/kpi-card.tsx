@@ -8,8 +8,10 @@ export interface KpiCardProps {
   label: string;
   /** Preformatted headline value (IDR or %). */
   value: string;
-  /** Signed variance % vs budget (drives the arrow chip). */
+  /** Signed delta vs budget (drives the arrow chip). */
   deltaPct: number | null;
+  /** Unit for the vs-budget delta: "%" (default) or "pts" (percentage points). */
+  deltaUnit?: "%" | "pts";
   /** Preformatted budget value, e.g. "Rp 1.089.643.475" or "90.19%". */
   budgetValue?: string;
   /** Optional signed variance % vs last year. */
@@ -22,6 +24,7 @@ export function KpiCard({
   label,
   value,
   deltaPct,
+  deltaUnit = "%",
   budgetValue,
   lastYearDeltaPct,
   spark,
@@ -37,7 +40,7 @@ export function KpiCard({
           {value}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-          <MoMBadge value={deltaPct} />
+          <MoMBadge value={deltaPct} unit={deltaUnit} />
           {budgetValue && (
             <span className="text-muted-foreground">vs budget {budgetValue}</span>
           )}

@@ -20,7 +20,7 @@ export interface DashNavItem {
 }
 
 export const DASHBOARD_NAV: DashNavItem[] = [
-  { label: "Executive Summary", href: "", icon: LayoutDashboard },
+  { label: "Executive Summary", href: "summary", icon: LayoutDashboard },
   {
     label: "Rooms Analytics",
     href: "rooms",

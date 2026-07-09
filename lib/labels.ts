@@ -12,6 +12,17 @@ export function periodLabel(period: string): string {
   return `${MONTHS[idx] ?? month} ${year}`;
 }
 
+const MONTHS_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "2026-07" → "Jul". */
+export function periodMonthShort(period: string): string {
+  const month = period.split("-")[1];
+  return MONTHS_SHORT[Number(month) - 1] ?? (month ?? period);
+}
+
 /** Shorten long market-segment names for chart axis labels. */
 export function shortSegment(name: string): string {
   const map: Record<string, string> = {

@@ -160,7 +160,7 @@ export async function getShellData(): Promise<ShellData> {
   let defaultPath = "/admin/import";
   const withData = properties.find((p) => p.periods.length > 0);
   if (withData) {
-    defaultPath = `/dashboard/${withData.code}/${dateToPeriod(withData.periods[0]!.period)}`;
+    defaultPath = `/dashboard/${withData.code}/${dateToPeriod(withData.periods[0]!.period)}/summary`;
   }
 
   return {
@@ -277,6 +277,203 @@ export async function getExecutiveSummary(
     totalRevenue: byDept.get("TOTAL_REVENUE") ?? null,
     departments,
     segments,
+  };
+}
+
+// ─── Executive Summary page (aggregated) ─────────────────────────────────────
+
+export interface MetricABL {
+  actual: number;
+  budget: number;
+  lastYear: number | null;
+}
+
+export interface RevenueLine {
+  department: string;
+  label: string;
+  actual: number;
+  budget: number;
+  lastYear: number | null;
+  format: "idr" | "ratio";
+}
+
+export interface MixSlice {
+  key: string;
+  label: string;
+  value: number;
+}
+
+export interface NarrativeBlock {
+  content: string;
+  aiGenerated: boolean;
+}
+
+export interface ForecastPoint {
+  month: string; // "yyyy-mm"
+  forecastOcc: number | null; // percent
+  lastYearOcc: number | null;
+  marketDemand: number | null;
+}
+
+export interface SummaryPageData {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: string;
+  hasData: boolean;
+  status: string | null;
+  dataAsOf: string | null;
+  metrics: {
+    occupancy: MetricABL | null;
+    adr: MetricABL | null;
+    revpar: MetricABL | null;
+    totalRevenue: MetricABL | null;
+    roomRevenue: MetricABL | null;
+  };
+  revenueLines: RevenueLine[];
+  mix: MixSlice[];
+  narratives: {
+    summary: NarrativeBlock | null;
+    external: NarrativeBlock | null;
+    internal: NarrativeBlock | null;
+  };
+  forecasts: ForecastPoint[];
+}
+
+const SUMMARY_LINES: { dept: string; label: string; format: "idr" | "ratio" }[] = [
+  { dept: "OCCUPANCY", label: "Occupancy", format: "ratio" },
+  { dept: "ADR", label: "ADR", format: "idr" },
+  { dept: "REVPAR", label: "RevPAR", format: "idr" },
+  { dept: "ROOM_REVENUE", label: "Room Revenue", format: "idr" },
+  { dept: "FNB", label: "F&B", format: "idr" },
+  { dept: "SPA_WELLNESS", label: "Spa & Wellness", format: "idr" },
+  { dept: "GALLERY", label: "Gallery", format: "idr" },
+  { dept: "OOD", label: "OOD", format: "idr" },
+  { dept: "TOTAL_REVENUE", label: "Total Revenue", format: "idr" },
+];
+
+const MIX_DEPARTMENTS: [string, string][] = [
+  ["ROOM_REVENUE", "Rooms"],
+  ["FNB", "F&B"],
+  ["SPA_WELLNESS", "Spa & Wellness"],
+  ["GALLERY", "Gallery"],
+  ["OOD", "Other Operating"],
+];
+
+/** Single aggregated fetch backing the Executive Summary page. */
+export async function getSummaryPageData(
+  propertyCode: string,
+  period: string,
+): Promise<SummaryPageData | null> {
+  noStore();
+  const periodDate = periodToDate(period);
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: periodDate },
+        take: 1,
+        include: {
+          revenueSummaries: true,
+          narrativeContent: {
+            where: {
+              section: {
+                in: ["SUMMARY", "EXTERNAL_FACTORS", "INTERNAL_FACTORS"],
+              },
+            },
+          },
+          forecasts: { orderBy: { targetMonth: "asc" }, take: 6 },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+    period,
+  };
+
+  const rp = property.periods[0];
+  if (!rp) {
+    return {
+      ...base,
+      hasData: false,
+      status: null,
+      dataAsOf: null,
+      metrics: { occupancy: null, adr: null, revpar: null, totalRevenue: null, roomRevenue: null },
+      revenueLines: [],
+      mix: [],
+      narratives: { summary: null, external: null, internal: null },
+      forecasts: [],
+    };
+  }
+
+  const lastImport = await prisma.importHistory.findFirst({
+    where: { propertyId: property.id, period: periodDate },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  const dataAsOf = (lastImport?.createdAt ?? rp.updatedAt).toISOString();
+
+  const byDept = new Map<string, MetricABL>();
+  for (const row of rp.revenueSummaries) {
+    byDept.set(row.department, {
+      actual: row.actual.toNumber(),
+      budget: row.budget.toNumber(),
+      lastYear: row.lastYear ? row.lastYear.toNumber() : null,
+    });
+  }
+
+  const revenueLines: RevenueLine[] = SUMMARY_LINES.filter((l) =>
+    byDept.has(l.dept),
+  ).map((l) => {
+    const m = byDept.get(l.dept)!;
+    return { department: l.dept, label: l.label, actual: m.actual, budget: m.budget, lastYear: m.lastYear, format: l.format };
+  });
+
+  const mix: MixSlice[] = MIX_DEPARTMENTS.map(([dept, label]) => ({
+    key: dept,
+    label,
+    value: byDept.get(dept)?.actual ?? 0,
+  })).filter((s) => s.value > 0);
+
+  const narrative = (section: string): NarrativeBlock | null => {
+    const n = rp.narrativeContent.find((x) => x.section === section);
+    return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
+  };
+
+  const forecasts: ForecastPoint[] = rp.forecasts.map((f) => ({
+    month: dateToPeriod(f.targetMonth),
+    forecastOcc: f.forecastOccPct ? f.forecastOccPct.toNumber() * 100 : null,
+    lastYearOcc: f.lastYearOccPct ? f.lastYearOccPct.toNumber() * 100 : null,
+    marketDemand: f.marketDemandPct ? f.marketDemandPct.toNumber() * 100 : null,
+  }));
+
+  return {
+    ...base,
+    hasData: true,
+    status: rp.status,
+    dataAsOf,
+    metrics: {
+      occupancy: byDept.get("OCCUPANCY") ?? null,
+      adr: byDept.get("ADR") ?? null,
+      revpar: byDept.get("REVPAR") ?? null,
+      totalRevenue: byDept.get("TOTAL_REVENUE") ?? null,
+      roomRevenue: byDept.get("ROOM_REVENUE") ?? null,
+    },
+    revenueLines,
+    mix,
+    narratives: {
+      summary: narrative("SUMMARY"),
+      external: narrative("EXTERNAL_FACTORS"),
+      internal: narrative("INTERNAL_FACTORS"),
+    },
+    forecasts,
   };
 }
 
