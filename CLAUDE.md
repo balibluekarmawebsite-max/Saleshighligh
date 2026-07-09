@@ -240,6 +240,15 @@ rule-based auto-insight panel (best performer, largest deficit with RN & ADR
 drivers, total gap + top-2 contributors), and the ROOMTYPE_ANALYSIS narrative
 panel. Aggregated fetch `getRoomTypesPageData`.
 
+**Phase 7 — Rooms: Guests (nationality, geography, LOS). ✅ Done.**
+`/dashboard/[property]/[period]/rooms/guests` (respects MTD/YTD; old
+nationality-geography and length-of-stay routes redirect here). Ranked
+nationality table (flag, share, vs-LY MoMBadge, rank movement) cross-filtered
+with a react-simple-maps choropleth (world-atlas; `lib/geo.ts` alpha-2→numeric
++ flag emoji), a top-10 this-year-vs-last-year bar, and a Length-of-Stay
+section (column chart + KPI chips: avg LOS, 3+ share, dominant bucket + table).
+Aggregated fetch `getGuestsPageData`.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

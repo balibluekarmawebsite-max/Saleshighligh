@@ -28,8 +28,7 @@ export const DASHBOARD_NAV: DashNavItem[] = [
     children: [
       { label: "Market & Accounts", href: "rooms/segments" },
       { label: "Room Types", href: "rooms/room-types" },
-      { label: "Nationality & Geography", href: "rooms/nationality-geography" },
-      { label: "Length of Stay", href: "rooms/length-of-stay" },
+      { label: "Guests & Geography", href: "rooms/guests" },
     ],
   },
   { label: "Digital Ads & Reputation", href: "digital-ads", icon: Megaphone },

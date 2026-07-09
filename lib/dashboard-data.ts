@@ -695,6 +695,137 @@ export async function getRoomTypesPageData(
   };
 }
 
+// ─── Rooms — Guests (nationality, geography, LOS) page ───────────────────────
+
+export interface NationalityRank {
+  rank: number;
+  countryName: string;
+  countryCode: string | null;
+  roomNights: number;
+  sharePct: number;
+  lastYearRoomNights: number | null;
+  rankMovement: number | null; // + = moved up vs last year
+}
+
+export interface LosBucketRow {
+  bucket: string;
+  bookings: number;
+  roomNights: number;
+  lastYearRoomNights: number | null;
+  sharePct: number;
+}
+
+export interface GuestsPageData {
+  property: { code: string; name: string; area: string; roomCount: number };
+  period: string;
+  scope: "MTD" | "YTD";
+  hasData: boolean;
+  nationalities: NationalityRank[];
+  losBuckets: LosBucketRow[];
+  avgLos: number | null;
+  share3Plus: number | null;
+  dominantBucket: string | null;
+}
+
+/** Aggregated data for the Rooms → Guests (nationality / geography / LOS) page. */
+export async function getGuestsPageData(
+  propertyCode: string,
+  period: string,
+  scope: "MTD" | "YTD" = "MTD",
+): Promise<GuestsPageData | null> {
+  noStore();
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: periodToDate(period) },
+        take: 1,
+        include: {
+          nationality: { where: { scope }, orderBy: { roomNights: "desc" } },
+          lengthOfStay: true,
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      roomCount: property.roomCount,
+    },
+    period,
+    scope,
+  };
+
+  const rp = property.periods[0];
+  if (!rp) {
+    return {
+      ...base,
+      hasData: false,
+      nationalities: [],
+      losBuckets: [],
+      avgLos: null,
+      share3Plus: null,
+      dominantBucket: null,
+    };
+  }
+
+  const totalRN = rp.nationality.reduce((s, n) => s + n.roomNights, 0);
+
+  // Last-year ranking (only among rows that carry a last-year value).
+  const lyRank = new Map<string, number>();
+  rp.nationality
+    .filter((n) => n.roomNightsLastYear !== null)
+    .sort((a, b) => (b.roomNightsLastYear ?? 0) - (a.roomNightsLastYear ?? 0))
+    .forEach((n, i) => lyRank.set(n.countryName, i + 1));
+
+  const nationalities: NationalityRank[] = rp.nationality.map((n, i) => {
+    const rank = i + 1;
+    const prev = lyRank.get(n.countryName);
+    return {
+      rank,
+      countryName: n.countryName,
+      countryCode: n.countryCode,
+      roomNights: n.roomNights,
+      sharePct: totalRN > 0 ? (n.roomNights / totalRN) * 100 : 0,
+      lastYearRoomNights: n.roomNightsLastYear ?? null,
+      rankMovement: prev !== undefined ? prev - rank : null,
+    };
+  });
+
+  const LOS_ORDER_LOCAL = ["1", "2", "3", "4", "5", "6", "7+"];
+  const losSorted = [...rp.lengthOfStay].sort(
+    (a, b) => LOS_ORDER_LOCAL.indexOf(a.losBucket) - LOS_ORDER_LOCAL.indexOf(b.losBucket),
+  );
+  const totalLosRN = losSorted.reduce((s, l) => s + l.roomNights, 0);
+  const totalBookings = losSorted.reduce((s, l) => s + l.bookings, 0);
+  const losBuckets: LosBucketRow[] = losSorted.map((l) => ({
+    bucket: l.losBucket,
+    bookings: l.bookings,
+    roomNights: l.roomNights,
+    lastYearRoomNights: l.lastYearRoomNights ?? null,
+    sharePct: totalLosRN > 0 ? (l.roomNights / totalLosRN) * 100 : 0,
+  }));
+  const threePlus = losSorted
+    .filter((l) => ["3", "4", "5", "6", "7+"].includes(l.losBucket))
+    .reduce((s, l) => s + l.roomNights, 0);
+  const dominant = [...losSorted].sort((a, b) => b.roomNights - a.roomNights)[0];
+
+  return {
+    ...base,
+    hasData: true,
+    nationalities,
+    losBuckets,
+    avgLos: totalBookings > 0 ? totalLosRN / totalBookings : null,
+    share3Plus: totalLosRN > 0 ? (threePlus / totalLosRN) * 100 : null,
+    dominantBucket: dominant ? dominant.losBucket : null,
+  };
+}
+
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {
