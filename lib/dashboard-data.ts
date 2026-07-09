@@ -1,6 +1,6 @@
 import { unstable_noStore as noStore } from "next/cache";
 
-import { cpc, ctr, momChange } from "@/lib/calculations";
+import { achievementPct, avgCheck, cpc, ctr, momChange } from "@/lib/calculations";
 import { prisma } from "@/lib/prisma";
 import { periodMonthShort } from "@/lib/labels";
 
@@ -841,6 +841,15 @@ export interface AdsPlatformRow {
   cpc: number | null;
 }
 
+export interface AdsSummary {
+  totalSpend: number;
+  trackedRevenue: number;
+  roasPct: number | null;
+  roasRatio: number | null;
+  totalClicks: number;
+  platforms: AdsPlatformRow[];
+}
+
 export interface RoasPoint {
   month: string;
   roasPct: number | null;
@@ -871,14 +880,7 @@ export interface MarketingPageData {
   property: { code: string; name: string; area: string; roomCount: number };
   period: string;
   hasData: boolean;
-  ads: {
-    totalSpend: number;
-    trackedRevenue: number;
-    roasPct: number | null;
-    roasRatio: number | null;
-    totalClicks: number;
-    platforms: AdsPlatformRow[];
-  } | null;
+  ads: AdsSummary | null;
   roasTrend: RoasPoint[];
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   rankCards: RankCard[];
@@ -894,6 +896,68 @@ export interface MarketingPageData {
 
 const ADS_PLATFORM_ORDER = ["GOOGLE", "META", "CORPORATE"];
 const RANK_PLATFORMS = ["BOOKING", "EXPEDIA", "TRIPADVISOR"] as const;
+
+type RawAd = {
+  platform: string;
+  spend: { toNumber(): number };
+  impressions: number;
+  clicks: number;
+  reach: number | null;
+  trackedRevenue: { toNumber(): number };
+};
+
+/** Build the ads summary + spend/revenue + ROAS trend for one business unit. */
+function buildAdsBlock(
+  currentAds: RawAd[],
+  ascPeriods: { period: Date; adsPerformance: RawAd[] }[],
+): {
+  ads: AdsSummary | null;
+  spendRevenue: { platform: string; spend: number; revenue: number }[];
+  roasTrend: RoasPoint[];
+} {
+  const sorted = [...currentAds].sort(
+    (a, b) => ADS_PLATFORM_ORDER.indexOf(a.platform) - ADS_PLATFORM_ORDER.indexOf(b.platform),
+  );
+  let ads: AdsSummary | null = null;
+  let spendRevenue: { platform: string; spend: number; revenue: number }[] = [];
+  if (sorted.length > 0) {
+    const totalSpend = sorted.reduce((s, a) => s + a.spend.toNumber(), 0);
+    const trackedRevenue = sorted.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+    const totalClicks = sorted.reduce((s, a) => s + a.clicks, 0);
+    const roasRatio = totalSpend > 0 ? trackedRevenue / totalSpend : null;
+    ads = {
+      totalSpend,
+      trackedRevenue,
+      roasRatio,
+      roasPct: roasRatio !== null ? roasRatio * 100 : null,
+      totalClicks,
+      platforms: sorted.map((a) => ({
+        platform: a.platform,
+        spend: a.spend.toNumber(),
+        impressions: a.impressions,
+        clicks: a.clicks,
+        reach: a.reach,
+        trackedRevenue: a.trackedRevenue.toNumber(),
+        ctr: ctr(a.clicks, a.impressions),
+        cpc: cpc(a.spend.toNumber(), a.clicks),
+      })),
+    };
+    spendRevenue = sorted.map((a) => ({
+      platform: a.platform,
+      spend: a.spend.toNumber(),
+      revenue: a.trackedRevenue.toNumber(),
+    }));
+  }
+  const roasTrend: RoasPoint[] = ascPeriods.slice(-6).map((p) => {
+    const spend = p.adsPerformance.reduce((s, a) => s + a.spend.toNumber(), 0);
+    const rev = p.adsPerformance.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+    return {
+      month: periodMonthShort(dateToPeriod(p.period)),
+      roasPct: spend > 0 ? (rev / spend) * 100 : null,
+    };
+  });
+  return { ads, spendRevenue, roasTrend };
+}
 
 /** Aggregated data for the Marketing (ads + reputation) page. */
 export async function getMarketingPageData(
@@ -947,48 +1011,10 @@ export async function getMarketingPageData(
   }
   const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
 
-  // Ads
-  const hotelAds = [...current.adsPerformance].sort(
-    (a, b) => ADS_PLATFORM_ORDER.indexOf(a.platform) - ADS_PLATFORM_ORDER.indexOf(b.platform),
-  );
-  let ads: MarketingPageData["ads"] = null;
-  let spendRevenue: MarketingPageData["spendRevenue"] = [];
-  if (hotelAds.length > 0) {
-    const totalSpend = hotelAds.reduce((s, a) => s + a.spend.toNumber(), 0);
-    const trackedRevenue = hotelAds.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
-    const totalClicks = hotelAds.reduce((s, a) => s + a.clicks, 0);
-    const roasRatio = totalSpend > 0 ? trackedRevenue / totalSpend : null;
-    ads = {
-      totalSpend,
-      trackedRevenue,
-      roasRatio,
-      roasPct: roasRatio !== null ? roasRatio * 100 : null,
-      totalClicks,
-      platforms: hotelAds.map((a) => ({
-        platform: a.platform,
-        spend: a.spend.toNumber(),
-        impressions: a.impressions,
-        clicks: a.clicks,
-        reach: a.reach,
-        trackedRevenue: a.trackedRevenue.toNumber(),
-        ctr: ctr(a.clicks, a.impressions),
-        cpc: cpc(a.spend.toNumber(), a.clicks),
-      })),
-    };
-    spendRevenue = hotelAds.map((a) => ({
-      platform: a.platform,
-      spend: a.spend.toNumber(),
-      revenue: a.trackedRevenue.toNumber(),
-    }));
-  }
-
-  // Trends (oldest → newest)
+  // Ads (oldest → newest for trends)
   const asc = [...property.periods].reverse();
-  const roasTrend: RoasPoint[] = asc.slice(-6).map((p) => {
-    const spend = p.adsPerformance.reduce((s, a) => s + a.spend.toNumber(), 0);
-    const rev = p.adsPerformance.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
-    return { month: periodMonthShort(dateToPeriod(p.period)), roasPct: spend > 0 ? (rev / spend) * 100 : null };
-  });
+  const { ads, spendRevenue, roasTrend } = buildAdsBlock(current.adsPerformance, asc);
+
   const rankTrend: RankTrendPoint[] = asc.slice(-12).map((p) => {
     const find = (pl: string) => p.platformRankings.find((r) => r.platform === pl)?.rank ?? null;
     return {
@@ -1036,6 +1062,327 @@ export async function getMarketingPageData(
   }
 
   return { ...base, hasData: true, ads, roasTrend, spendRevenue, rankCards, rankTrend, tripadvisor };
+}
+
+// ─── Restaurant page (aggregated) ────────────────────────────────────────────
+
+export interface MealRow {
+  meal: string; // BREAKFAST | LUNCH | DINNER
+  coversActual: number;
+  coversBudget: number;
+  revenueActual: number;
+  revenueBudget: number;
+  avgCheckActual: number | null;
+  avgCheckBudget: number | null;
+  pctOfRevenue: number; // share of restaurant actual revenue
+}
+
+export type FnbSourceCategory = "IN_HOUSE" | "OUTSIDER" | "PLATFORM";
+
+export interface SourceRow {
+  sourceName: string;
+  category: FnbSourceCategory;
+  persons: number;
+  revenue: number;
+  avgCheck: number | null;
+  pctPersons: number;
+}
+
+export interface AcqRow {
+  channel: string; // WALK_IN | REPEATER | CHOPE | CATERING
+  bookingsPct: number; // display percent (0–100)
+  coversPct: number;
+}
+
+export interface ChopeSummary {
+  fulfilledBookings: number;
+  fulfilledCovers: number;
+  cancelledBookings: number;
+  cancelledCovers: number;
+  noShows: number;
+  revenue: number;
+  platformBookings: number;
+  directBookings: number;
+  pctOfRestaurantRevenue: number | null;
+}
+
+export interface GokaiMetric {
+  key: string;
+  label: string;
+  value: number;
+  format: "number" | "pct" | "idr";
+  mom: number | null;
+}
+
+export interface GokaiSummary {
+  unit: string; // RESTAURANT or HOTEL (fallback)
+  metrics: GokaiMetric[];
+}
+
+export interface TripadvisorSummary {
+  rank: number | null;
+  totalInMarket: number | null;
+  rating: number | null;
+  area: string;
+  noun: string; // "restaurants"
+  metrics: TripMetric[];
+}
+
+export interface RestaurantPageData {
+  property: { code: string; name: string; area: string; restaurantName: string };
+  period: string;
+  hasData: boolean;
+  status: string | null;
+  overview: {
+    covers: MetricAB;
+    revenue: MetricAB;
+    avgCheckActual: number | null;
+    avgCheckBudget: number | null;
+    revenueAchievementPct: number | null;
+  } | null;
+  meals: MealRow[];
+  restaurantRevenueActual: number;
+  restaurantRevenueBudget: number;
+  sources: SourceRow[];
+  acquisition: AcqRow[];
+  chope: ChopeSummary | null;
+  gokai: GokaiSummary | null;
+  ads: AdsSummary | null;
+  spendRevenue: { platform: string; spend: number; revenue: number }[];
+  roasTrend: RoasPoint[];
+  tripadvisor: TripadvisorSummary | null;
+  narrative: NarrativeBlock | null;
+}
+
+const MEAL_ORDER = ["BREAKFAST", "LUNCH", "DINNER"];
+const ACQ_ORDER = ["WALK_IN", "REPEATER", "CHOPE", "CATERING"];
+
+/** Bucket a free-text F&B source name into In-House / Outsider / Platform. */
+function classifyFnbSource(name: string): FnbSourceCategory {
+  const n = name.toLowerCase();
+  if (/chope|grab|gojek|go-?food|traveloka|delivery|online/.test(n)) return "PLATFORM";
+  if (/in.?house|house|hotel|villa|resident|guest|stay/.test(n)) return "IN_HOUSE";
+  return "OUTSIDER";
+}
+
+/** Aggregated data for the Restaurant page (ads + tripadvisor scoped to RESTAURANT). */
+export async function getRestaurantPageData(
+  propertyCode: string,
+  period: string,
+): Promise<RestaurantPageData | null> {
+  noStore();
+  const selectedDate = periodToDate(period);
+  const property = await prisma.property.findUnique({
+    where: { code: propertyCode },
+    include: {
+      periods: {
+        where: { period: { lte: selectedDate } },
+        orderBy: { period: "desc" },
+        take: 6,
+        include: {
+          fnbSales: true,
+          fnbSources: true,
+          fnbAcquisition: true,
+          chopeReports: true,
+          gokaiReports: true,
+          adsPerformance: { where: { unit: "RESTAURANT" } },
+          tripadvisorMetrics: { where: { unit: "RESTAURANT" } },
+          narrativeContent: { where: { section: "RESTAURANT_OVERVIEW" } },
+        },
+      },
+    },
+  });
+
+  if (!property) return null;
+
+  const base = {
+    property: {
+      code: property.code,
+      name: property.name,
+      area: property.area,
+      restaurantName: property.restaurantName,
+    },
+    period,
+  };
+
+  const current = property.periods.find(
+    (p) => p.period.getTime() === selectedDate.getTime(),
+  );
+  if (!current) {
+    return {
+      ...base,
+      hasData: false,
+      status: null,
+      overview: null,
+      meals: [],
+      restaurantRevenueActual: 0,
+      restaurantRevenueBudget: 0,
+      sources: [],
+      acquisition: [],
+      chope: null,
+      gokai: null,
+      ads: null,
+      spendRevenue: [],
+      roasTrend: [],
+      tripadvisor: null,
+      narrative: null,
+    };
+  }
+  const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
+
+  // Meal-period performance
+  const mealSorted = [...current.fnbSales].sort(
+    (a, b) => MEAL_ORDER.indexOf(a.mealPeriod) - MEAL_ORDER.indexOf(b.mealPeriod),
+  );
+  const restaurantRevenueActual = mealSorted.reduce((s, m) => s + m.revenueActual.toNumber(), 0);
+  const restaurantRevenueBudget = mealSorted.reduce((s, m) => s + m.revenueBudget.toNumber(), 0);
+  const meals: MealRow[] = mealSorted.map((m) => {
+    const revenueActual = m.revenueActual.toNumber();
+    const revenueBudget = m.revenueBudget.toNumber();
+    return {
+      meal: m.mealPeriod,
+      coversActual: m.coversActual,
+      coversBudget: m.coversBudget,
+      revenueActual,
+      revenueBudget,
+      avgCheckActual: avgCheck(revenueActual, m.coversActual),
+      avgCheckBudget: avgCheck(revenueBudget, m.coversBudget),
+      pctOfRevenue: restaurantRevenueActual > 0 ? (revenueActual / restaurantRevenueActual) * 100 : 0,
+    };
+  });
+
+  const coversActual = mealSorted.reduce((s, m) => s + m.coversActual, 0);
+  const coversBudget = mealSorted.reduce((s, m) => s + m.coversBudget, 0);
+  const overview =
+    mealSorted.length > 0
+      ? {
+          covers: { actual: coversActual, budget: coversBudget },
+          revenue: { actual: restaurantRevenueActual, budget: restaurantRevenueBudget },
+          avgCheckActual: avgCheck(restaurantRevenueActual, coversActual),
+          avgCheckBudget: avgCheck(restaurantRevenueBudget, coversBudget),
+          revenueAchievementPct: achievementPct(restaurantRevenueActual, restaurantRevenueBudget),
+        }
+      : null;
+
+  // Source of booking
+  const totalPersons = current.fnbSources.reduce((s, r) => s + r.persons, 0);
+  const sources: SourceRow[] = [...current.fnbSources]
+    .map((r) => {
+      const revenue = r.revenue.toNumber();
+      return {
+        sourceName: r.sourceName,
+        category: classifyFnbSource(r.sourceName),
+        persons: r.persons,
+        revenue,
+        avgCheck: avgCheck(revenue, r.persons),
+        pctPersons: totalPersons > 0 ? (r.persons / totalPersons) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+
+  // Acquisition mix (stored as ratios → display percents)
+  const acquisition: AcqRow[] = [...current.fnbAcquisition]
+    .sort((a, b) => ACQ_ORDER.indexOf(a.channel) - ACQ_ORDER.indexOf(b.channel))
+    .map((r) => ({
+      channel: r.channel,
+      bookingsPct: r.bookingsPct.toNumber() * 100,
+      coversPct: r.coversPct.toNumber() * 100,
+    }));
+
+  // Chope
+  const chopeRow = current.chopeReports[0];
+  const chope: ChopeSummary | null = chopeRow
+    ? {
+        fulfilledBookings: chopeRow.fulfilledBookings,
+        fulfilledCovers: chopeRow.fulfilledCovers,
+        cancelledBookings: chopeRow.cancelledBookings,
+        cancelledCovers: chopeRow.cancelledCovers,
+        noShows: chopeRow.noShows,
+        revenue: chopeRow.revenue.toNumber(),
+        platformBookings: chopeRow.platformBookings,
+        directBookings: chopeRow.directBookings,
+        pctOfRestaurantRevenue:
+          restaurantRevenueActual > 0
+            ? (chopeRow.revenue.toNumber() / restaurantRevenueActual) * 100
+            : null,
+      }
+    : null;
+
+  // Gokai (prefer RESTAURANT unit, fall back to HOTEL)
+  const pickGokai = (p: typeof current | undefined) =>
+    p?.gokaiReports.find((g) => g.unit === "RESTAURANT") ??
+    p?.gokaiReports.find((g) => g.unit === "HOTEL");
+  const gCur = pickGokai(current);
+  let gokai: GokaiSummary | null = null;
+  if (gCur) {
+    const gPrev = previous?.gokaiReports.find((g) => g.unit === gCur.unit);
+    const mom = (cur: number, prev: number | undefined) =>
+      prev === undefined ? null : momChange(cur, prev);
+    gokai = {
+      unit: gCur.unit,
+      metrics: [
+        { key: "signups", label: "Sign-ups", value: gCur.signups, format: "number", mom: mom(gCur.signups, gPrev?.signups) },
+        { key: "openRate", label: "Open Rate", value: gCur.openRatePct.toNumber() * 100, format: "pct", mom: mom(gCur.openRatePct.toNumber(), gPrev?.openRatePct.toNumber()) },
+        { key: "ctr", label: "CTR", value: gCur.ctrPct.toNumber() * 100, format: "pct", mom: mom(gCur.ctrPct.toNumber(), gPrev?.ctrPct.toNumber()) },
+        { key: "survey", label: "Survey Completion", value: gCur.surveyCompletionPct.toNumber() * 100, format: "pct", mom: mom(gCur.surveyCompletionPct.toNumber(), gPrev?.surveyCompletionPct.toNumber()) },
+        { key: "upsellSales", label: "Upsell Sales", value: gCur.upsellSales, format: "number", mom: mom(gCur.upsellSales, gPrev?.upsellSales) },
+        { key: "upsellRevenue", label: "Upsell Revenue", value: gCur.upsellRevenue.toNumber(), format: "idr", mom: mom(gCur.upsellRevenue.toNumber(), gPrev?.upsellRevenue.toNumber()) },
+      ],
+    };
+  }
+
+  // Ads (unit=RESTAURANT), oldest → newest for the ROAS trend
+  const asc = [...property.periods].reverse();
+  const { ads, spendRevenue, roasTrend } = buildAdsBlock(current.adsPerformance, asc);
+
+  // Tripadvisor (unit=RESTAURANT). Per-outlet ranking is not modelled, so
+  // rank/total stay null until sourced; rating + engagement come from the row.
+  const tm = current.tripadvisorMetrics[0];
+  const prevTm = previous?.tripadvisorMetrics[0];
+  let tripadvisor: TripadvisorSummary | null = null;
+  if (tm) {
+    const mom = (cur: number, prev: number | undefined) =>
+      prev === undefined ? null : momChange(cur, prev);
+    const menuMom =
+      tm.menuViews != null && prevTm?.menuViews != null ? momChange(tm.menuViews, prevTm.menuViews) : null;
+    tripadvisor = {
+      rank: null,
+      totalInMarket: null,
+      rating: tm.avgRating.toNumber(),
+      area: property.area,
+      noun: "restaurants",
+      metrics: [
+        { key: "impressions", label: "Impressions", value: tm.impressions, mom: mom(tm.impressions, prevTm?.impressions) },
+        { key: "pageVisitors", label: "Page Visitors", value: tm.pageVisitors, mom: mom(tm.pageVisitors, prevTm?.pageVisitors) },
+        { key: "newReviews", label: "New Reviews", value: tm.newReviews, mom: mom(tm.newReviews, prevTm?.newReviews) },
+        { key: "menuViews", label: "Menu Views", value: tm.menuViews ?? 0, mom: menuMom },
+        { key: "websiteClicks", label: "Website Clicks", value: tm.websiteClicks, mom: mom(tm.websiteClicks, prevTm?.websiteClicks) },
+        { key: "phoneCalls", label: "Phone Calls", value: tm.phoneCalls, mom: mom(tm.phoneCalls, prevTm?.phoneCalls) },
+      ],
+    };
+  }
+
+  const narr = current.narrativeContent[0];
+  const narrative = narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null;
+
+  return {
+    ...base,
+    hasData: true,
+    status: current.status,
+    overview,
+    meals,
+    restaurantRevenueActual,
+    restaurantRevenueBudget,
+    sources,
+    acquisition,
+    chope,
+    gokai,
+    ads,
+    spendRevenue,
+    roasTrend,
+    tripadvisor,
+    narrative,
+  };
 }
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────

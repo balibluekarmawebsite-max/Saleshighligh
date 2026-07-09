@@ -258,6 +258,23 @@ trend. OTA ranking: three rank cards with MoM change (lower is better) and a
 with auto MoM vs the previous period. Multi-period aggregated fetch
 `getMarketingPageData` (all trends/MoM computed from DB, never entered).
 
+**Phase 9 — Restaurant. ✅ Done.**
+`/dashboard/[property]/[period]/restaurant` (title = property `restaurantName`).
+Overview KPI strip (covers / revenue / blended average check vs budget +
+revenue achievement); Meal Period Performance (`MealPeriodTable` — grouped
+Covers / Average Check / Revenue as Actual·Budget·Diff·% + % of revenue + TOTAL,
+a revenue-vs-budget grouped bar, and strongest / weakest / avg-check auto-insight
+chips); Source of Booking (table + covers-mix donut, sources auto-classified
+In-House / Outsider / Platform); Acquisition Split (two donuts — bookings % /
+covers % by Walk-in·Repeater·Chope·Catering); Chope panel (fulfilled/cancelled/
+no-show funnel, revenue + % of restaurant revenue, platform-vs-direct split);
+Gokai panel (sign-ups / open rate / CTR / survey / upsell, each with auto
+MoMBadge; prefers RESTAURANT unit, falls back to HOTEL); Restaurant Ads and
+Restaurant Tripadvisor (reusable `AdsBlock` / `TripadvisorBlock`, both unit=
+RESTAURANT); and a RESTAURANT_OVERVIEW narrative rendered as 😊 / ☹️ / 💡
+columns (`NarrativeColumns`) with the AI-generate stub. Aggregated fetch
+`getRestaurantPageData`; empty-safe per section.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).
