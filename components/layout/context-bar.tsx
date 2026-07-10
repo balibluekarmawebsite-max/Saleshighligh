@@ -72,10 +72,12 @@ export function ContextBar({
               p.code === property
                 ? period
                 : (periodsByProperty[p.code]?.[0]?.period ?? period);
+            // Group is a single consolidated page (not per-section).
+            const href = p.code === GROUP_CODE ? `/dashboard/${GROUP_CODE}/${targetPeriod}` : build(p.code, targetPeriod);
             return (
               <Link
                 key={p.code}
-                href={build(p.code, targetPeriod)}
+                href={href}
                 aria-current={p.code === property ? "page" : undefined}
                 className={cn(
                   "rounded px-2.5 py-1 text-sm font-medium transition-colors",

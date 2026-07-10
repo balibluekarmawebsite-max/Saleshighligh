@@ -373,6 +373,24 @@ migration `20260710100000_add_export_history` (run its `migration.sql` in the
 Supabase SQL editor). Adds `pptxgenjs`, `jszip`, `playwright`; the last two/
 `xlsx` kept external in `next.config`.
 
+**Phase 15 — Group Consolidated View. ✅ Done.**
+The 🏢 cross-property page at `/dashboard/GROUP/[period]` (the base route renders
+`GroupView` for the `GROUP` code; the context-bar Group switcher lands here and
+the sidebar collapses to a single "Group Overview"). New data layer
+`lib/group-data.ts` (`getGroupData`) aggregates the three properties in one batch:
+revenues summed, occupancy/RevPAR room-count-weighted, ADR sold-rooms-weighted.
+Sections: (1) **Group scorecard** — blended KPI cards vs summed budgets; (2)
+**Property Comparison Matrix** — KPI rows × BKDS/BKDU/BKV/Group, each cell
+achievement-colour-scaled (red→green) and linking to that property's section; (3)
+**Comparative charts** — revenue-by-property stacked over 12 months
+(`GroupTrendChart`), achievement % by department grouped by property + ROAS by
+unit (`GroupGroupedBar`), merged top-10 nationalities, and a 6-month occupancy
+forecast with a market-demand band (`GroupForecastChart`); (4) **Group
+leaderboards** — best ROAS campaign, best Tripadvisor position, biggest MoM
+social growth, top revenue account; (5) **AI Group summary** — `GroupSummaryPanel`
+streams a Claude brief from `/api/narrative` (new `GROUP_SUMMARY` section +
+`groupContext`; read-only, no period row to save into). No schema change.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

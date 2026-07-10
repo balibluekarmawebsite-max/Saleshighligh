@@ -19,6 +19,7 @@ import {
   type RevenueLine,
 } from "@/lib/dashboard-data";
 import { formatIDRCompact, formatNumber, formatPercent, formatRatioPct, formatVariancePercent } from "@/lib/format";
+import { getGroupData, type GroupKpiCell } from "@/lib/group-data";
 import { periodLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 
@@ -257,11 +258,48 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */
+/** Cross-property comparison context for the AI Group summary. */
+async function groupContext(period: string): Promise<NarrativeContext> {
+  const g = await getGroupData(period);
+  const meta = { code: "GROUP", name: "Blue Karma Group", area: "Bali", restaurantName: "", spaName: "" };
+  if (!g.hasData) {
+    return { section: "GROUP_SUMMARY", property: meta, period: periodLabel(period), data: { note: "No data imported for any property this period." } };
+  }
+  const cellFmt = (c: GroupKpiCell, format: "ratio" | "idr") => ({
+    actual: c.actual == null ? "—" : format === "ratio" ? formatRatioPct(c.actual) : money(c.actual),
+    budget: c.budget == null ? "—" : format === "ratio" ? formatRatioPct(c.budget) : money(c.budget),
+    achievement: c.achievement == null ? "—" : formatPercent(c.achievement),
+  });
+  const l = g.leaderboards;
+  return {
+    section: "GROUP_SUMMARY",
+    property: meta,
+    period: periodLabel(period),
+    data: {
+      properties: g.properties.map((p) => ({
+        code: p.code,
+        name: p.name,
+        roomCount: p.roomCount,
+        kpis: Object.fromEntries(g.kpis.map((k) => [k.label, cellFmt(k.perProperty[p.code] ?? { actual: null, budget: null, achievement: null }, k.format)])),
+      })),
+      group: Object.fromEntries(g.kpis.map((k) => [k.label, cellFmt(k.group, k.format)])),
+      leaderboards: {
+        bestRoasCampaign: l.bestRoas ? `${l.bestRoas.property} ${l.bestRoas.unit} ${l.bestRoas.platform}: ${l.bestRoas.roasPct.toFixed(0)}%` : "—",
+        bestTripadvisor: l.bestTripadvisor ? `${l.bestTripadvisor.property}: #${l.bestTripadvisor.rank}` : "—",
+        biggestSocialGrowth: l.bestSocial ? `${l.bestSocial.property}: reach ${formatVariancePercent(l.bestSocial.momPct)} MoM` : "—",
+        topAccount: l.topAccount ? `${l.topAccount.property} ${l.topAccount.accountName}: ${money(l.topAccount.revenue)}` : "—",
+      },
+    },
+  };
+}
+
 export async function buildNarrativeContext(
   section: string,
   propertyCode: string,
   period: string,
 ): Promise<NarrativeContext | null> {
+  if (propertyCode === "GROUP") return groupContext(period);
+
   const property = await prisma.property.findUnique({
     where: { code: propertyCode },
     select: { code: true, name: true, area: true, restaurantName: true, spaName: true },

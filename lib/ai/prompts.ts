@@ -43,6 +43,13 @@ const SECTION_GUIDANCE: Record<string, string> = {
   ADS_SUMMARY: `Write a short overview paragraph that interprets ROAS in plain language (for example, "every Rp 1 spent returned Rp X"), then a compact platform-by-platform breakdown of spend, clicks and return, then a one-sentence conclusion on where budget is working hardest.`,
 
   SOCIAL_SUMMARY: `Summarise organic social performance by business unit and platform, citing the month-over-month changes provided. Lead each unit with its strongest movements and flag the weakest metric. Keep it to a short paragraph per unit.`,
+
+  GROUP_SUMMARY: `Write a one-page executive brief for management comparing the three Blue Karma properties — BKDS (Dijiwa Seminyak), BKDU (Dijiwa Ubud) and BKV (Village). Structure it as roughly five short paragraphs:
+1. Consolidated Group performance versus budget (total revenue, occupancy, ADR, RevPAR), citing the group figures.
+2. Which property led and which lagged on revenue achievement, with the exact figures.
+3. Explicitly separate SHARED headwinds or tailwinds (market-wide factors affecting all three) from PROPERTY-SPECIFIC issues.
+4. The standout results from the leaderboards (best ROAS campaign, best Tripadvisor position, biggest social growth, top account).
+5. Two or three group-level priorities for management.`,
 };
 
 const PLAN_LABELS: Record<string, string> = {
