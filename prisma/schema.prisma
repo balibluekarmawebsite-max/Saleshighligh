@@ -177,6 +177,7 @@ model ReportPeriod {
   forecasts          Forecast[]
   marketSupply       MarketSupply[]
   narrativeContent   NarrativeContent[]
+  narrativeVersions  NarrativeVersion[]
   influencerCollabs  InfluencerCollab[]
 
   @@unique([propertyId, period])
@@ -545,6 +546,23 @@ model NarrativeContent {
 
   @@unique([periodId, section])
   @@map("narrative_content")
+}
+
+/// Append-only history of narrative edits (AI drafts, human edits, carry-forward).
+model NarrativeVersion {
+  id          String           @id @default(cuid())
+  periodId    String
+  section     NarrativeSection
+  content     String           @db.Text
+  aiGenerated Boolean          @default(false)
+  /// Origin of this version: "ai", "human", or "carry_forward".
+  source      String
+  createdAt   DateTime         @default(now())
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId, section])
+  @@map("narrative_versions")
 }
 
 /// Audit log of monthly workbook imports (who, when, file, per-tab row counts).

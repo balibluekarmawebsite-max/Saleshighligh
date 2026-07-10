@@ -327,6 +327,29 @@ _Schema:_ adds a `SALES_STRATEGY` value on `NarrativeSection` — migration
 `20260709100000_add_sales_strategy_section` (run its `migration.sql` in the
 Supabase SQL editor before the Plans page will load).
 
+**Phase 13 — AI Narrative Generation (Claude API). ✅ Done.**
+Server-side `/api/narrative` streams grounded narrative drafts via the Anthropic
+SDK (`@anthropic-ai/sdk`; model `claude-sonnet-4-6`, override with
+`ANTHROPIC_MODEL`; key read from `ANTHROPIC_API_KEY`, never sent to the client;
+low temperature, thinking off). `lib/ai/context.ts` builds a compact,
+**pre-formatted** JSON context per section by reusing the dashboard fetchers, so
+the model only ever *quotes* figures (IDR compact, 2-dp %, signed variances) —
+it never computes or invents a number. Section generators: Executive Summary
+(3-paragraph vs-budget), Room-Type Analysis (labelled bullets with RN/ADR
+drivers + IDR gaps), Restaurant & Spa Overview (😊/☹️/💡 with actionable
+takeaways), Ads Summary (ROAS "every Rp 1 → Rp X"), Social Summary (per
+unit/platform MoM); plan/factor sections fall back to a KPI-grounded draft.
+System prompts + guardrails in `lib/ai/prompts.ts` (British-neutral hospitality
+English, numbers-from-context-only). UX: the three narrative panels
+(`NarrativePanel`, `NarrativeColumns`, `PlanSectionPanel`) share
+`useNarrativeDraft` — "Generate with AI" streams into an editable `AiDraftEditor`;
+Save (`/api/narrative/save`) upserts `NarrativeContent` (`aiGenerated` true until
+a human edits) and appends a `NarrativeVersion` history row; FINAL periods are
+locked. _Schema:_ adds `NarrativeVersion` — migration
+`20260710090000_add_narrative_versions` (run its `migration.sql` in the Supabase
+SQL editor). _Still deferred:_ TipTap rich-text, image upload, and admin auth to
+gate the save endpoint.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

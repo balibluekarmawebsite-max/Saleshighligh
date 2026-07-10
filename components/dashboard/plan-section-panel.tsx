@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { CopyPlus, Sparkles } from "lucide-react";
 
+import { AiDraftEditor } from "@/components/dashboard/ai-draft-editor";
 import { Button } from "@/components/ui/button";
+import { useNarrativeDraft } from "@/lib/ai/use-narrative-draft";
 import type { PlanSectionBlocks } from "@/lib/dashboard-data";
 
 /**
- * A content-managed plan section: renders the current narrative, offers an AI
- * draft (stub) and a "Carry forward from last month" action that seeds a draft
- * from the previous period's content. Persisted edit-in-place + rich-text land
- * with the admin/auth phase, so drafts here are previews only.
+ * A content-managed plan section (Phase 13): renders the current narrative,
+ * streams an AI draft into an editable buffer, and offers "Carry forward from
+ * last month" (seeds the buffer from the previous period's content). Saving
+ * writes back to the period and keeps a version history.
  */
 export function PlanSectionPanel({
   blocks,
@@ -25,37 +26,8 @@ export function PlanSectionPanel({
   period: string;
   emptyText?: string;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const [draftLabel, setDraftLabel] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-
+  const { draft, streaming, saveState, generate, setDraft, seed, discard, save } = useNarrativeDraft(section, property, period);
   const { current, previous } = blocks;
-
-  async function generate() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/ai/narrative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, property, period }),
-      });
-      const data = (await res.json()) as { text?: string };
-      setDraft(data.text ?? "No draft returned.");
-      setDraftLabel("AI draft preview");
-    } catch {
-      setDraft("Could not reach the AI service (stub).");
-      setDraftLabel("AI draft preview");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function carryForward() {
-    if (previous?.content) {
-      setDraft(previous.content);
-      setDraftLabel("Carried forward from last month");
-    }
-  }
 
   return (
     <div className="space-y-3">
@@ -70,16 +42,16 @@ export function PlanSectionPanel({
             size="sm"
             variant="outline"
             className="gap-1.5"
-            onClick={carryForward}
-            disabled={!previous?.content}
+            onClick={() => previous?.content && seed(previous.content)}
+            disabled={!previous?.content || streaming}
             title={previous?.content ? "Copy last month's content as a starting draft" : "No previous month to carry forward"}
           >
             <CopyPlus className="h-4 w-4" />
             Carry forward
           </Button>
-          <Button size="sm" variant="outline" className="gap-1.5" onClick={generate} disabled={loading}>
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={generate} disabled={streaming}>
             <Sparkles className="h-4 w-4" />
-            {loading ? "Generating…" : "Generate with AI"}
+            {streaming ? "Generating…" : "Generate with AI"}
           </Button>
         </div>
       </div>
@@ -94,14 +66,14 @@ export function PlanSectionPanel({
         <p className="text-sm text-muted-foreground">{emptyText}</p>
       )}
 
-      {draft && (
-        <div className="rounded-md border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/5 p-3 text-sm">
-          <p className="mb-1 text-xs font-medium text-[hsl(var(--brand-gold))]">
-            {draftLabel} — saving &amp; in-place editing arrive in a later phase
-          </p>
-          <p className="whitespace-pre-line text-muted-foreground">{draft}</p>
-        </div>
-      )}
+      <AiDraftEditor
+        draft={draft}
+        streaming={streaming}
+        saveState={saveState}
+        onChange={setDraft}
+        onSave={save}
+        onDiscard={discard}
+      />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Sparkles } from "lucide-react";
 
+import { AiDraftEditor } from "@/components/dashboard/ai-draft-editor";
 import { Button } from "@/components/ui/button";
+import { useNarrativeDraft } from "@/lib/ai/use-narrative-draft";
 import type { NarrativeBlock } from "@/lib/dashboard-data";
 import { cn } from "@/lib/utils";
 
@@ -115,30 +117,12 @@ export function NarrativeColumns({
   property: string;
   period: string;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { draft, streaming, saveState, generate, setDraft, discard, save } = useNarrativeDraft(section, property, period);
 
   const parsed = useMemo(
     () => (block?.content ? parseNarrative(block.content) : null),
     [block?.content],
   );
-
-  async function generate() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/ai/narrative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, property, period }),
-      });
-      const data = (await res.json()) as { text?: string };
-      setDraft(data.text ?? "No draft returned.");
-    } catch {
-      setDraft("Could not reach the AI service (stub).");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -148,9 +132,9 @@ export function NarrativeColumns({
             <Sparkles className="h-3 w-3" /> AI-generated
           </span>
         )}
-        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={generate} disabled={loading}>
+        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={generate} disabled={streaming}>
           <Sparkles className="h-4 w-4" />
-          {loading ? "Generating…" : "Generate with AI"}
+          {streaming ? "Generating…" : "Generate with AI"}
         </Button>
       </div>
 
@@ -177,14 +161,14 @@ export function NarrativeColumns({
         </div>
       )}
 
-      {draft && (
-        <div className="rounded-md border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/5 p-3 text-sm">
-          <p className="mb-1 text-xs font-medium text-[hsl(var(--brand-gold))]">
-            AI draft preview — saving &amp; in-place editing arrive in Phase 13
-          </p>
-          <p className="whitespace-pre-line text-muted-foreground">{draft}</p>
-        </div>
-      )}
+      <AiDraftEditor
+        draft={draft}
+        streaming={streaming}
+        saveState={saveState}
+        onChange={setDraft}
+        onSave={save}
+        onDiscard={discard}
+      />
     </div>
   );
 }
