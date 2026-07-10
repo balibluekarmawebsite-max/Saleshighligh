@@ -28,10 +28,19 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "section, property and period are required." }, { status: 400 });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  // Credentials resolve, in order: ANTHROPIC_API_KEY → ANTHROPIC_AUTH_TOKEN →
+  // an `ant auth login` OAuth profile on disk (set ANTHROPIC_USE_PROFILE=true to
+  // opt into the profile path, since it can't be detected from env alone).
+  const hasCredential =
+    !!process.env.ANTHROPIC_API_KEY ||
+    !!process.env.ANTHROPIC_AUTH_TOKEN ||
+    process.env.ANTHROPIC_USE_PROFILE === "true";
+  if (!hasCredential) {
     return Response.json(
-      { error: "AI generation is not configured — set ANTHROPIC_API_KEY on the server to enable drafts." },
+      {
+        error:
+          "AI generation is not configured — set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN), or run `ant auth login` and set ANTHROPIC_USE_PROFILE=true, on the server.",
+      },
       { status: 501 },
     );
   }
@@ -41,7 +50,14 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Unknown property "${property}".` }, { status: 404 });
   }
 
-  const client = new Anthropic({ apiKey });
+  let client: Anthropic;
+  try {
+    // No explicit apiKey — let the SDK resolve from env or the on-disk profile.
+    client = new Anthropic();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "no usable credential";
+    return Response.json({ error: `AI credential could not be resolved: ${message}` }, { status: 501 });
+  }
   const userContent =
     `Report period: ${ctx.period}\n` +
     `Property: ${ctx.property.name} (${ctx.property.code}), ${ctx.property.area}\n` +
