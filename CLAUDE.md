@@ -350,6 +350,29 @@ locked. _Schema:_ adds `NarrativeVersion` — migration
 SQL editor). _Still deferred:_ TipTap rich-text, image upload, and admin auth to
 gate the save endpoint.
 
+**Phase 14 — Report Export (PPTX + PDF). ✅ Done.**
+One-click export of the monthly Sales Highlight deck. **PPTX** `/api/export/pptx`
+(`pptxgenjs`, server-side, `lib/export/pptx.ts`): a clean template — white
+slides, deep-teal headers, a slim gold accent, Calibri, native tables + native
+bar charts (no decorative bars) — built from the same fetchers the dashboard
+uses. Cover → Executive Summary (achievement table + narrative) → External/
+Internal Factors → Rooms (Market Segment MTD & YTD, Account Production, Room
+Types + narrative, Nationality + LOS) → Digital Ads/ROAS + OTA rankings +
+Tripadvisor → Restaurant (overview, meals + chart, SOB, Chope, Gokai, narrative)
+→ Spa (segments + chart, treatments, Gokai, narrative) → Market (booking pace,
+6-month forecast + revenue-vs-budget) → Plans (all `NarrativeContent` sections) →
+Social + Influencers. **PDF** `/api/export/pdf` prints the dedicated
+`/print/[property]/[period]` route (print CSS, section-filterable) to a paginated
+A4-landscape PDF via **Playwright/Chromium** (needs a Node host with the browser;
+`PLAYWRIGHT_CHROMIUM_PATH` override). **Export modal** (`ExportModal`, wired into
+the context bar): checkbox tree of sections (default all), PPTX/PDF choice, and a
+**Group pack** (`/api/export/group`, `jszip`) zipping every property's deck (the
+consolidated Group summary lands with Phase 15). Each export writes an
+`ExportHistory` audit row (best-effort). _Schema:_ adds `ExportHistory` —
+migration `20260710100000_add_export_history` (run its `migration.sql` in the
+Supabase SQL editor). Adds `pptxgenjs`, `jszip`, `playwright`; the last two/
+`xlsx` kept external in `next.config`.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, ChevronDown, Download } from "lucide-react";
+import { Building2, ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { ExportModal } from "@/components/dashboard/export-modal";
 import { GROUP_CODE, type PeriodOption, type PropertyOption } from "@/lib/dashboard-data";
 import { sectionTitle } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -132,10 +132,7 @@ export function ContextBar({
           ))}
         </div>
 
-        <Button size="sm" className="gap-2" disabled title="Coming in a later phase">
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Export Report</span>
-        </Button>
+        <ExportModal property={property} period={period} />
       </div>
     </header>
   );

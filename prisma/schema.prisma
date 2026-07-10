@@ -140,6 +140,7 @@ model Property {
 
   periods       ReportPeriod[]
   importHistory ImportHistory[]
+  exportHistory ExportHistory[]
 
   @@map("properties")
 }
@@ -579,6 +580,25 @@ model ImportHistory {
 
   @@index([propertyId, period])
   @@map("import_history")
+}
+
+/// Audit log of generated report exports (PPTX / PDF / group zip).
+model ExportHistory {
+  id         String   @id @default(cuid())
+  /// Null for Group packs (multiple properties).
+  propertyId String?
+  period     DateTime @db.Date
+  /// "pptx" | "pdf" | "group-zip".
+  format     String
+  /// "single" | "group".
+  scope      String   @default("single")
+  sections   Json?
+  createdAt  DateTime @default(now())
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, period])
+  @@map("export_history")
 }
 
 /// Influencer / KOL collaborations for the month.
