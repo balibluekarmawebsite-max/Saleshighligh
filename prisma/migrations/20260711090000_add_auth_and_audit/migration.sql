@@ -1,8 +1,10 @@
 -- Phase 16: Auth, Roles & Audit
 --
 -- NextAuth (User/Account/Session/VerificationToken) + role/property access, and
--- an AuditLog activity trail. Run in the Supabase SQL editor. The ALTER TYPE
--- line for the enum only adds the type; it is safe on its own.
+-- an AuditLog activity trail. Run in the Supabase SQL editor.
+--
+-- Idempotent: safe to re-run even if a previous attempt partially applied — every
+-- object is created only if it does not already exist.
 
 -- CreateEnum
 DO $$ BEGIN
@@ -10,7 +12,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 -- CreateTable
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
     "id" TEXT NOT NULL,
     "name" TEXT,
     "email" TEXT,
@@ -24,9 +26,9 @@ CREATE TABLE "users" (
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "users_email_key" ON "users"("email");
 
-CREATE TABLE "accounts" (
+CREATE TABLE IF NOT EXISTS "accounts" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "type" TEXT NOT NULL,
@@ -42,9 +44,9 @@ CREATE TABLE "accounts" (
 
     CONSTRAINT "accounts_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "accounts_provider_providerAccountId_key" ON "accounts"("provider", "providerAccountId");
+CREATE UNIQUE INDEX IF NOT EXISTS "accounts_provider_providerAccountId_key" ON "accounts"("provider", "providerAccountId");
 
-CREATE TABLE "sessions" (
+CREATE TABLE IF NOT EXISTS "sessions" (
     "id" TEXT NOT NULL,
     "sessionToken" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -52,17 +54,17 @@ CREATE TABLE "sessions" (
 
     CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
 );
-CREATE UNIQUE INDEX "sessions_sessionToken_key" ON "sessions"("sessionToken");
+CREATE UNIQUE INDEX IF NOT EXISTS "sessions_sessionToken_key" ON "sessions"("sessionToken");
 
-CREATE TABLE "verification_tokens" (
+CREATE TABLE IF NOT EXISTS "verification_tokens" (
     "identifier" TEXT NOT NULL,
     "token" TEXT NOT NULL,
     "expires" TIMESTAMP(3) NOT NULL
 );
-CREATE UNIQUE INDEX "verification_tokens_token_key" ON "verification_tokens"("token");
-CREATE UNIQUE INDEX "verification_tokens_identifier_token_key" ON "verification_tokens"("identifier", "token");
+CREATE UNIQUE INDEX IF NOT EXISTS "verification_tokens_token_key" ON "verification_tokens"("token");
+CREATE UNIQUE INDEX IF NOT EXISTS "verification_tokens_identifier_token_key" ON "verification_tokens"("identifier", "token");
 
-CREATE TABLE "audit_logs" (
+CREATE TABLE IF NOT EXISTS "audit_logs" (
     "id" TEXT NOT NULL,
     "userId" TEXT,
     "userEmail" TEXT,
@@ -73,9 +75,17 @@ CREATE TABLE "audit_logs" (
 
     CONSTRAINT "audit_logs_pkey" PRIMARY KEY ("id")
 );
-CREATE INDEX "audit_logs_createdAt_idx" ON "audit_logs"("createdAt");
+CREATE INDEX IF NOT EXISTS "audit_logs_createdAt_idx" ON "audit_logs"("createdAt");
 
--- AddForeignKey
-ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- AddForeignKey (guarded so a re-run doesn't fail on an existing constraint)
+DO $$ BEGIN
+  ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+DO $$ BEGIN
+  ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN null; END $$;
