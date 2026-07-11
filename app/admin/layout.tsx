@@ -1,5 +1,6 @@
 import { AdminHeader } from "@/components/layout/admin-header";
 import { AppShell } from "@/components/layout/app-shell";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { getShellData } from "@/lib/dashboard-data";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const shell = await getShellData();
+  const me = process.env.AUTH_SECRET ? await getCurrentUser() : null;
   const parts = shell.defaultPath.split("/").filter(Boolean);
   const onDashboard = parts[0] === "dashboard";
   const property = onDashboard ? parts[1]! : (shell.properties[0]?.code ?? "BKDS");
@@ -19,6 +21,7 @@ export default async function AdminLayout({
     <AppShell
       property={property}
       period={period}
+      userEmail={me?.email ?? null}
       header={<AdminHeader backHref={shell.defaultPath} />}
     >
       {children}

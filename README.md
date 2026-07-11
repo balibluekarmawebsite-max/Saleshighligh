@@ -49,9 +49,24 @@ Database → Connection string**. See `.env.example` for the exact formats.
 | `npm run db:seed`    | Seed properties + demo period        |
 | `npm run db:verify`  | Read demo data back + derived example|
 | `npm run db:studio`  | Open Prisma Studio                   |
+| `npm run db:create-admin` | Bootstrap the first ADMIN user  |
 
 ## Database
 
 Supabase Postgres for all environments. Prisma uses two URLs: `DATABASE_URL`
 (transaction pooler, runtime) and `DIRECT_URL` (session/direct, migrations). See
-`CLAUDE.md` for details.
+`CLAUDE.md` for details. Apply all migrations with `npx prisma migrate deploy`.
+
+## Auth & roles
+
+Auth.js (NextAuth) with email/password + optional Google SSO. Roles: **ADMIN**
+(full access, mark final, manage users), **EDITOR** (import + edit assigned
+properties), **VIEWER** (read-only + export). Protection turns on when
+`AUTH_SECRET` is set — until then the app stays open. Manage users in
+**Admin → Users**; see the activity trail in **Admin → Activity**.
+
+## Deployment
+
+Production target is **Vercel** + Supabase/Neon Postgres. Full step-by-step
+(env vars, migrations, auth, storage, PDF caveat, QA checklist) in
+[`DEPLOY.md`](./DEPLOY.md).

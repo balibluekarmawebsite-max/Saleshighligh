@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { ContextBar } from "@/components/layout/context-bar";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { GROUP_CODE, getShellData } from "@/lib/dashboard-data";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function DashboardLayout({
   params: { property: string; period: string };
 }) {
   const shell = await getShellData();
+  const me = process.env.AUTH_SECRET ? await getCurrentUser() : null;
   const validProperty =
     params.property === GROUP_CODE ||
     shell.properties.some((p) => p.code === params.property);
@@ -26,6 +28,7 @@ export default async function DashboardLayout({
     <AppShell
       property={params.property}
       period={params.period}
+      userEmail={me?.email ?? null}
       header={
         <Suspense fallback={<div className="h-16 border-b border-border bg-white" />}>
           <ContextBar

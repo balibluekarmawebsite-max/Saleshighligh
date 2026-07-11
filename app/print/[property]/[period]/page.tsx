@@ -13,6 +13,7 @@ import {
   getSpaPageData,
   getSummaryPageData,
 } from "@/lib/dashboard-data";
+import { getCurrentUser } from "@/lib/auth-helpers";
 import { formatIDRCompact, formatNumber, formatPercent, formatRatioPct, formatVariancePercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
@@ -63,8 +64,15 @@ export default async function PrintPage({
   searchParams,
 }: {
   params: { property: string; period: string };
-  searchParams: { sections?: string };
+  searchParams: { sections?: string; token?: string };
 }) {
+  // Self-gate: /print is excluded from middleware so the PDF exporter's headless
+  // browser can reach it. When auth is on, require a session or the internal token.
+  if (process.env.AUTH_SECRET) {
+    const user = await getCurrentUser();
+    if (!user && searchParams.token !== process.env.AUTH_SECRET) notFound();
+  }
+
   const { property: code, period } = params;
   const sel = searchParams.sections ? new Set(searchParams.sections.split(",")) : null;
   const show = (id: string) => !sel || sel.has(id);

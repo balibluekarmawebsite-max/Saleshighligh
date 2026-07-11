@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "prisma generate && next build",
+  "functions": {
+    "app/api/export/pptx/route.ts": { "maxDuration": 60 },
+    "app/api/export/group/route.ts": { "maxDuration": 120 },
+    "app/api/export/pdf/route.ts": { "maxDuration": 120 }
+  }
+}

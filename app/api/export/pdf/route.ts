@@ -1,8 +1,11 @@
 import type { NextRequest } from "next/server";
 import type { Browser } from "playwright";
 
+import { requireRole } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 import { periodToDate } from "@/lib/dashboard-data";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +17,9 @@ export const maxDuration = 120;
  * Requires a Node host with Chromium available (not serverless/edge).
  */
 export async function GET(req: NextRequest) {
+  if (!rateLimit(req, "export", 10, 60_000)) return tooManyRequests();
+  const guard = await requireRole(["ADMIN", "EDITOR", "VIEWER"]);
+  if ("response" in guard) return guard.response;
   const url = new URL(req.url);
   const property = url.searchParams.get("property");
   const period = url.searchParams.get("period");
@@ -22,7 +28,11 @@ export async function GET(req: NextRequest) {
   }
 
   const sections = url.searchParams.get("sections");
-  const printUrl = `${url.origin}/print/${property}/${period}${sections ? `?sections=${encodeURIComponent(sections)}` : ""}`;
+  const printParams = new URLSearchParams();
+  if (sections) printParams.set("sections", sections);
+  if (process.env.AUTH_SECRET) printParams.set("token", process.env.AUTH_SECRET);
+  const qs = printParams.toString();
+  const printUrl = `${url.origin}/print/${property}/${period}${qs ? `?${qs}` : ""}`;
 
   let chromium: typeof import("playwright").chromium;
   try {
@@ -63,6 +73,7 @@ export async function GET(req: NextRequest) {
           data: { propertyId: prop.id, period: periodToDate(period), format: "pdf", scope: "single" },
         });
       }
+      await logAudit("export.pdf", `${property} ${period}`);
     } catch {
       /* ignore audit failures */
     }

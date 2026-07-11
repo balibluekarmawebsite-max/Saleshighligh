@@ -1,8 +1,11 @@
 import type { NextRequest } from "next/server";
 
+import { requireRole } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 import { periodToDate } from "@/lib/dashboard-data";
 import { DECK_SECTIONS, DEFAULT_SECTION_IDS, buildDeck, type DeckSectionId } from "@/lib/export/pptx";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +14,9 @@ const VALID = new Set<string>(DECK_SECTIONS.map((s) => s.id));
 
 /** GET /api/export/pptx?property=BKDS&period=2026-06&sections=summary,rooms,… */
 export async function GET(req: NextRequest) {
+  if (!rateLimit(req, "export", 10, 60_000)) return tooManyRequests();
+  const guard = await requireRole(["ADMIN", "EDITOR", "VIEWER"]);
+  if ("response" in guard) return guard.response;
   const url = new URL(req.url);
   const property = url.searchParams.get("property");
   const period = url.searchParams.get("period");
@@ -36,6 +42,7 @@ export async function GET(req: NextRequest) {
         data: { propertyId: prop.id, period: periodToDate(period), format: "pptx", scope: "single", sections },
       });
     }
+    await logAudit("export.pptx", `${property} ${period}`, { sections });
   } catch {
     /* ignore audit failures */
   }

@@ -1,5 +1,7 @@
 "use server";
 
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 import { applyImport, ImportLockedError } from "@/lib/import/apply";
 import { parseWorkbook, type ValidationIssue } from "@/lib/import/parse";
 
@@ -67,6 +69,11 @@ export async function commitWorkbook(
     return { ok: false, message: "Attach an .xlsx file." };
   }
 
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { ok: false, message: `You don't have import access to ${property}.` };
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer());
   const parsed = parseWorkbook(buffer, {
     expectedProperty: property,
@@ -86,6 +93,7 @@ export async function commitWorkbook(
       period,
       fileName: file.name,
     });
+    await logAudit("import", `${property} ${period}`, { fileName: file.name, written: result.written });
     return { ok: true, written: result.written };
   } catch (error) {
     if (error instanceof ImportLockedError) {

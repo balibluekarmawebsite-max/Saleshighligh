@@ -391,6 +391,30 @@ social growth, top revenue account; (5) **AI Group summary** — `GroupSummaryPa
 streams a Claude brief from `/api/narrative` (new `GROUP_SUMMARY` section +
 `groupContext`; read-only, no period row to save into). No schema change.
 
+**Phase 16 — Auth, Roles & Deployment. ✅ Done.**
+Production hardening. **Auth.js (NextAuth v5)** — email/password (bcrypt) +
+optional Google SSO, JWT sessions, Prisma adapter (`auth.ts` / edge-safe
+`auth.config.ts` / `middleware.ts`). Roles **ADMIN / EDITOR / VIEWER** with
+per-property access for editors (`User.role` + `assignedProperties[]`).
+`lib/auth-helpers.ts` (`getCurrentUser`, `requireRole`, `canEditProperty`) gates
+the write surface: narrative save + generate (EDITOR/ADMIN + property), import
+(EDITOR/ADMIN + property), exports (any authed), finalize + user management
+(ADMIN). **Rollout switch:** protection turns on only when `AUTH_SECRET` is set;
+until then the app runs open as a synthetic admin. **Audit** (`lib/audit.ts` +
+`AuditLog`) records imports, narrative edits, exports and final-locks; feed at
+`/admin/activity`. `/admin/users` (ADMIN) manages users/roles/property access;
+`/api/admin/finalize` marks a period FINAL. **Login** `/login`; sidebar sign-out.
+Prod: `next.config` security headers, in-memory rate limiter on API routes
+(`lib/rate-limit.ts`; swap for Upstash on multi-instance), `lib/storage.ts`
+(Supabase Storage REST for uploaded images), `vercel.json`, and **DEPLOY.md**
+(env, `prisma migrate deploy`, `npm run db:create-admin`, Google OAuth, PDF/
+Playwright-on-Vercel caveat, QA checklist). `/print` is middleware-excluded and
+self-gated by session-or-internal-token so the PDF exporter can render it.
+_Schema:_ adds `User`/`Account`/`Session`/`VerificationToken`/`AuditLog` +
+`UserRole` — migration `20260711090000_add_auth_and_audit` (run `prisma migrate
+deploy` or its `migration.sql`). Adds `next-auth`, `@auth/prisma-adapter`,
+`bcryptjs`.
+
 **Phase 3 — Outlets, Ads & Reputation.**
 Restaurant and Spa performance, Digital Ads & ROAS, Online Reputation (OTA
 rankings, Tripadvisor).

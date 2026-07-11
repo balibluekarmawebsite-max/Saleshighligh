@@ -3,6 +3,8 @@ import type { NextRequest } from "next/server";
 
 import { buildNarrativeContext } from "@/lib/ai/context";
 import { NARRATIVE_MODEL, systemPromptFor } from "@/lib/ai/prompts";
+import { requireRole } from "@/lib/auth-helpers";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +29,10 @@ export async function POST(req: NextRequest) {
   if (!section || !property || !period) {
     return Response.json({ error: "section, property and period are required." }, { status: 400 });
   }
+
+  if (!rateLimit(req, "narrative", 20, 60_000)) return tooManyRequests();
+  const guard = await requireRole(["ADMIN", "EDITOR"]);
+  if ("response" in guard) return guard.response;
 
   // Credentials resolve, in order: ANTHROPIC_API_KEY → ANTHROPIC_AUTH_TOKEN →
   // an `ant auth login` OAuth profile on disk (set ANTHROPIC_USE_PROFILE=true to

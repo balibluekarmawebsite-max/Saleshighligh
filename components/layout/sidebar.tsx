@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, Settings } from "lucide-react";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import {
   ADMIN_NAV,
   DASHBOARD_NAV,
@@ -21,9 +22,11 @@ function currentRel(pathname: string): string | null {
 export function Sidebar({
   property,
   period,
+  userEmail = null,
 }: {
   property: string;
   period: string;
+  userEmail?: string | null;
 }) {
   const pathname = usePathname();
   const rel = currentRel(pathname);
@@ -137,6 +140,11 @@ export function Sidebar({
             </Link>
           );
         })}
+        {userEmail && (
+          <div className="mt-2 border-t border-border pt-2">
+            <SignOutButton email={userEmail} />
+          </div>
+        )}
       </div>
     </aside>
   );

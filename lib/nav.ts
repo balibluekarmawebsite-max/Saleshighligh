@@ -48,8 +48,9 @@ export interface AdminNavItem {
 export const ADMIN_NAV: AdminNavItem[] = [
   { label: "Import", href: "/admin/import", ready: true },
   { label: "Templates", href: "/admin/template", ready: true },
+  { label: "Activity", href: "/admin/activity", ready: true },
+  { label: "Users", href: "/admin/users", ready: true },
   { label: "Manual Entry", href: "/admin/data", ready: false },
-  { label: "Users", href: "/admin/users", ready: false },
 ];
 
 /** Build an absolute dashboard href from a property, period and relative path. */

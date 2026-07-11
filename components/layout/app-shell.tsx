@@ -7,15 +7,17 @@ export function AppShell({
   period,
   header,
   children,
+  userEmail = null,
 }: {
   property: string;
   period: string;
   header: React.ReactNode;
   children: React.ReactNode;
+  userEmail?: string | null;
 }) {
   return (
     <div className="flex h-screen overflow-hidden bg-muted/30">
-      <Sidebar property={property} period={period} />
+      <Sidebar property={property} period={period} userEmail={userEmail} />
       <div className="flex min-w-0 flex-1 flex-col">
         {header}
         <MobileNav property={property} period={period} />

@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
 import type { NarrativeSection } from "@prisma/client";
 
+import { canEditProperty, requireRole } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 import { periodToDate } from "@/lib/dashboard-data";
 import { prisma } from "@/lib/prisma";
 
@@ -61,6 +63,12 @@ export async function POST(req: NextRequest) {
   }
   const sec = section as NarrativeSection;
 
+  const guard = await requireRole(["ADMIN", "EDITOR"]);
+  if ("response" in guard) return guard.response;
+  if (!canEditProperty(guard.user, property)) {
+    return Response.json({ error: `You don't have edit access to ${property}.` }, { status: 403 });
+  }
+
   const reportPeriod = await prisma.reportPeriod.findFirst({
     where: { property: { code: property }, period: periodToDate(period) },
     select: { id: true, status: true },
@@ -84,6 +92,8 @@ export async function POST(req: NextRequest) {
       data: { periodId: reportPeriod.id, section: sec, content, aiGenerated, source },
     }),
   ]);
+
+  await logAudit("narrative.save", `${property} ${period} ${sec}`, { source });
 
   return Response.json({ ok: true });
 }

@@ -1,9 +1,12 @@
 import type { NextRequest } from "next/server";
 import JSZip from "jszip";
 
+import { requireRole } from "@/lib/auth-helpers";
+import { logAudit } from "@/lib/audit";
 import { periodToDate } from "@/lib/dashboard-data";
 import { DEFAULT_SECTION_IDS, buildDeck } from "@/lib/export/pptx";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +16,9 @@ export const dynamic = "force-dynamic";
  * Highlight deck. The consolidated Group summary deck lands with Phase 15.
  */
 export async function GET(req: NextRequest) {
+  if (!rateLimit(req, "export", 10, 60_000)) return tooManyRequests();
+  const guard = await requireRole(["ADMIN", "EDITOR", "VIEWER"]);
+  if ("response" in guard) return guard.response;
   const url = new URL(req.url);
   const period = url.searchParams.get("period");
   if (!period) {
@@ -46,6 +52,7 @@ export async function GET(req: NextRequest) {
     await prisma.exportHistory.create({
       data: { period: periodToDate(period), format: "group-zip", scope: "group", sections: DEFAULT_SECTION_IDS },
     });
+    await logAudit("export.group", period, { properties: added });
   } catch {
     /* ignore audit failures */
   }
