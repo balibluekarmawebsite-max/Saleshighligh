@@ -1,7 +1,16 @@
 # Deploying BK Sales Dashboard
 
-Production target: **Vercel** + **Supabase Postgres** (Neon works too). This
-guide covers env vars, database migrations, auth setup, storage, and the deploy.
+Two supported targets:
+
+- **Self-hosted on an Ubuntu VM** (Oracle Cloud Always Free, or any VPS) —
+  full support **including PDF export**, since Chromium runs natively. This is
+  the recommended target for Blue Karma. Jump to **[§9 Self-host on an Ubuntu
+  VM](#9-self-host-on-an-ubuntu-vm-oracle-cloud-always-free)**.
+- **Vercel** — fast to set up; PPTX + Group zip work unchanged, but PDF export
+  needs a workaround (see §5).
+
+Either way the database stays on **Supabase Postgres** (Neon works too). This
+guide covers env vars, migrations, auth, storage, and both deploys.
 
 ---
 
@@ -151,3 +160,163 @@ use inline styles) — add a tuned CSP if your security posture requires it.
 - [ ] With `AUTH_SECRET` set: signing out redirects to `/login`; a VIEWER cannot
       import or save narratives; an EDITOR only sees their assigned properties.
 - [ ] Admin → Activity lists imports / edits / exports / final-locks.
+
+---
+
+## 9. Self-host on an Ubuntu VM (Oracle Cloud Always Free)
+
+Full walkthrough for deploying to an **Oracle Cloud Always Free** VM. The DB
+stays on Supabase (already migrated), so this only stands up the app. PDF export
+works here because Chromium runs natively. Helper files live in `deploy/`.
+
+> **Why Oracle "Ampere A1"?** The Next.js production build is memory-hungry. The
+> AMD **Micro** free shape has only **1 GB RAM** and the build will OOM. Use an
+> **Ampere A1 (ARM)** shape — the Always Free tier gives you up to **4 vCPU /
+> 24 GB RAM**; even 1–2 vCPU / 6–12 GB is plenty. Node/Next/Prisma all have ARM
+> builds, so ARM is fine.
+
+### 9.1 Create the instance
+
+1. **Compute → Instances → Create instance.**
+2. **Image:** Canonical **Ubuntu 22.04** (or 24.04).
+3. **Shape:** *Change shape → Ampere → VM.Standard.A1.Flex*. Set e.g. **2 OCPU /
+   12 GB** (all within Always Free). Avoid the AMD Micro shape.
+4. **SSH keys:** upload your public key (or let Oracle generate one and download
+   the private key). You'll SSH in as user **`ubuntu`**.
+5. **Networking:** keep "Assign a public IPv4 address" checked. Create/keep the
+   default VCN. **Create.** Note the **public IP**.
+
+### 9.2 Open ports 80 + 443 (the Oracle gotcha — do BOTH)
+
+Oracle blocks traffic in **two** places. You must open ports in **both** or
+HTTPS will silently hang.
+
+**(a) VCN Security List (cloud firewall).** Networking → your VCN → the public
+subnet → its **Security List** → **Add Ingress Rules**:
+
+| Source CIDR | IP Protocol | Dest. port |
+|---|---|---|
+| `0.0.0.0/0` | TCP | `80` |
+| `0.0.0.0/0` | TCP | `443` |
+
+**(b) The instance's own OS firewall.** Ubuntu on Oracle ships with `iptables`
+rules that drop everything but SSH. SSH in (next step) and run:
+
+```bash
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+(If you'll test IP-only on :3000 first, also open `3000` in both places, then
+remove it once Caddy/HTTPS is up.)
+
+### 9.3 SSH in and install the toolchain
+
+```bash
+ssh ubuntu@<public-ip>
+
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git build-essential
+
+# Node 20 LTS (NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v   # v20.x
+```
+
+### 9.4 Clone the repo + create .env
+
+The repo is private, so authenticate the clone. Easiest is a **GitHub Personal
+Access Token** (repo scope) used as the password, or a deploy key. Clone into
+the home directory so the path matches the systemd unit
+(`/home/ubuntu/Saleshighligh`):
+
+```bash
+cd ~
+git clone https://github.com/balibluekarmawebsite-max/saleshighligh.git Saleshighligh
+cd Saleshighligh
+git checkout claude/bk-sales-dashboard-setup-wetevl   # or main, once merged
+
+cp deploy/env.vm.example .env
+nano .env            # fill DATABASE_URL, DIRECT_URL, AUTH_SECRET, AUTH_URL, ANTHROPIC_API_KEY
+chmod 600 .env
+```
+
+Generate `AUTH_SECRET` with `openssl rand -base64 32`. Set `AUTH_URL` to your
+final `https://…` domain (or `http://<public-ip>:3000` for an IP-only smoke
+test).
+
+### 9.5 Install deps, build, create the admin
+
+```bash
+npm ci
+npx prisma generate
+npx playwright install --with-deps chromium   # for PDF export
+npm run build                                 # ~1–3 min on A1; this is why you want RAM
+
+# First admin (bcrypt-hashed). DB is already migrated on Supabase.
+ADMIN_EMAIL=you@bluekarmasecrets.com ADMIN_PASSWORD='a-strong-password' npm run db:create-admin
+```
+
+> If `npm run build` ever gets OOM-killed on a smaller shape, add swap:
+> `sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap
+> /swapfile && sudo swapon /swapfile` (persist in `/etc/fstab`).
+
+### 9.6 Run it as a service (systemd)
+
+Keeps the app alive across crashes and reboots.
+
+```bash
+sudo cp deploy/bk-dashboard.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now bk-dashboard
+sudo systemctl status bk-dashboard     # should be active (running)
+journalctl -u bk-dashboard -f          # live logs
+```
+
+The app now listens on `127.0.0.1:3000`. Quick check:
+`curl -I http://localhost:3000` should return `200`.
+
+### 9.7 HTTPS with a domain (Caddy)
+
+You need a DNS name pointing at the public IP. Free option: **DuckDNS** —
+create `something.duckdns.org` and set it to your IP. Then install Caddy (it
+gets and renews the TLS cert automatically):
+
+```bash
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install -y caddy
+
+sudo nano deploy/Caddyfile        # replace dashboard.example.com with your domain
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Set `AUTH_URL="https://your-domain"` in `.env`, then
+`sudo systemctl restart bk-dashboard`. Visit the domain — you should get HTTPS
+and the `/login` page.
+
+### 9.8 Updating the app later
+
+```bash
+cd ~/Saleshighligh
+git pull
+npm ci
+npx prisma migrate deploy        # only if new migrations landed
+npm run build
+sudo systemctl restart bk-dashboard
+```
+
+### 9.9 AI narrative auth on the server
+
+`ANTHROPIC_API_KEY` in `.env` is the simplest path. Alternatively log in once
+with the Claude CLI on the server and set `ANTHROPIC_USE_PROFILE=true` (see
+`deploy/env.vm.example`). Either way calls bill your **Anthropic API** account —
+the CLI login is an auth convenience, **not** a way to bill a Claude.ai
+subscription.
+

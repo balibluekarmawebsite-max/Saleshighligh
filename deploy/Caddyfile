@@ -1,0 +1,30 @@
+# Caddy reverse proxy + automatic HTTPS for the BK Sales Dashboard.
+#
+# Caddy fetches and renews a Let's Encrypt certificate automatically as long as
+# the domain's DNS A record points at this server's public IP and ports 80/443
+# are open (VCN security list AND the OS firewall — see DEPLOY.md).
+#
+# Install:
+#   sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+#   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+#     | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+#   curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+#     | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+#   sudo apt update && sudo apt install -y caddy
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # after editing the domain below
+#   sudo systemctl reload caddy
+#
+# Replace dashboard.example.com with your real domain (or a free DuckDNS
+# subdomain, e.g. bk-sales.duckdns.org). Everything else can stay as-is.
+
+dashboard.example.com {
+	# The Next.js app is served by the bk-dashboard systemd service on :3000.
+	reverse_proxy 127.0.0.1:3000
+
+	encode gzip zstd
+
+	# Let the app render /print for the PDF exporter; long jobs need headroom.
+	request_body {
+		max_size 25MB
+	}
+}

@@ -1,0 +1,27 @@
+# systemd unit for the BK Sales Dashboard on an Ubuntu VM.
+# Install:
+#   sudo cp deploy/bk-dashboard.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bk-dashboard
+#   sudo systemctl status bk-dashboard      # check it's running
+#   journalctl -u bk-dashboard -f           # tail logs
+#
+# Next.js loads the project's .env automatically, so env vars live in
+# /home/ubuntu/Saleshighligh/.env (chmod 600). Adjust User/paths if different.
+
+[Unit]
+Description=BK Sales Dashboard (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Saleshighligh
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
