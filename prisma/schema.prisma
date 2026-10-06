@@ -143,6 +143,15 @@ model Property {
   importHistory ImportHistory[]
   exportHistory ExportHistory[]
 
+  // Weekly Reports module (shares the same properties)
+  weeklyReports        WeeklyReport[]
+  weeklyBudgets        WeeklyBudget[]
+  weeklyMarketSegments WeeklyMarketSegment[]
+  weeklyRateCodes      WeeklyRateCode[]
+  weeklyChannels       WeeklyChannel[]
+  weeklySettings       WeeklySetting[]
+  weeklyImports        WeeklyImport[]
+
   @@map("properties")
 }
 
@@ -644,6 +653,11 @@ model User {
   sessions  Session[]
   auditLogs AuditLog[]
 
+  // Weekly Reports module (shares the same users)
+  weeklyReportsOwned WeeklyReport[]
+  weeklyImports      WeeklyImport[]
+  weeklyAiDrafts     WeeklyAiDraft[]
+
   @@map("users")
 }
 
@@ -704,4 +718,414 @@ model AuditLog {
 
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── Weekly Reports module ──────────────────────────────────────────────────
+//
+// A second reporting product in the same app: a weekly (Fri–Thu) Sales &
+// Marketing report. It reuses Property and User above; every table here is
+// prefixed `Weekly*` / mapped to `weekly_*` so it never clashes with the
+// monthly Sales Highlight models. Derived metrics (ARR, variances, %, YTD) are
+// computed in the calculation layer, except WeeklyMonthlyStat which stores the
+// occupancy/ARR figures exactly as imported from VHP (occ as a 0–1 fraction).
+
+/// Lifecycle of a weekly report. APPROVED and EXPORTED are locked (read-only).
+enum WeeklyReportStatus {
+  DRAFT
+  IN_PROGRESS
+  READY_FOR_REVIEW
+  APPROVED
+  EXPORTED
+}
+
+/// One weekly report (Fri–Thu) for a property — parent of every section below.
+model WeeklyReport {
+  id         String             @id @default(cuid())
+  propertyId String
+  startDate  DateTime           @db.Date
+  endDate    DateTime           @db.Date
+  year       Int
+  weekNumber Int
+  label      String?
+  status     WeeklyReportStatus @default(DRAFT)
+  ownerId    String?
+  lockedAt   DateTime?
+  exportedAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  owner    User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  monthlyStats        WeeklyMonthlyStat[]
+  segmentProductions  WeeklySegmentProduction[]
+  rateCodeProductions WeeklyRateCodeProduction[]
+  channelRns          WeeklyChannelRn[]
+  ownerRepeaters      WeeklyOwnerRepeater[]
+  ownerChannelMix     WeeklyOwnerChannelMix[]
+  overviewBlocks      WeeklyOverviewBlock[]
+  activities          WeeklyActivity[]
+  socialMetrics       WeeklySocialMetric[]
+  trainings           WeeklyTraining[]
+  actionPlans         WeeklyActionPlan[]
+  imports             WeeklyImport[]
+  aiDrafts            WeeklyAiDraft[]
+
+  @@unique([propertyId, startDate])
+  @@index([propertyId, endDate])
+  @@map("weekly_reports")
+}
+
+/// Yearly budget — one row per month per property (feeds Section B).
+model WeeklyBudget {
+  id         String   @id @default(cuid())
+  propertyId String
+  year       Int
+  month      Int
+  rnSold     Int      @default(0)
+  /// Occupancy stored as a PERCENT (0–100), e.g. 72.500.
+  occupancy  Decimal  @default(0) @db.Decimal(6, 3)
+  arr        Decimal  @default(0) @db.Decimal(14, 2)
+  revenue    Decimal  @default(0) @db.Decimal(16, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year, month])
+  @@map("weekly_budgets")
+}
+
+/// Reference list of market segments (Section C). propertyId null = global.
+model WeeklyMarketSegment {
+  id         String   @id @default(cuid())
+  propertyId String?
+  code       String
+  name       String
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, code])
+  @@map("weekly_market_segments")
+}
+
+/// Reference list of rate codes / promotions (Section D). propertyId null = global.
+model WeeklyRateCode {
+  id         String   @id @default(cuid())
+  propertyId String?
+  code       String
+  name       String
+  category   String?
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, code])
+  @@map("weekly_rate_codes")
+}
+
+/// Reference list of booking channels / sources (Sections E/F). propertyId null = global.
+model WeeklyChannel {
+  id         String   @id @default(cuid())
+  propertyId String?
+  code       String
+  name       String
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, code])
+  @@map("weekly_channels")
+}
+
+/// Key/value settings (AI model, language, branding). group: general|ai|import|branding.
+model WeeklySetting {
+  id         String   @id @default(cuid())
+  propertyId String?
+  group      String   @default("general")
+  key        String
+  value      Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, group, key])
+  @@map("weekly_settings")
+}
+
+/// Section B — per-month Actual/Budget/LY, snapshotted onto the week.
+/// occ_* are fractions (0–1) exactly as imported; ARR/revenue in IDR.
+model WeeklyMonthlyStat {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  month        Int
+  rnSold       Int?
+  occActual    Decimal? @db.Decimal(7, 4)
+  occBudget    Decimal? @db.Decimal(7, 4)
+  occLy        Decimal? @db.Decimal(7, 4)
+  arrActual    Decimal? @db.Decimal(14, 2)
+  arrBudget    Decimal? @db.Decimal(14, 2)
+  arrLy        Decimal? @db.Decimal(14, 2)
+  revActual    Decimal? @db.Decimal(16, 2)
+  revBudget    Decimal? @db.Decimal(16, 2)
+  revLy        Decimal? @db.Decimal(16, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@unique([reportWeekId, month])
+  @@map("weekly_monthly_stats")
+}
+
+/// Section C — weekly production by market segment (last 7 days). ARR/% derived.
+model WeeklySegmentProduction {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  label        String
+  segmentGroup String?
+  rnSold       Int?
+  grossRevenue Decimal? @db.Decimal(16, 2)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_segment_productions")
+}
+
+/// Section D — rate code / promotion production. ARR/% derived.
+model WeeklyRateCodeProduction {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  label        String
+  rnSold       Int?
+  grossRevenue Decimal? @db.Decimal(16, 2)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_rate_code_productions")
+}
+
+/// Sections E/F — Channel Inside (room nights): one row per source per year,
+/// with 12 monthly columns. YTD/% derived.
+model WeeklyChannelRn {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  year         Int
+  sourceLabel  String
+  jan          Int      @default(0)
+  feb          Int      @default(0)
+  mar          Int      @default(0)
+  apr          Int      @default(0)
+  may          Int      @default(0)
+  jun          Int      @default(0)
+  jul          Int      @default(0)
+  aug          Int      @default(0)
+  sep          Int      @default(0)
+  oct          Int      @default(0)
+  nov          Int      @default(0)
+  dec          Int      @default(0)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@unique([reportWeekId, year, sourceLabel])
+  @@map("weekly_channel_month_rn")
+}
+
+/// Owner Overview — repeater-guest 12-month performance. ADR derived.
+model WeeklyOwnerRepeater {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  label        String
+  roomNights   Int?
+  revenue      Decimal? @db.Decimal(16, 2)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_owner_repeater_months")
+}
+
+/// Owner Overview — channel mix. ARR derived.
+model WeeklyOwnerChannelMix {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  label        String
+  rnSold       Int?
+  grossRevenue Decimal? @db.Decimal(16, 2)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_owner_channel_mix")
+}
+
+/// Section A — Sales & Marketing Overview; one text block per sub-section.
+/// key: financial|market|pace|countries|booking_window|booking_ranking|learning.
+model WeeklyOverviewBlock {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  key          String
+  heading      String
+  body         String?  @db.Text
+  aiDraft      Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@unique([reportWeekId, key])
+  @@map("weekly_overview_blocks")
+}
+
+/// Sections G / G2 / Marketing — activity logs. department: sales|ecommerce|marketing.
+model WeeklyActivity {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  department   String
+  dateLabel    String?
+  title        String?
+  notes        String?  @db.Text
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId, department])
+  @@map("weekly_activities")
+}
+
+/// Section H — Social Media Insight. Growth/growth% derived from last vs this week.
+/// metricKey: website_visit|profile_visit|account_reached|impression|followers.
+model WeeklySocialMetric {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  platform     String   @default("Instagram")
+  metricKey    String
+  lastWeek     Int?
+  thisWeek     Int?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_social_media_metrics")
+}
+
+/// Section I — Training.
+model WeeklyTraining {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  dateLabel    String?
+  topic        String
+  duration     String?
+  trainer      String?
+  participants String?  @db.Text
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_trainings")
+}
+
+/// Section J — Next Week Action Plan.
+model WeeklyActionPlan {
+  id            String   @id @default(cuid())
+  reportWeekId  String
+  category      String?
+  plan          String
+  startLabel    String?
+  deadlineLabel String?
+  remark        String?  @db.Text
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_action_plans")
+}
+
+/// Upload audit — each VHP / weekly-report file and how it was applied.
+/// source: manual|vhp. status: pending|parsed|applied|failed.
+model WeeklyImport {
+  id               String    @id @default(cuid())
+  userId           String?
+  propertyId       String?
+  reportWeekId     String?
+  source           String    @default("manual")
+  originalFilename String
+  storedPath       String?
+  status           String    @default("pending")
+  periodLabel      String?
+  summary          Json?
+  warnings         Json?
+  error            String?   @db.Text
+  appliedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  property   Property?     @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  reportWeek WeeklyReport? @relation(fields: [reportWeekId], references: [id], onDelete: SetNull)
+
+  @@index([reportWeekId])
+  @@map("weekly_imports")
+}
+
+/// Audit trail of AI (narrative) generations/rewrites for a week.
+/// section: overview|activity|action_plan. mode: draft|rewrite|shorten|translate_en|translate_id.
+model WeeklyAiDraft {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  section      String
+  fieldKey     String?
+  mode         String
+  model        String
+  output       String   @db.Text
+  status       String   @default("draft")
+  userId       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([reportWeekId, section])
+  @@map("weekly_ai_drafts")
 }
