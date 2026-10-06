@@ -10,7 +10,7 @@ phase roadmap.
 ## Stack
 
 Next.js 14 (App Router) · TypeScript · Tailwind CSS · shadcn/ui · Recharts ·
-Prisma on Supabase (Postgres) · SheetJS (`xlsx`) · lucide-react.
+Prisma on self-hosted PostgreSQL · SheetJS (`xlsx`) · lucide-react.
 
 ## Getting started
 
@@ -18,8 +18,8 @@ Prisma on Supabase (Postgres) · SheetJS (`xlsx`) · lucide-react.
 # 1. Install dependencies
 npm install
 
-# 2. Configure the database (Supabase / Postgres)
-cp .env.example .env      # then fill in DATABASE_URL + DIRECT_URL from Supabase
+# 2. Configure the database (local PostgreSQL)
+cp .env.example .env      # then set DATABASE_URL + DIRECT_URL to your local Postgres
 npm run db:generate       # generate the Prisma client
 npm run db:migrate        # create + apply the initial migration
 npm run db:seed           # seed properties + BKDS June 2026 demo period
@@ -29,9 +29,10 @@ npm run db:verify         # sanity-check: prints a derived example
 npm run dev               # http://localhost:3000
 ```
 
-Get `DATABASE_URL` (Transaction pooler, port 6543, `?pgbouncer=true`) and
-`DIRECT_URL` (Session pooler, port 5432) from **Supabase → Project Settings →
-Database → Connection string**. See `.env.example` for the exact formats.
+Set `DATABASE_URL` and `DIRECT_URL` to your local PostgreSQL
+(`postgresql://<user>:<pass>@127.0.0.1:5432/<db>?schema=public` — both the same
+for a plain local Postgres). See `.env.example` and
+**[`DEPLOY.md`](./DEPLOY.md) §1** for creating the role + database + grants.
 
 ## Scripts
 
@@ -53,8 +54,9 @@ Database → Connection string**. See `.env.example` for the exact formats.
 
 ## Database
 
-Supabase Postgres for all environments. Prisma uses two URLs: `DATABASE_URL`
-(transaction pooler, runtime) and `DIRECT_URL` (session/direct, migrations). See
+Self-hosted PostgreSQL for all environments — a local Postgres instance on the
+VPS, no external service. Prisma uses two URLs, `DATABASE_URL` (runtime) and
+`DIRECT_URL` (migrations); for a plain local Postgres they're identical. See
 `CLAUDE.md` for details. Apply all migrations with `npx prisma migrate deploy`.
 
 ## Auth & roles
@@ -67,6 +69,7 @@ properties), **VIEWER** (read-only + export). Protection turns on when
 
 ## Deployment
 
-Production target is **Vercel** + Supabase/Neon Postgres. Full step-by-step
-(env vars, migrations, auth, storage, PDF caveat, QA checklist) in
+Production target is a **self-hosted VPS** (Ubuntu + local PostgreSQL + Caddy),
+running everything on one box — no external database or storage. Full
+step-by-step (DB setup, env vars, migrations, auth, HTTPS, PDF, QA checklist) in
 [`DEPLOY.md`](./DEPLOY.md).

@@ -1,83 +1,122 @@
 # Deploying BK Sales Dashboard
 
-Two supported targets:
+This project runs **entirely on one self-hosted VPS** — the Next.js app, a local
+**PostgreSQL** database, and a Caddy reverse proxy for HTTPS. No external
+database, no external file storage. The only optional outside service is the
+Anthropic API for the "Generate with AI" narrative buttons (the app works fully
+without it).
 
-- **Self-hosted on an Ubuntu VM** (Oracle Cloud Always Free, or any VPS) —
-  full support **including PDF export**, since Chromium runs natively. This is
-  the recommended target for Blue Karma. Jump to **[§9 Self-host on an Ubuntu
-  VM](#9-self-host-on-an-ubuntu-vm-oracle-cloud-always-free)**.
-- **Vercel** — fast to set up; PPTX + Group zip work unchanged, but PDF export
-  needs a workaround (see §5).
+This guide covers the database, env vars, auth, storage, and the full server
+walkthrough. Target OS: **Ubuntu 22.04 / 24.04** on any VPS with root access
+(Bluehost VPS, Oracle Cloud, etc.).
 
-Either way the database stays on **Supabase Postgres** (Neon works too). This
-guide covers env vars, migrations, auth, storage, and both deploys.
+> A `vercel.json` is still in the repo for anyone who ever wants to run on
+> Vercel, but that path needs an external managed Postgres and has a PDF-export
+> caveat, so it is **not** the supported setup. Everything below assumes the VPS.
 
 ---
 
-## 1. Database (Supabase or Neon)
+## 1. Database — self-hosted PostgreSQL on the VPS
 
-The Prisma datasource is already PostgreSQL for every environment. You need two
-connection strings (see `.env.example` for exact formats):
+The database runs on the same server as the app. Install PostgreSQL, then create
+a dedicated role + database for the app and grant it access.
 
-- **`DATABASE_URL`** — runtime, via the **Transaction pooler** (port `6543`,
-  `?pgbouncer=true`).
-- **`DIRECT_URL`** — migrations, via the **Session pooler** / direct connection
-  (port `5432`).
-
-**Neon:** create a project, use the pooled connection string for `DATABASE_URL`
-(add `?pgbouncer=true&connection_limit=1`) and the direct string for `DIRECT_URL`.
-
-### Apply migrations
-
-From a machine that can reach the database:
+### Install PostgreSQL
 
 ```bash
-npm install
-npx prisma migrate deploy   # applies every migration in prisma/migrations/ in order
+sudo apt update
+sudo apt install -y postgresql
+sudo systemctl enable --now postgresql
 ```
 
-If you prefer the Supabase SQL editor, run each `prisma/migrations/*/migration.sql`
-in timestamp order. The full list:
+### Create the role, database, and grants
 
-```
-20260708090459_init
-20260708233011_add_import_history
-20260709004909_widen_revenue_summary_precision
-20260709090000_add_market_supply
-20260709100000_add_sales_strategy_section
-20260710090000_add_narrative_versions
-20260710100000_add_export_history
-20260711090000_add_auth_and_audit
-```
-
-### Seed & first admin
+Connect as the `postgres` superuser (add `-p 5433` if your instance listens on a
+non-default port — e.g. this server uses `5433`):
 
 ```bash
-npm run db:seed                                   # properties + demo period(s)
-ADMIN_EMAIL=you@bluekarma.com ADMIN_PASSWORD='strong-pass' npm run db:create-admin
+sudo -u postgres psql
+```
+
+Then run (replace the password with a strong one):
+
+```sql
+CREATE ROLE bkapp WITH LOGIN PASSWORD 'a-strong-db-password';
+CREATE DATABASE bkdash OWNER bkapp;
+\c bkdash
+GRANT ALL ON SCHEMA public TO bkapp;
+ALTER SCHEMA public OWNER TO bkapp;
+\q
+```
+
+> **Why the grants matter (don't skip this).** In PostgreSQL, creating a login
+> role and creating a database are separate from *granting that role access* to
+> the database's schema. On **PostgreSQL 15+** a non-owner role has no `CREATE`
+> on the `public` schema by default. Making `bkapp` the **owner** of its own
+> database (as above) gives it everything it needs to run migrations and
+> read/write data. Skipping this is the classic cause of
+> `P1010: User was denied access on the database` — which shows up as
+> "Application error: a server-side exception has occurred" on every page.
+>
+> If the role and database already exist but the app is hitting that P1010
+> error, fix it without recreating anything:
+>
+> ```sql
+> ALTER DATABASE bkdash OWNER TO bkapp;
+> \c bkdash
+> ALTER SCHEMA public OWNER TO bkapp;
+> GRANT ALL ON SCHEMA public TO bkapp;
+> GRANT ALL ON ALL TABLES IN SCHEMA public TO bkapp;
+> GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO bkapp;
+> ```
+
+### Point the app at it
+
+In `.env` (copy from `deploy/env.vm.example`). Both URLs are the **same** for a
+plain local Postgres — `DIRECT_URL` only differs when an external connection
+pooler sits in front, which we don't use:
+
+```
+DATABASE_URL="postgresql://bkapp:a-strong-db-password@127.0.0.1:5432/bkdash?schema=public"
+DIRECT_URL="postgresql://bkapp:a-strong-db-password@127.0.0.1:5432/bkdash?schema=public"
+```
+
+Use the port your Postgres listens on (default `5432`; this server uses `5433`).
+
+### Apply migrations, seed, create the first admin
+
+From the project directory, once dependencies are installed (see §8):
+
+```bash
+npx prisma migrate deploy   # creates every table (prisma/migrations/, in order)
+npm run db:seed             # properties + demo period(s)
+npm run db:verify           # sanity check: prints a derived example
+ADMIN_EMAIL=you@bluekarmasecrets.com ADMIN_PASSWORD='strong-pass' npm run db:create-admin
 ```
 
 ---
 
 ## 2. Environment variables
 
-Set these in **Vercel → Project → Settings → Environment Variables** (and locally
-in `.env`). See `.env.example` for the annotated list.
+Live in `.env` at the project root (`chmod 600 .env`). Next.js loads it
+automatically; the systemd service picks it up on restart. See
+`deploy/env.vm.example` for the annotated list.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `DATABASE_URL` | ✅ | Runtime DB (transaction pooler) |
-| `DIRECT_URL` | ✅ | Migrations (session/direct) |
+| `DATABASE_URL` | ✅ | Runtime DB (local Postgres) |
+| `DIRECT_URL` | ✅ | Migrations (same value for local Postgres) |
 | `AUTH_SECRET` | ✅ (prod) | Enables auth + route protection. `openssl rand -base64 32` |
-| `AUTH_URL` | ✅ (prod) | Deployed origin, e.g. `https://app.vercel.app` |
-| `ANTHROPIC_API_KEY` | for AI | Server-side Claude key (never exposed to client) |
+| `AUTH_URL` | ✅ (prod) | Deployed origin, e.g. `https://dashboard.bluekarmasecrets.com` |
+| `ANTHROPIC_API_KEY` | optional | Server-side Claude key for AI narratives (never exposed to client) |
 | `ANTHROPIC_MODEL` | optional | Defaults to `claude-sonnet-4-6` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | Google SSO |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_STORAGE_BUCKET` | optional | Uploaded-image storage |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | Google SSO (email/password works without it) |
+| `UPLOAD_DIR` / `UPLOAD_URL_BASE` | optional | Local image-upload dir + URL base (defaults: `public/uploads`, `/uploads`) |
 
 > **Auth rollout switch:** protection and role enforcement turn on **only when
 > `AUTH_SECRET` is set**. Without it the app stays open and every action runs as a
-> synthetic admin — handy for preview, but set `AUTH_SECRET` before going live.
+> synthetic admin — handy while setting up, but set `AUTH_SECRET` before exposing
+> the app publicly.
 
 ---
 
@@ -85,10 +124,10 @@ in `.env`). See `.env.example` for the annotated list.
 
 - **Email/password:** users are created by an admin in **Admin → Users** (or via
   `npm run db:create-admin` for the first one). Passwords are bcrypt-hashed.
-- **Google SSO:** create an OAuth client in Google Cloud Console → Credentials.
-  Authorized redirect URI: `https://<your-domain>/api/auth/callback/google`. Put
-  the client id/secret in the env vars. New Google users default to **VIEWER**;
-  an admin can promote them.
+- **Google SSO (optional):** create an OAuth client in Google Cloud Console →
+  Credentials. Authorized redirect URI:
+  `https://<your-domain>/api/auth/callback/google`. Put the client id/secret in
+  the env vars. New Google users default to **VIEWER**; an admin can promote them.
 
 ### Roles
 
@@ -100,47 +139,27 @@ in `.env`). See `.env.example` for the annotated list.
 
 ---
 
-## 4. Image storage (optional)
+## 4. Image storage (local disk — no external service)
 
-Uploaded images use Supabase Storage via `lib/storage.ts` (REST, no SDK). Create
-a **public** bucket (default name `uploads`) in Supabase → Storage, then set
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET`. When
-unset, image upload is disabled gracefully.
-
----
-
-## 5. Deploy to Vercel
-
-1. Import the GitHub repo into Vercel (framework auto-detected: Next.js).
-2. `vercel.json` sets the build command (`prisma generate && next build`) and
-   raises `maxDuration` for the export routes.
-3. Add all env vars (above) for **Production** (and Preview if desired).
-4. Deploy. First deploy runs `postinstall` → `prisma generate`.
-
-### PDF export caveat on Vercel
-
-`/api/export/pdf` launches headless Chromium via Playwright. Vercel's serverless
-runtime **cannot launch the bundled Chromium** — options:
-
-- Run the app on a **Node host** (Render, Fly, a VM) where `npx playwright install
-  chromium` works; or
-- Swap to `@sparticuz/chromium` + `playwright-core` and set
-  `PLAYWRIGHT_CHROMIUM_PATH` (small code change in `app/api/export/pdf/route.ts`).
-
-**PPTX and the Group zip work on Vercel unchanged** — they need no browser.
+Uploaded images (promotions, plans) are written to **local disk** via
+`lib/storage.ts` and served by the app. By default they land in `public/uploads`
+and are served at `/uploads/<key>` — nothing to configure. To store uploads
+outside the repo tree (e.g. a data volume), set `UPLOAD_DIR=/var/lib/bkdash/uploads`
+and serve that path with Caddy, matching `UPLOAD_URL_BASE`. The `public/uploads`
+directory is gitignored, so user content is never committed.
 
 ---
 
-## 6. Rate limiting
+## 5. Rate limiting
 
 API routes (`/api/narrative`, `/api/export/*`) use an in-memory limiter
-(`lib/rate-limit.ts`) — fine for a single instance. On Vercel (many instances)
-back it with **Upstash Redis** for a shared counter; the `rateLimit()` call sites
-stay the same.
+(`lib/rate-limit.ts`) — correct for a single-instance VPS. If you ever run
+multiple app instances, back it with a shared store (e.g. Redis); the
+`rateLimit()` call sites stay the same.
 
 ---
 
-## 7. Security headers
+## 6. Security headers
 
 Set in `next.config.mjs` (`headers()`): `X-Content-Type-Options`,
 `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`, and HSTS.
@@ -149,13 +168,14 @@ use inline styles) — add a tuned CSP if your security posture requires it.
 
 ---
 
-## 8. QA checklist (after seeding a full month for all 3 properties)
+## 7. QA checklist (after seeding a full month for all 3 properties)
 
 - [ ] Every dashboard section renders for BKDS / BKDU / BKV and the Group view.
 - [ ] Empty states show where a section has no data (no crashes).
 - [ ] Derived numbers match `lib/calculations.ts` — run `npm run test` (32 tests).
 - [ ] Occupancy shows the exact ratio (e.g. `94.83%`), not a rounded value.
 - [ ] PPTX export opens in PowerPoint/Keynote/Google Slides with tables + charts.
+- [ ] PDF export produces a paginated A4-landscape file.
 - [ ] MTD/YTD toggle, property switcher, and month picker all update the URL.
 - [ ] With `AUTH_SECRET` set: signing out redirects to `/login`; a VIEWER cannot
       import or save narratives; an EDITOR only sees their assigned properties.
@@ -163,59 +183,18 @@ use inline styles) — add a tuned CSP if your security posture requires it.
 
 ---
 
-## 9. Self-host on an Ubuntu VM (Oracle Cloud Always Free)
+## 8. Full server walkthrough (Ubuntu VPS)
 
-Full walkthrough for deploying to an **Oracle Cloud Always Free** VM. The DB
-stays on Supabase (already migrated), so this only stands up the app. PDF export
-works here because Chromium runs natively. Helper files live in `deploy/`.
+End-to-end setup on a fresh Ubuntu VPS. PDF export works here because Chromium
+runs natively. Helper files live in `deploy/`.
 
-> **Why Oracle "Ampere A1"?** The Next.js production build is memory-hungry. The
-> AMD **Micro** free shape has only **1 GB RAM** and the build will OOM. Use an
-> **Ampere A1 (ARM)** shape — the Always Free tier gives you up to **4 vCPU /
-> 24 GB RAM**; even 1–2 vCPU / 6–12 GB is plenty. Node/Next/Prisma all have ARM
-> builds, so ARM is fine.
+> **RAM note.** The Next.js production build is memory-hungry. Give the VPS at
+> least **2 GB RAM** (4 GB+ comfortable). On a 1 GB box the build can OOM — add
+> swap (see 8.6) or size up.
 
-### 9.1 Create the instance
-
-1. **Compute → Instances → Create instance.**
-2. **Image:** Canonical **Ubuntu 22.04** (or 24.04).
-3. **Shape:** *Change shape → Ampere → VM.Standard.A1.Flex*. Set e.g. **2 OCPU /
-   12 GB** (all within Always Free). Avoid the AMD Micro shape.
-4. **SSH keys:** upload your public key (or let Oracle generate one and download
-   the private key). You'll SSH in as user **`ubuntu`**.
-5. **Networking:** keep "Assign a public IPv4 address" checked. Create/keep the
-   default VCN. **Create.** Note the **public IP**.
-
-### 9.2 Open ports 80 + 443 (the Oracle gotcha — do BOTH)
-
-Oracle blocks traffic in **two** places. You must open ports in **both** or
-HTTPS will silently hang.
-
-**(a) VCN Security List (cloud firewall).** Networking → your VCN → the public
-subnet → its **Security List** → **Add Ingress Rules**:
-
-| Source CIDR | IP Protocol | Dest. port |
-|---|---|---|
-| `0.0.0.0/0` | TCP | `80` |
-| `0.0.0.0/0` | TCP | `443` |
-
-**(b) The instance's own OS firewall.** Ubuntu on Oracle ships with `iptables`
-rules that drop everything but SSH. SSH in (next step) and run:
+### 8.1 Install the toolchain
 
 ```bash
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save
-```
-
-(If you'll test IP-only on :3000 first, also open `3000` in both places, then
-remove it once Caddy/HTTPS is up.)
-
-### 9.3 SSH in and install the toolchain
-
-```bash
-ssh ubuntu@<public-ip>
-
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y git build-essential
 
@@ -225,45 +204,60 @@ sudo apt install -y nodejs
 node -v   # v20.x
 ```
 
-### 9.4 Clone the repo + create .env
+Install PostgreSQL and create the role + database + grants — see **§1**.
 
-The repo is private, so authenticate the clone. Easiest is a **GitHub Personal
-Access Token** (repo scope) used as the password, or a deploy key. Clone into
-the home directory so the path matches the systemd unit
-(`/home/ubuntu/Saleshighligh`):
+### 8.2 Open ports 80 + 443
+
+Open HTTP/HTTPS in your VPS firewall. On plain Ubuntu with `ufw`:
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
+
+> **Oracle Cloud only:** Oracle blocks traffic in **two** places — you must also
+> add ingress rules for TCP `80` and `443` from `0.0.0.0/0` in the VCN Security
+> List, *and* open them in the instance's `iptables`
+> (`sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT`,
+> same for 443, then `sudo netfilter-persistent save`). On Bluehost and most
+> VPS providers, the `ufw` rules above are all you need.
+
+### 8.3 Clone the repo + create .env
+
+The repo is private, so authenticate the clone (a GitHub Personal Access Token
+with repo scope used as the password, or a deploy key). Clone into the home
+directory; adjust the path/user in `deploy/bk-dashboard.service` if you use a
+different location (this server uses `/home/bkdash/Saleshighligh`):
 
 ```bash
 cd ~
 git clone https://github.com/balibluekarmawebsite-max/saleshighligh.git Saleshighligh
 cd Saleshighligh
-git checkout claude/bk-sales-dashboard-setup-wetevl   # or main, once merged
+git checkout claude/bk-sales-dashboard-report-xsw5me   # or main, once merged
 
 cp deploy/env.vm.example .env
-nano .env            # fill DATABASE_URL, DIRECT_URL, AUTH_SECRET, AUTH_URL, ANTHROPIC_API_KEY
+nano .env            # fill DATABASE_URL, DIRECT_URL, AUTH_SECRET, AUTH_URL (ANTHROPIC_API_KEY optional)
 chmod 600 .env
 ```
 
 Generate `AUTH_SECRET` with `openssl rand -base64 32`. Set `AUTH_URL` to your
-final `https://…` domain (or `http://<public-ip>:3000` for an IP-only smoke
-test).
+final `https://…` domain (or `http://<public-ip>:3000` for an IP-only smoke test).
 
-### 9.5 Install deps, build, create the admin
+### 8.4 Install deps, migrate, seed, build
 
 ```bash
 npm ci
 npx prisma generate
 npx playwright install --with-deps chromium   # for PDF export
-npm run build                                 # ~1–3 min on A1; this is why you want RAM
 
-# First admin (bcrypt-hashed). DB is already migrated on Supabase.
+npx prisma migrate deploy                     # create tables in the local DB
+npm run db:seed                               # properties + demo period(s)
 ADMIN_EMAIL=you@bluekarmasecrets.com ADMIN_PASSWORD='a-strong-password' npm run db:create-admin
+
+npm run build                                 # production build
 ```
 
-> If `npm run build` ever gets OOM-killed on a smaller shape, add swap:
-> `sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap
-> /swapfile && sudo swapon /swapfile` (persist in `/etc/fstab`).
-
-### 9.6 Run it as a service (systemd)
+### 8.5 Run it as a service (systemd)
 
 Keeps the app alive across crashes and reboots.
 
@@ -275,14 +269,17 @@ sudo systemctl status bk-dashboard     # should be active (running)
 journalctl -u bk-dashboard -f          # live logs
 ```
 
-The app now listens on `127.0.0.1:3000`. Quick check:
-`curl -I http://localhost:3000` should return `200`.
+The app listens on `127.0.0.1:3000`. Quick check:
+`curl -I http://localhost:3000` should return `200` (or a `307` redirect to
+`/login` when `AUTH_SECRET` is set).
 
-### 9.7 HTTPS with a domain (Caddy)
+> Edit `deploy/bk-dashboard.service` first if your OS user / project path differ
+> from `ubuntu` / `/home/ubuntu/Saleshighligh`.
 
-You need a DNS name pointing at the public IP. Free option: **DuckDNS** —
-create `something.duckdns.org` and set it to your IP. Then install Caddy (it
-gets and renews the TLS cert automatically):
+### 8.6 HTTPS with a domain (Caddy)
+
+Point a DNS A record at the VPS public IP, then install Caddy (it fetches and
+renews the TLS cert automatically):
 
 ```bash
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -301,7 +298,11 @@ Set `AUTH_URL="https://your-domain"` in `.env`, then
 `sudo systemctl restart bk-dashboard`. Visit the domain — you should get HTTPS
 and the `/login` page.
 
-### 9.8 Updating the app later
+> If the build ever gets OOM-killed on a small box, add swap:
+> `sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap
+> /swapfile && sudo swapon /swapfile` (persist in `/etc/fstab`).
+
+### 8.7 Updating the app later
 
 ```bash
 cd ~/Saleshighligh
@@ -312,11 +313,12 @@ npm run build
 sudo systemctl restart bk-dashboard
 ```
 
-### 9.9 AI narrative auth on the server
+### 8.8 AI narrative auth on the server (optional)
 
 `ANTHROPIC_API_KEY` in `.env` is the simplest path. Alternatively log in once
 with the Claude CLI on the server and set `ANTHROPIC_USE_PROFILE=true` (see
 `deploy/env.vm.example`). Either way calls bill your **Anthropic API** account —
 the CLI login is an auth convenience, **not** a way to bill a Claude.ai
-subscription.
-
+subscription. Leave it unset and the "Generate with AI" buttons simply show
+"not configured"; nothing else is affected.
+```

@@ -42,6 +42,9 @@ next-env.d.ts
 /prisma/dev.db
 /prisma/dev.db-journal
 
+# locally-stored uploads (promotions / plans images) — user content, not source
+/public/uploads/
+
 # editor
 .idea
 .vscode/*

@@ -2,7 +2,7 @@
  * Shared demo seed data for the BK Sales Dashboard.
  *
  * One source of truth consumed by:
- *   - prisma/seed.ts        → seeds Supabase via Prisma (`npm run db:seed`)
+ *   - prisma/seed.ts        → seeds PostgreSQL via Prisma (`npm run db:seed`)
  *   - prisma/gen-seed-sql.ts → generates prisma/seed.sql for the SQL editor
  *
  * The three properties are real. The BKDS June 2026 ReportPeriod uses REAL

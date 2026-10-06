@@ -1,8 +1,9 @@
 // BK Sales Dashboard — Prisma schema (Phase 1)
 //
-// Database: Supabase (Postgres) for all environments.
-//   - DATABASE_URL: transaction pooler (port 6543, ?pgbouncer=true) — runtime.
-//   - DIRECT_URL:   session/direct connection (port 5432) — Prisma Migrate.
+// Database: self-hosted PostgreSQL (local to the VPS) for all environments.
+//   - DATABASE_URL: the app's runtime connection.
+//   - DIRECT_URL:   used by Prisma Migrate. Same value as DATABASE_URL for a
+//                   plain local Postgres (no external connection pooler).
 //
 // Modelling principles (see CLAUDE.md):
 //   - Everything is keyed by (propertyId, period) where `period` is the first

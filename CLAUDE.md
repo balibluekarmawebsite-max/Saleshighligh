@@ -46,25 +46,25 @@ Each property produces a monthly Sales Highlight with these sections:
 - **Next.js 14+** (App Router) + **TypeScript**
 - **Tailwind CSS** + **shadcn/ui** components
 - **Recharts** for charts
-- **Prisma ORM** on **Supabase (Postgres)** — all environments
+- **Prisma ORM** on **self-hosted PostgreSQL** (local to the VPS) — all environments
 - **SheetJS (`xlsx`)** for Excel parsing
 - **lucide-react** for icons
 
-### Database (Supabase / Postgres)
+### Database (self-hosted PostgreSQL)
 
-The database is Supabase Postgres for every environment (no SQLite). Prisma
-connects through two URLs (Supabase's recommended setup):
+The project runs entirely on our own VPS, including the database: a **local
+PostgreSQL** instance on the server (no external DB service, no SQLite). Prisma
+connects through two URLs, both configured in `prisma/schema.prisma`'s
+`datasource` block:
 
-- **`DATABASE_URL`** — the app's runtime connection via the **Transaction
-  pooler** (Supavisor, `...pooler.supabase.com:6543`) with `?pgbouncer=true`.
-- **`DIRECT_URL`** — used by Prisma Migrate/Introspect (they can't run over the
-  transaction pooler) via the **Session pooler** (port `5432`) or the direct
-  connection.
+- **`DATABASE_URL`** — the app's runtime connection.
+- **`DIRECT_URL`** — used by Prisma Migrate/Introspect. For a plain local
+  Postgres (no external connection pooler) this is the **same value** as
+  `DATABASE_URL`.
 
-Both are configured in `prisma/schema.prisma`'s `datasource` block. See
-`.env.example` for the exact formats. Because the GitHub↔Supabase integration is
-set up, prefer **`prisma migrate`** (versioned migration files under
-`prisma/migrations/`) over `db push` so schema changes are tracked and can sync.
+See `.env.example` for the exact format and DEPLOY.md §1 for creating the role +
+database + grants on the VPS. Prefer **`prisma migrate`** (versioned migration
+files under `prisma/migrations/`) over `db push` so schema changes are tracked.
 
 Conventions:
 
@@ -98,7 +98,7 @@ Conventions:
   schema.prisma     23 models + 13 enums (see roadmap)
   seed-data.ts      shared demo data (single source of truth)
   seed.ts           Prisma seed (npm run db:seed)
-  seed.sql          generated SQL seed (for the Supabase SQL editor)
+  seed.sql          generated SQL seed (for psql / any SQL client)
   gen-seed-sql.ts   regenerates seed.sql from seed-data.ts
   verify.ts         post-seed sanity check (npm run db:verify)
   /migrations       versioned SQL migrations
@@ -172,7 +172,7 @@ npx tsx prisma/gen-seed-sql.ts
 **Phase 0 — Scaffolding & design system. ✅ Done.**
 Project setup, folder structure, Tailwind + shadcn design system, brand
 palette, formatting helpers, app shell (sidebar + topbar), CLAUDE.md.
-Supabase (Postgres) configured.
+Self-hosted PostgreSQL configured.
 
 **Phase 1 — Data model, calculations & seed. ✅ Done (schema).**
 Full Prisma schema (23 models + 13 enums) covering executive summary, rooms
@@ -303,8 +303,8 @@ a demand-range card, and an editable MARKET_INTEL narrative (`NarrativePanel`,
 new `emptyText` prop). Aggregated fetch `getMarketPageData`.
 _Schema:_ adds a `MarketSupply` model (period · areaName · propertiesCount ·
 propertiesCountLastYear) and a `MARKET_INTEL` value on `NarrativeSection` —
-migration `20260709090000_add_market_supply` (run its `migration.sql` in the
-Supabase SQL editor before the page will load).
+migration `20260709090000_add_market_supply` (apply with `npx prisma migrate
+deploy` before the page will load).
 
 **Phase 12 — Social Media & PR + Action Plans & Promotions. ✅ Done.**
 Two pages. **Social** `/dashboard/[property]/[period]/social` (nav href now
@@ -324,8 +324,8 @@ scaffolds) via a new `PlanSectionPanel` (rich-text display, AI-draft stub, and a
 Aggregated fetch `getPlansPageData` (current + previous). Edit-in-place, image
 upload and drag-to-reorder are scaffolded and land with the admin/auth phase.
 _Schema:_ adds a `SALES_STRATEGY` value on `NarrativeSection` — migration
-`20260709100000_add_sales_strategy_section` (run its `migration.sql` in the
-Supabase SQL editor before the Plans page will load).
+`20260709100000_add_sales_strategy_section` (apply with `npx prisma migrate
+deploy` before the Plans page will load).
 
 **Phase 13 — AI Narrative Generation (Claude API). ✅ Done.**
 Server-side `/api/narrative` streams grounded narrative drafts via the Anthropic
@@ -346,8 +346,8 @@ English, numbers-from-context-only). UX: the three narrative panels
 Save (`/api/narrative/save`) upserts `NarrativeContent` (`aiGenerated` true until
 a human edits) and appends a `NarrativeVersion` history row; FINAL periods are
 locked. _Schema:_ adds `NarrativeVersion` — migration
-`20260710090000_add_narrative_versions` (run its `migration.sql` in the Supabase
-SQL editor). _Still deferred:_ TipTap rich-text, image upload, and admin auth to
+`20260710090000_add_narrative_versions` (apply with `npx prisma migrate
+deploy`). _Still deferred:_ TipTap rich-text, image upload, and admin auth to
 gate the save endpoint.
 
 **Phase 14 — Report Export (PPTX + PDF). ✅ Done.**
@@ -369,8 +369,8 @@ the context bar): checkbox tree of sections (default all), PPTX/PDF choice, and 
 **Group pack** (`/api/export/group`, `jszip`) zipping every property's deck (the
 consolidated Group summary lands with Phase 15). Each export writes an
 `ExportHistory` audit row (best-effort). _Schema:_ adds `ExportHistory` —
-migration `20260710100000_add_export_history` (run its `migration.sql` in the
-Supabase SQL editor). Adds `pptxgenjs`, `jszip`, `playwright`; the last two/
+migration `20260710100000_add_export_history` (apply with `npx prisma migrate
+deploy`). Adds `pptxgenjs`, `jszip`, `playwright`; the last two/
 `xlsx` kept external in `next.config`.
 
 **Phase 15 — Group Consolidated View. ✅ Done.**
@@ -406,9 +406,9 @@ until then the app runs open as a synthetic admin. **Audit** (`lib/audit.ts` +
 `/api/admin/finalize` marks a period FINAL. **Login** `/login`; sidebar sign-out.
 Prod: `next.config` security headers, in-memory rate limiter on API routes
 (`lib/rate-limit.ts`; swap for Upstash on multi-instance), `lib/storage.ts`
-(Supabase Storage REST for uploaded images), `vercel.json`, and **DEPLOY.md**
+(local-disk storage for uploaded images), and **DEPLOY.md**
 (env, `prisma migrate deploy`, `npm run db:create-admin`, Google OAuth, PDF/
-Playwright-on-Vercel caveat, QA checklist). `/print` is middleware-excluded and
+Playwright, QA checklist). `/print` is middleware-excluded and
 self-gated by session-or-internal-token so the PDF exporter can render it.
 _Schema:_ adds `User`/`Account`/`Session`/`VerificationToken`/`AuditLog` +
 `UserRole` — migration `20260711090000_add_auth_and_audit` (run `prisma migrate
