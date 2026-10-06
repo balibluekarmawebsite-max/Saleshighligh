@@ -1,13 +1,11 @@
 import { redirect } from "next/navigation";
 
-import { getShellData } from "@/lib/dashboard-data";
-import { currentWeekId } from "@/lib/weekly/week";
+import { getWeeklyShellData } from "@/lib/weekly/dashboard-data";
 
 export const dynamic = "force-dynamic";
 
-/** Weekly Reports landing — resolve a default property and the current week. */
+/** Weekly Reports landing — go to the latest week that has data. */
 export default async function WeeklyIndexPage() {
-  const shell = await getShellData();
-  const property = shell.properties[0]?.code ?? "BKDS";
-  redirect(`/weekly/${property}/${currentWeekId()}/dashboard`);
+  const { defaultPath } = await getWeeklyShellData();
+  redirect(defaultPath);
 }

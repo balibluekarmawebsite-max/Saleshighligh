@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { WeeklyContextBar } from "@/components/layout/weekly-context-bar";
 import { getCurrentUser } from "@/lib/auth-helpers";
-import { getShellData } from "@/lib/dashboard-data";
+import { getWeeklyShellData } from "@/lib/weekly/dashboard-data";
 import { isWeekId } from "@/lib/weekly/week";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function WeeklyLayout({
   children: React.ReactNode;
   params: { property: string; week: string };
 }) {
-  const shell = await getShellData();
+  const shell = await getWeeklyShellData();
   const me = process.env.AUTH_SECRET ? await getCurrentUser() : null;
   const validProperty = shell.properties.some((p) => p.code === params.property);
   if (!validProperty || !isWeekId(params.week)) {
@@ -30,6 +30,7 @@ export default async function WeeklyLayout({
       header={
         <WeeklyContextBar
           properties={shell.properties}
+          weeks={shell.weeksByProperty[params.property] ?? []}
           property={params.property}
           week={params.week}
         />

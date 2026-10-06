@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "db:seed:weekly": "tsx prisma/weekly-seed.ts",
     "db:verify": "tsx prisma/verify.ts",
     "db:create-admin": "tsx prisma/create-admin.ts",
     "test": "vitest run",
