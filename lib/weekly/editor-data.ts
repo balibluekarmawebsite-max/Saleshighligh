@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { type WeeklyProgressItem } from "@/lib/weekly/dashboard-data";
+import { type WeeklySectionId } from "@/lib/weekly/sections";
 
 /** The 7 Section A overview blocks, in report order. */
 export const OVERVIEW_BLOCKS: { key: string; heading: string }[] = [
@@ -148,5 +149,73 @@ export async function getWeeklyEditorData(
     },
     blocks,
     progress,
+  };
+}
+
+export type SectionRow = Record<string, string>;
+
+export interface WeeklyDepartmentData {
+  week: { id: string; label: string; status: string; locked: boolean } | null;
+  rows: Record<WeeklySectionId, SectionRow[]>;
+}
+
+/** Load every Department Inputs section's rows (as strings, ready for inputs). */
+export async function getWeeklyDepartmentData(
+  propertyCode: string,
+  week: string,
+): Promise<WeeklyDepartmentData> {
+  noStore();
+  const report = await prisma.weeklyReport.findFirst({
+    where: { property: { code: propertyCode }, endDate: new Date(`${week}T00:00:00.000Z`) },
+    include: {
+      activities: { orderBy: { sortOrder: "asc" } },
+      socialMetrics: { orderBy: { sortOrder: "asc" } },
+      trainings: { orderBy: { sortOrder: "asc" } },
+      actionPlans: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+
+  const empty: Record<WeeklySectionId, SectionRow[]> = {
+    sales: [], ecommerce: [], social: [], trainings: [], action_plans: [],
+  };
+  if (!report) return { week: null, rows: empty };
+
+  const s = (v: unknown): string => (v === null || v === undefined ? "" : String(v));
+  const activities = (dept: string): SectionRow[] =>
+    report.activities
+      .filter((a) => a.department === dept)
+      .map((a) => ({ dateLabel: s(a.dateLabel), title: s(a.title), notes: s(a.notes) }));
+
+  return {
+    week: {
+      id: week,
+      label: report.label ?? week,
+      status: report.status,
+      locked: isLockedStatus(report.status),
+    },
+    rows: {
+      sales: activities("sales"),
+      ecommerce: activities("ecommerce"),
+      social: report.socialMetrics.map((m) => ({
+        platform: s(m.platform),
+        metricKey: s(m.metricKey),
+        lastWeek: s(m.lastWeek),
+        thisWeek: s(m.thisWeek),
+      })),
+      trainings: report.trainings.map((t) => ({
+        dateLabel: s(t.dateLabel),
+        topic: s(t.topic),
+        duration: s(t.duration),
+        trainer: s(t.trainer),
+        participants: s(t.participants),
+      })),
+      action_plans: report.actionPlans.map((a) => ({
+        category: s(a.category),
+        plan: s(a.plan),
+        startLabel: s(a.startLabel),
+        deadlineLabel: s(a.deadlineLabel),
+        remark: s(a.remark),
+      })),
+    },
   };
 }
