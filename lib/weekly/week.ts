@@ -28,6 +28,39 @@ export function currentWeekId(date: Date = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** ISO 8601 week number for a date. */
+function isoWeek(d: Date): number {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dayNum = (date.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+  date.setUTCDate(date.getUTCDate() - dayNum + 3); // nearest Thursday
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const diff = date.getTime() - firstThursday.getTime();
+  return 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
+}
+
+export interface WeekMeta {
+  startDate: Date;
+  endDate: Date;
+  year: number;
+  weekNumber: number;
+  label: string;
+}
+
+/** Derive the full week metadata (Fri–Thu) from a week id (its Thursday end). */
+export function weekMeta(weekId: string): WeekMeta | null {
+  if (!isWeekId(weekId)) return null;
+  const endDate = new Date(`${weekId}T00:00:00.000Z`);
+  const startDate = new Date(endDate);
+  startDate.setUTCDate(startDate.getUTCDate() - 6);
+  return {
+    startDate,
+    endDate,
+    year: endDate.getUTCFullYear(),
+    weekNumber: isoWeek(endDate),
+    label: weekLabel(weekId),
+  };
+}
+
 /** Human label for a week id, e.g. "25 Sep – 1 Oct 2026" (Fri–Thu span). */
 export function weekLabel(weekId: string): string {
   if (!isWeekId(weekId)) return weekId;

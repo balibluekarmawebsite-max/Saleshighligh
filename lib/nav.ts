@@ -3,6 +3,7 @@ import {
   BedDouble,
   CalendarRange,
   ClipboardList,
+  FilePen,
   Flower2,
   LayoutDashboard,
   LineChart,
@@ -70,6 +71,7 @@ export const DASHBOARD_NAV: DashNavItem[] = [
 export const WEEKLY_NAV: DashNavItem[] = [
   { label: "Dashboard", href: "dashboard", icon: LayoutDashboard },
   { label: "Weekly Reports", href: "reports", icon: CalendarRange },
+  { label: "Report Editor", href: "editor", icon: FilePen },
   { label: "Department Inputs", href: "departments", icon: ClipboardList },
   { label: "Trends", href: "trends", icon: LineChart },
 ];
