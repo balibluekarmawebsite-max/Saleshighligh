@@ -13,6 +13,7 @@ import {
   type MonthlyTotals,
   type ProductionTotals,
 } from "@/lib/weekly/calculations";
+import { getWeeklyAds, type WeeklyAdsData } from "@/lib/weekly/ads-data";
 import { OVERVIEW_BLOCKS } from "@/lib/weekly/editor-data";
 import { weekLabel } from "@/lib/weekly/week";
 
@@ -101,6 +102,7 @@ export interface WeeklyExportData {
   channels: { rows: WeeklyChannelRow[]; ytdTotal: number };
   social: WeeklySocialRow[];
   screenshots: WeeklyScreenshotExport[];
+  ads: WeeklyAdsData;
   departments: {
     sales: { dateLabel: string | null; title: string | null; notes: string | null }[];
     ecommerce: { dateLabel: string | null; title: string | null; notes: string | null }[];
@@ -260,6 +262,8 @@ export async function getWeeklyExportData(
       .filter((a) => a.department === dept)
       .map((a) => ({ dateLabel: a.dateLabel, title: a.title, notes: a.notes }));
 
+  const ads = await getWeeklyAds(propertyCode, week);
+
   return {
     property,
     week: {
@@ -286,6 +290,7 @@ export async function getWeeklyExportData(
       imageKey: s.imageKey,
       summary: s.summary,
     })),
+    ads,
     departments: {
       sales: activities("sales"),
       ecommerce: activities("ecommerce"),

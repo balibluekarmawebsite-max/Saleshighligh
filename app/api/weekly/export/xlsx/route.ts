@@ -116,6 +116,16 @@ export async function GET(req: NextRequest) {
     ]);
   }
 
+  if (show("ads") && data.ads.hasData && data.ads.blended) {
+    const b = data.ads.blended;
+    addSheet("Ads & ROAS", [
+      ["Scope", "Spend", "Revenue", "Conversions", "Impressions", "Clicks", "ROAS", "CTR %", "CPC"],
+      ["Blended", b.spend, b.revenue, b.conversions, b.impressions, b.clicks, r1(b.roas), r1(b.ctr), r1(b.cpc)],
+      ...data.ads.platforms.map((p): Cell[] => [p.label, p.spend, p.revenue, p.conversions, p.impressions, p.clicks, r1(p.roas), r1(p.ctr), r1(p.cpc)]),
+      ...(data.ads.window.from ? [["Window", `${data.ads.window.from} → ${data.ads.window.to}`] as Cell[]] : []),
+    ]);
+  }
+
   if (show("screenshots") && data.screenshots.length > 0) {
     addSheet("Screenshots", [
       ["Category", "Title", "Summary"],

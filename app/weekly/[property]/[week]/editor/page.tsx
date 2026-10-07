@@ -2,10 +2,12 @@ import { AlertCircle, Lock } from "lucide-react";
 
 import { SectionCard } from "@/components/dashboard/section-card";
 import { Button } from "@/components/ui/button";
+import { AdsEditor } from "@/components/weekly/ads-editor";
 import { OverviewEditor } from "@/components/weekly/overview-editor";
 import { ReportProgress } from "@/components/weekly/report-progress";
 import { ScreenshotManager } from "@/components/weekly/screenshot-manager";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
+import { getWeeklyAds } from "@/lib/weekly/ads-data";
 import { createWeek, setStatus } from "@/lib/weekly/editor-actions";
 import { getWeeklyEditorData } from "@/lib/weekly/editor-data";
 import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
@@ -85,6 +87,7 @@ export default async function WeeklyEditorPage({
   const w = params.week;
   const locked = week.locked;
   const screenshots = await getWeeklyScreenshots(p, w);
+  const ads = await getWeeklyAds(p, w);
 
   return (
     <div className="space-y-6">
@@ -156,6 +159,13 @@ export default async function WeeklyEditorPage({
         description="Upload Booking.com / social screenshots and summarise each with AI"
       >
         <ScreenshotManager property={p} week={w} locked={locked || !canEdit} screenshots={screenshots} />
+      </SectionCard>
+
+      <SectionCard
+        title="Digital Ads & ROAS"
+        description="Sync from the ads dashboard, or enter Google / Meta figures manually"
+      >
+        <AdsEditor property={p} week={w} locked={locked || !canEdit} data={ads} />
       </SectionCard>
     </div>
   );

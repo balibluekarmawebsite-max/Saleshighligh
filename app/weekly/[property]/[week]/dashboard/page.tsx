@@ -13,6 +13,7 @@ import {
 } from "@/lib/weekly/dashboard-data";
 import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
 import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
+import { getWeeklyAds } from "@/lib/weekly/ads-data";
 import {
   formatIDR,
   formatNumber,
@@ -49,6 +50,8 @@ export default async function WeeklyDashboardPage({
   const adr = kpiVariances(h.arrActual, h.arrBudget, h.arrLy);
   const rev = kpiVariances(h.revActual, h.revBudget, h.revLy);
   const screenshots = await getWeeklyScreenshots(params.property, params.week);
+  const ads = await getWeeklyAds(params.property, params.week);
+  const roasText = (n: number | null) => (n === null ? "—" : `${n.toFixed(2)}×`);
 
   return (
     <div className="space-y-6">
@@ -148,6 +151,59 @@ export default async function WeeklyDashboardPage({
               </figure>
             ))}
           </div>
+        </SectionCard>
+      )}
+
+      {/* Digital Ads & ROAS */}
+      {ads.hasData && ads.blended && (
+        <SectionCard
+          title="Digital Ads & ROAS"
+          description={ads.window.from ? `Ads window ${ads.window.from} → ${ads.window.to}` : "Google & Meta performance"}
+        >
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {[
+              { label: "Blended ROAS", value: roasText(ads.blended.roas) },
+              { label: "Ad Spend", value: ads.blended.spend == null ? "—" : formatIDR(ads.blended.spend) },
+              { label: "Booked Revenue", value: ads.blended.revenue == null ? "—" : formatIDR(ads.blended.revenue) },
+              { label: "Conversions", value: ads.blended.conversions == null ? "—" : formatNumber(Math.round(ads.blended.conversions)) },
+            ].map((k) => (
+              <div key={k.label} className="rounded-lg border border-border bg-card p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{k.label}</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{k.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {ads.platforms.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr className="border-b border-border">
+                    <th className="py-2 pr-3 font-medium">Platform</th>
+                    <th className="py-2 pr-3 text-right font-medium">Spend</th>
+                    <th className="py-2 pr-3 text-right font-medium">Conversions</th>
+                    <th className="py-2 pr-3 text-right font-medium">Attributed Rev</th>
+                    <th className="py-2 pr-3 text-right font-medium">ROAS</th>
+                    <th className="py-2 pr-3 text-right font-medium">CTR</th>
+                    <th className="py-2 text-right font-medium">CPC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ads.platforms.map((p) => (
+                    <tr key={p.platform} className="border-b border-border/60">
+                      <td className="py-2 pr-3 font-medium text-foreground">{p.label}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-foreground">{p.spend == null ? "—" : formatIDR(p.spend)}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-foreground">{p.conversions == null ? "—" : formatNumber(Math.round(p.conversions))}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-foreground">{p.revenue == null ? "—" : formatIDR(p.revenue)}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-foreground">{roasText(p.roas)}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums text-foreground">{formatWeeklyPercent(p.ctr)}</td>
+                      <td className="py-2 text-right tabular-nums text-foreground">{p.cpc == null ? "—" : formatIDR(p.cpc)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </SectionCard>
       )}
 

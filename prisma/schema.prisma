@@ -771,6 +771,7 @@ model WeeklyReport {
   imports             WeeklyImport[]
   aiDrafts            WeeklyAiDraft[]
   screenshots         WeeklyScreenshot[]
+  adsRoas             WeeklyAdsRoas[]
 
   @@unique([propertyId, startDate])
   @@index([propertyId, endDate])
@@ -1151,4 +1152,31 @@ model WeeklyScreenshot {
 
   @@index([reportWeekId])
   @@map("weekly_screenshots")
+}
+
+/// Digital Ads & ROAS (pulled from the ads dashboard API, or entered manually).
+/// One row per platform scope: "blended" (property totals; ROAS uses booked
+/// `revenue`), "google" and "meta" (ROAS uses attributed `conversionValue`).
+/// Raw inputs only; ROAS / CTR / CPC are computed in lib/weekly/calculations.
+model WeeklyAdsRoas {
+  id              String   @id @default(cuid())
+  reportWeekId    String
+  platform        String
+  spend           Decimal? @db.Decimal(16, 2)
+  revenue         Decimal? @db.Decimal(16, 2)
+  conversionValue Decimal? @db.Decimal(16, 2)
+  conversions     Decimal? @db.Decimal(14, 4)
+  impressions     Int?
+  clicks          Int?
+  source          String   @default("manual")
+  windowFrom      String?
+  windowTo        String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@unique([reportWeekId, platform])
+  @@map("weekly_ads_roas")
 }

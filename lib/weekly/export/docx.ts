@@ -37,6 +37,7 @@ const num = (n: number | null | undefined) => (n == null ? EMPTY : formatNumber(
 const occ = (frac: number | null | undefined) =>
   frac == null ? EMPTY : formatWeeklyPercent(occPercent(frac));
 const share = (n: number | null | undefined) => (n == null ? EMPTY : formatWeeklyPercent(n));
+const roas = (n: number | null | undefined) => (n == null ? EMPTY : `${n.toFixed(2)}×`);
 
 function sectionHeading(text: string): Paragraph {
   return new Paragraph({
@@ -131,7 +132,7 @@ export async function buildWeeklyDocx(
   sections: Set<string> | null,
 ): Promise<Buffer> {
   const show = (id: string) => !sections || sections.has(id);
-  const { property, week, overview, monthly, segments, rateCodes, channels, social, screenshots, departments } = data;
+  const { property, week, overview, monthly, segments, rateCodes, channels, social, ads, screenshots, departments } = data;
   const activities = [
     ...departments.sales.map((a) => ({ dept: "Sales", ...a })),
     ...departments.ecommerce.map((a) => ({ dept: "E-commerce", ...a })),
@@ -222,6 +223,29 @@ export async function buildWeeklyDocx(
         ]),
       ),
     );
+  }
+
+  if (show("ads") && ads.hasData && ads.blended) {
+    children.push(sectionHeading("Digital Ads & ROAS"));
+    children.push(
+      new Paragraph({
+        spacing: { after: 80 },
+        children: [
+          new TextRun({
+            text: `Blended ROAS ${roas(ads.blended.roas)} · Spend ${money(ads.blended.spend)} · Booked Revenue ${money(ads.blended.revenue)} · Conversions ${num(ads.blended.conversions)}${ads.window.from ? ` · Window ${ads.window.from} → ${ads.window.to}` : ""}`,
+            size: 20,
+          }),
+        ],
+      }),
+    );
+    if (ads.platforms.length > 0) {
+      children.push(
+        table(
+          ["Platform", "Spend", "Conversions", "Attributed Rev", "ROAS", "CTR", "CPC"],
+          ads.platforms.map((p) => [p.label, money(p.spend), num(p.conversions), money(p.revenue), roas(p.roas), share(p.ctr), money(p.cpc)]),
+        ),
+      );
+    }
   }
 
   if (show("screenshots") && screenshots.length > 0) {

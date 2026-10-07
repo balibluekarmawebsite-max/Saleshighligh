@@ -19,6 +19,7 @@ const occ = (frac: number | null | undefined) =>
   frac == null ? EMPTY : formatWeeklyPercent(occPercent(frac));
 const share = (n: number | null | undefined) =>
   n == null ? EMPTY : formatWeeklyPercent(n);
+const roas = (n: number | null | undefined) => (n == null ? EMPTY : `${n.toFixed(2)}×`);
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -75,7 +76,7 @@ export default async function WeeklyPrintPage({
   const sel = searchParams.sections ? new Set(searchParams.sections.split(",")) : null;
   const show = (id: string) => !sel || sel.has(id);
 
-  const { property, week, overview, monthly, segments, rateCodes, channels, social, screenshots, departments } = data;
+  const { property, week, overview, monthly, segments, rateCodes, channels, social, ads, screenshots, departments } = data;
   const activities = [...departments.sales, ...departments.ecommerce];
 
   return (
@@ -167,6 +168,21 @@ export default async function WeeklyPrintPage({
               s.growthPct == null ? EMPTY : `${s.growthPct >= 0 ? "+" : ""}${s.growthPct.toFixed(1)}%`,
             ])}
           />
+        </Section>
+      )}
+
+      {show("ads") && ads.hasData && ads.blended && (
+        <Section title="Digital Ads &amp; ROAS">
+          <p className="muted">
+            Blended ROAS {roas(ads.blended.roas)} · Spend {money(ads.blended.spend)} · Booked Revenue {money(ads.blended.revenue)} · Conversions {num(ads.blended.conversions)}
+            {ads.window.from ? ` · Window ${ads.window.from} → ${ads.window.to}` : ""}
+          </p>
+          {ads.platforms.length > 0 && (
+            <Table
+              head={["Platform", "Spend", "Conversions", "Attributed Rev", "ROAS", "CTR", "CPC"]}
+              rows={ads.platforms.map((p) => [p.label, money(p.spend), num(p.conversions), money(p.revenue), roas(p.roas), share(p.ctr), money(p.cpc)])}
+            />
+          )}
         </Section>
       )}
 
