@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, RefreshCw } from "lucide-react";
 
@@ -12,6 +12,21 @@ import { type WeeklyAdsData } from "@/lib/weekly/ads-data";
 type Row = { spend: string; revenue: string; conversions: string; impressions: string; clicks: string };
 const EMPTY_ROW: Row = { spend: "", revenue: "", conversions: "", impressions: "", clicks: "" };
 const s = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n));
+
+/** Build the input grid from the server-fetched ads data. */
+function seedGrid(data: WeeklyAdsData): Record<string, Row> {
+  const by: Record<string, { spend: number | null; revenue: number | null; conversions: number | null; impressions: number | null; clicks: number | null } | null> = {
+    blended: data.blended,
+    google: data.platforms.find((p) => p.platform === "google") ?? null,
+    meta: data.platforms.find((p) => p.platform === "meta") ?? null,
+  };
+  return Object.fromEntries(
+    AD_PLATFORMS.map((p) => {
+      const r = by[p.id];
+      return [p.id, r ? { spend: s(r.spend), revenue: s(r.revenue), conversions: s(r.conversions), impressions: s(r.impressions), clicks: s(r.clicks) } : { ...EMPTY_ROW }];
+    }),
+  );
+}
 
 export function AdsEditor({
   property,
@@ -29,20 +44,15 @@ export function AdsEditor({
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const byPlatform: Record<string, { spend: number | null; revenue: number | null; conversions: number | null; impressions: number | null; clicks: number | null } | null> = {
-    blended: data.blended,
-    google: data.platforms.find((p) => p.platform === "google") ?? null,
-    meta: data.platforms.find((p) => p.platform === "meta") ?? null,
-  };
+  const [grid, setGrid] = useState<Record<string, Row>>(() => seedGrid(data));
 
-  const [grid, setGrid] = useState<Record<string, Row>>(() =>
-    Object.fromEntries(
-      AD_PLATFORMS.map((p) => {
-        const r = byPlatform[p.id];
-        return [p.id, r ? { spend: s(r.spend), revenue: s(r.revenue), conversions: s(r.conversions), impressions: s(r.impressions), clicks: s(r.clicks) } : { ...EMPTY_ROW }];
-      }),
-    ),
-  );
+  // Re-seed the grid whenever the server data changes (after a Sync or Save +
+  // router.refresh()), so freshly-synced figures appear in the inputs.
+  const dataSig = JSON.stringify([data.blended, data.platforms]);
+  useEffect(() => {
+    setGrid(seedGrid(data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSig]);
 
   const set = (platform: string, field: keyof Row, value: string) =>
     setGrid((g) => ({ ...g, [platform]: { ...(g[platform] ?? EMPTY_ROW), [field]: value } }));
