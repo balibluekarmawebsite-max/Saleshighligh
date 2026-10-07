@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Building2, CalendarRange, ChevronDown } from "lucide-react";
 
+import { WeeklyExportModal } from "@/components/weekly/weekly-export-modal";
 import { type PropertyOption } from "@/lib/dashboard-data";
 import { type WeeklyWeekOption } from "@/lib/weekly/dashboard-data";
 import { weeklyHref, weeklySectionTitle } from "@/lib/nav";
@@ -96,6 +97,8 @@ export function WeeklyContextBar({
             {currentStatus.replace(/_/g, " ").toLowerCase()}
           </span>
         )}
+
+        <WeeklyExportModal property={property} week={week} />
       </div>
     </header>
   );

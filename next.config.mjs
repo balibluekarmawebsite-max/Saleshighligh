@@ -6,8 +6,8 @@ const nextConfig = {
   // SheetJS (xlsx) is CommonJS; keep it external to avoid bundling issues in server components.
   experimental: {
     // Keep heavy/native server-only deps external so the bundler doesn't try to
-    // trace them into route bundles (xlsx=CJS, playwright=native, pptxgenjs=large).
-    serverComponentsExternalPackages: ["xlsx", "playwright", "pptxgenjs"],
+    // trace them into route bundles (xlsx=CJS, playwright=native, pptxgenjs/docx=large).
+    serverComponentsExternalPackages: ["xlsx", "playwright", "pptxgenjs", "docx"],
     // Monthly workbooks can be a few hundred KB; allow generous upload bodies.
     serverActions: { bodySizeLimit: "10mb" },
   },
