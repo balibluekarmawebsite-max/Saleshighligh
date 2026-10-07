@@ -4,9 +4,11 @@ import { SectionCard } from "@/components/dashboard/section-card";
 import { Button } from "@/components/ui/button";
 import { OverviewEditor } from "@/components/weekly/overview-editor";
 import { ReportProgress } from "@/components/weekly/report-progress";
+import { ScreenshotManager } from "@/components/weekly/screenshot-manager";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { createWeek, setStatus } from "@/lib/weekly/editor-actions";
 import { getWeeklyEditorData } from "@/lib/weekly/editor-data";
+import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
 import { weekLabel } from "@/lib/weekly/week";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +84,7 @@ export default async function WeeklyEditorPage({
   const p = params.property;
   const w = params.week;
   const locked = week.locked;
+  const screenshots = await getWeeklyScreenshots(p, w);
 
   return (
     <div className="space-y-6">
@@ -147,6 +150,13 @@ export default async function WeeklyEditorPage({
           </SectionCard>
         </div>
       </div>
+
+      <SectionCard
+        title="SM · Screenshots & Summaries"
+        description="Upload Booking.com / social screenshots and summarise each with AI"
+      >
+        <ScreenshotManager property={p} week={w} locked={locked || !canEdit} screenshots={screenshots} />
+      </SectionCard>
     </div>
   );
 }

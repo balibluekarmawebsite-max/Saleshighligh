@@ -16,7 +16,7 @@
  * and serve that path with Caddy/nginx, setting UPLOAD_URL_BASE to match.
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const uploadDir = () =>
@@ -59,4 +59,15 @@ export async function uploadObject(
 /** The public URL path a stored `key` is served at. */
 export function publicUrl(key: string): string {
   return `${urlBase()}/${safeKey(key)}`;
+}
+
+/** Delete a stored object (best-effort; ignores a missing file). */
+export async function deleteObject(key: string): Promise<void> {
+  const dest = path.join(uploadDir(), safeKey(key));
+  await rm(dest, { force: true });
+}
+
+/** Absolute on-disk path for a stored key (for server-side reads, e.g. AI vision). */
+export function storagePath(key: string): string {
+  return path.join(uploadDir(), safeKey(key));
 }

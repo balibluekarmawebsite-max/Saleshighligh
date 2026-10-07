@@ -73,6 +73,15 @@ export interface WeeklySocialRow {
   growthPct: number | null;
 }
 
+export interface WeeklyScreenshotExport {
+  id: string;
+  category: string;
+  title: string | null;
+  imageUrl: string;
+  imageKey: string;
+  summary: string | null;
+}
+
 export interface WeeklyExportData {
   property: { code: string; name: string; area: string };
   week: {
@@ -91,6 +100,7 @@ export interface WeeklyExportData {
   rateCodes: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
   channels: { rows: WeeklyChannelRow[]; ytdTotal: number };
   social: WeeklySocialRow[];
+  screenshots: WeeklyScreenshotExport[];
   departments: {
     sales: { dateLabel: string | null; title: string | null; notes: string | null }[];
     ecommerce: { dateLabel: string | null; title: string | null; notes: string | null }[];
@@ -135,6 +145,7 @@ export async function getWeeklyExportData(
       activities: { orderBy: { sortOrder: "asc" } },
       trainings: { orderBy: { sortOrder: "asc" } },
       actionPlans: { orderBy: { sortOrder: "asc" } },
+      screenshots: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
     },
   });
   if (!report) return null;
@@ -267,6 +278,14 @@ export async function getWeeklyExportData(
     rateCodes: { rows: rateCodeRows, totals: rcTotals },
     channels: { rows: channelRows, ytdTotal: channelYtdTotal },
     social,
+    screenshots: report.screenshots.map((s) => ({
+      id: s.id,
+      category: s.category,
+      title: s.title,
+      imageUrl: s.imageUrl,
+      imageKey: s.imageKey,
+      summary: s.summary,
+    })),
     departments: {
       sales: activities("sales"),
       ecommerce: activities("ecommerce"),

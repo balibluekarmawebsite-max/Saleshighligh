@@ -11,6 +11,8 @@ import {
   kpiVariances,
   occPointsDelta,
 } from "@/lib/weekly/dashboard-data";
+import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
+import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 import {
   formatIDR,
   formatNumber,
@@ -46,6 +48,7 @@ export default async function WeeklyDashboardPage({
   const h = data.headline;
   const adr = kpiVariances(h.arrActual, h.arrBudget, h.arrLy);
   const rev = kpiVariances(h.revActual, h.revBudget, h.revLy);
+  const screenshots = await getWeeklyScreenshots(params.property, params.week);
 
   return (
     <div className="space-y-6">
@@ -117,6 +120,36 @@ export default async function WeeklyDashboardPage({
           )}
         </SectionCard>
       </div>
+
+      {/* SM screenshots + summaries */}
+      {screenshots.length > 0 && (
+        <SectionCard
+          title="Social & OTA Screenshots"
+          description="Booking.com, Instagram and other captures with their summaries"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            {screenshots.map((s) => (
+              <figure key={s.id} className="space-y-2 rounded-lg border border-border bg-card p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={s.imageUrl}
+                  alt={s.title || screenshotCategoryLabel(s.category)}
+                  className="w-full rounded-md border border-border object-contain"
+                />
+                <figcaption className="space-y-1">
+                  <p className="text-xs font-medium text-foreground">
+                    {screenshotCategoryLabel(s.category)}
+                    {s.title ? ` · ${s.title}` : ""}
+                  </p>
+                  {s.summary && (
+                    <p className="text-sm leading-relaxed text-muted-foreground">{s.summary}</p>
+                  )}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </SectionCard>
+      )}
 
       {/* Progress + about */}
       <div className="grid gap-4 lg:grid-cols-2">

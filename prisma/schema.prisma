@@ -770,6 +770,7 @@ model WeeklyReport {
   actionPlans         WeeklyActionPlan[]
   imports             WeeklyImport[]
   aiDrafts            WeeklyAiDraft[]
+  screenshots         WeeklyScreenshot[]
 
   @@unique([propertyId, startDate])
   @@index([propertyId, endDate])
@@ -1128,4 +1129,26 @@ model WeeklyAiDraft {
 
   @@index([reportWeekId, section])
   @@map("weekly_ai_drafts")
+}
+
+/// Section SM — uploaded screenshots (Booking.com, Instagram, Facebook, etc.)
+/// with a written or AI-generated summary. Images live on local disk
+/// (lib/storage.ts); only the URL + storage key are persisted.
+model WeeklyScreenshot {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  category     String   @default("other")
+  title        String?
+  imageUrl     String
+  imageKey     String
+  summary      String?  @db.Text
+  aiGenerated  Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_screenshots")
 }

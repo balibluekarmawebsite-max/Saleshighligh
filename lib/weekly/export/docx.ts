@@ -1,7 +1,10 @@
+import { readFile } from "node:fs/promises";
+
 import {
   AlignmentType,
   BorderStyle,
   Document,
+  ImageRun,
   PageOrientation,
   Packer,
   Paragraph,
@@ -13,8 +16,10 @@ import {
 } from "docx";
 
 import { occPercent } from "@/lib/weekly/calculations";
+import { storagePath } from "@/lib/storage";
 import { EMPTY, formatIDRCompact, formatNumber, formatWeeklyPercent } from "@/lib/weekly/format";
 import type { WeeklyExportData } from "@/lib/weekly/export-data";
+import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 
 /**
  * Build a native .docx of a weekly report from the shared export view model.
@@ -79,12 +84,54 @@ function table(head: string[], rows: string[][]): Table {
   });
 }
 
+/** Read PNG/JPEG intrinsic dimensions from the file header (no image library). */
+function imageSize(buf: Buffer): { width: number; height: number; type: "png" | "jpg" } | null {
+  // PNG: 8-byte signature, then IHDR with width/height as big-endian uint32.
+  if (buf.length > 24 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20), type: "png" };
+  }
+  // JPEG: scan for a Start-Of-Frame marker and read its dimensions.
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const marker = buf[i + 1]!;
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7), type: "jpg" };
+      }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+
+/** Build an ImageRun for a stored screenshot, scaled to fit the page, or null. */
+async function imageRunFor(imageKey: string): Promise<ImageRun | null> {
+  let buf: Buffer;
+  try {
+    buf = await readFile(storagePath(imageKey));
+  } catch {
+    return null;
+  }
+  const size = imageSize(buf);
+  if (!size) return null; // unsupported format (e.g. WebP) — caller falls back to summary only
+  const MAX_W = 620;
+  const MAX_H = 440;
+  let scale = Math.min(1, MAX_W / size.width);
+  if (size.height * scale > MAX_H) scale = MAX_H / size.height;
+  return new ImageRun({
+    type: size.type,
+    data: buf,
+    transformation: { width: Math.round(size.width * scale), height: Math.round(size.height * scale) },
+  });
+}
+
 export async function buildWeeklyDocx(
   data: WeeklyExportData,
   sections: Set<string> | null,
 ): Promise<Buffer> {
   const show = (id: string) => !sections || sections.has(id);
-  const { property, week, overview, monthly, segments, rateCodes, channels, social, departments } = data;
+  const { property, week, overview, monthly, segments, rateCodes, channels, social, screenshots, departments } = data;
   const activities = [
     ...departments.sales.map((a) => ({ dept: "Sales", ...a })),
     ...departments.ecommerce.map((a) => ({ dept: "E-commerce", ...a })),
@@ -175,6 +222,16 @@ export async function buildWeeklyDocx(
         ]),
       ),
     );
+  }
+
+  if (show("screenshots") && screenshots.length > 0) {
+    children.push(sectionHeading("SM · Screenshots & Summaries"));
+    for (const s of screenshots) {
+      children.push(subHeading(`${screenshotCategoryLabel(s.category)}${s.title ? ` · ${s.title}` : ""}`));
+      const img = await imageRunFor(s.imageKey);
+      if (img) children.push(new Paragraph({ spacing: { after: 80 }, children: [img] }));
+      children.push(...prose(s.summary));
+    }
   }
 
   if (show("departments") && (activities.length > 0 || departments.trainings.length > 0)) {

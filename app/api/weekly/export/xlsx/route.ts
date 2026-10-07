@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { occPercent } from "@/lib/weekly/calculations";
 import { getWeeklyExportData } from "@/lib/weekly/export-data";
+import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 import { isWeekId } from "@/lib/weekly/week";
 
 export const runtime = "nodejs";
@@ -112,6 +113,13 @@ export async function GET(req: NextRequest) {
     addSheet("Social", [
       ["Platform", "Metric", "Last Week", "This Week", "Growth", "Growth %"],
       ...data.social.map((s): Cell[] => [s.platform, s.metric, s.lastWeek, s.thisWeek, s.growth, r1(s.growthPct)]),
+    ]);
+  }
+
+  if (show("screenshots") && data.screenshots.length > 0) {
+    addSheet("Screenshots", [
+      ["Category", "Title", "Summary"],
+      ...data.screenshots.map((s): Cell[] => [screenshotCategoryLabel(s.category), s.title ?? "", s.summary ?? ""]),
     ]);
   }
 

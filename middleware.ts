@@ -18,8 +18,10 @@ export default auth((req) => {
 });
 
 export const config = {
-  // Protect everything except Next internals, the login page, the auth API, and
-  // the /print route (self-gated by session-or-internal-token so the PDF
-  // exporter's headless-browser fetch can reach it).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|api/auth).*)"],
+  // Protect everything except Next internals, the login page, the auth API, the
+  // /print route (self-gated by session-or-internal-token so the PDF exporter's
+  // headless-browser fetch can reach it), and /uploads (static user images,
+  // served by unguessable key — the PDF exporter loads them as <img> sub-
+  // resources without a session).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth).*)"],
 };

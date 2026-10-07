@@ -7,6 +7,7 @@ export const WEEKLY_EXPORT_SECTIONS = [
   { id: "ratecodes", label: "Rate Codes & Promotions" },
   { id: "channels", label: "Channel Room Nights" },
   { id: "social", label: "Social Media" },
+  { id: "screenshots", label: "Screenshots & Summaries" },
   { id: "departments", label: "Department Activities & Training" },
   { id: "plans", label: "Action Plans" },
 ] as const;

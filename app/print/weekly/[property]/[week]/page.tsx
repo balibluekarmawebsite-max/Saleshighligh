@@ -9,6 +9,7 @@ import {
   formatNumber,
   formatWeeklyPercent,
 } from "@/lib/weekly/format";
+import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +75,7 @@ export default async function WeeklyPrintPage({
   const sel = searchParams.sections ? new Set(searchParams.sections.split(",")) : null;
   const show = (id: string) => !sel || sel.has(id);
 
-  const { property, week, overview, monthly, segments, rateCodes, channels, social, departments } = data;
+  const { property, week, overview, monthly, segments, rateCodes, channels, social, screenshots, departments } = data;
   const activities = [...departments.sales, ...departments.ecommerce];
 
   return (
@@ -169,6 +170,21 @@ export default async function WeeklyPrintPage({
         </Section>
       )}
 
+      {show("screenshots") && screenshots.length > 0 && (
+        <Section title="SM · Screenshots &amp; Summaries">
+          {screenshots.map((s) => (
+            <figure key={s.id} className="shot">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={s.imageUrl} alt={s.title || screenshotCategoryLabel(s.category)} />
+              <figcaption>
+                <strong>{screenshotCategoryLabel(s.category)}{s.title ? ` · ${s.title}` : ""}</strong>
+                {s.summary ? <span className="prose"> {s.summary}</span> : null}
+              </figcaption>
+            </figure>
+          ))}
+        </Section>
+      )}
+
       {show("departments") && (activities.length > 0 || departments.trainings.length > 0) && (
         <Section title="G · Department Activities &amp; Training">
           {activities.length > 0 && (
@@ -218,6 +234,11 @@ const PRINT_CSS = `
   td.l { text-align: left; }
   p.prose { font-size: 12px; line-height: 1.5; margin: 4px 0; }
   p.muted { color: #6B7280; font-size: 11px; margin: 4px 0; }
+  figure.shot { break-inside: avoid; margin: 8px 0 14px; }
+  figure.shot img { max-width: 100%; max-height: 440px; border: 1px solid #E5E7EB; border-radius: 4px; display: block; }
+  figure.shot figcaption { font-size: 12px; line-height: 1.5; margin-top: 4px; }
+  figure.shot figcaption strong { color: #0F4C5C; }
+  figure.shot figcaption .prose { color: #374151; }
   @media print {
     @page { size: A4 landscape; margin: 12mm; }
     .print-root { padding: 0; max-width: none; }
