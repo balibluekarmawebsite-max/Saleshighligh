@@ -10,6 +10,7 @@ import {
   ListChecks,
   Megaphone,
   Share2,
+  Upload,
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
@@ -73,6 +74,7 @@ export const WEEKLY_NAV: DashNavItem[] = [
   { label: "Weekly Reports", href: "reports", icon: CalendarRange },
   { label: "Report Editor", href: "editor", icon: FilePen },
   { label: "Department Inputs", href: "departments", icon: ClipboardList },
+  { label: "Import", href: "import", icon: Upload },
   { label: "Trends", href: "trends", icon: LineChart },
 ];
 
