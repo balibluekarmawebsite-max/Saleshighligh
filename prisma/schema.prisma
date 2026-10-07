@@ -772,6 +772,8 @@ model WeeklyReport {
   aiDrafts            WeeklyAiDraft[]
   screenshots         WeeklyScreenshot[]
   adsRoas             WeeklyAdsRoas[]
+  adsDaily            WeeklyAdsDaily[]
+  adsCampaigns        WeeklyAdsCampaign[]
 
   @@unique([propertyId, startDate])
   @@index([propertyId, endDate])
@@ -1167,6 +1169,7 @@ model WeeklyAdsRoas {
   conversionValue Decimal? @db.Decimal(16, 2)
   conversions     Decimal? @db.Decimal(14, 4)
   impressions     Int?
+  reach           Int?
   clicks          Int?
   source          String   @default("manual")
   windowFrom      String?
@@ -1179,4 +1182,46 @@ model WeeklyAdsRoas {
 
   @@unique([reportWeekId, platform])
   @@map("weekly_ads_roas")
+}
+
+/// Digital Ads — daily timeseries for the week (sparklines + trend chart).
+model WeeklyAdsDaily {
+  id              String   @id @default(cuid())
+  reportWeekId    String
+  date            String
+  spend           Decimal? @db.Decimal(16, 2)
+  conversionValue Decimal? @db.Decimal(16, 2)
+  conversions     Decimal? @db.Decimal(14, 4)
+  impressions     Int?
+  reach           Int?
+  clicks          Int?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@unique([reportWeekId, date])
+  @@map("weekly_ads_daily")
+}
+
+/// Digital Ads — per-campaign breakdown for the week.
+model WeeklyAdsCampaign {
+  id              String   @id @default(cuid())
+  reportWeekId    String
+  campaignId      String
+  campaignName    String
+  platform        String
+  spend           Decimal? @db.Decimal(16, 2)
+  conversionValue Decimal? @db.Decimal(16, 2)
+  conversions     Decimal? @db.Decimal(14, 4)
+  impressions     Int?
+  reach           Int?
+  clicks          Int?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_ads_campaigns")
 }

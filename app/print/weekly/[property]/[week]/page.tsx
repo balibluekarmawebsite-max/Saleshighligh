@@ -183,6 +183,16 @@ export default async function WeeklyPrintPage({
               rows={ads.platforms.map((p) => [p.label, money(p.spend), num(p.conversions), money(p.revenue), roas(p.roas), share(p.ctr), money(p.cpc)])}
             />
           )}
+          {ads.summary && <p className="prose">{ads.summary.headline}</p>}
+          {ads.campaigns.length > 0 && (
+            <>
+              <h3>Campaigns</h3>
+              <Table
+                head={["Campaign", "Platform", "Impr.", "Clicks", "Spend", "Conv.", "ROAS"]}
+                rows={ads.campaigns.slice(0, 15).map((c) => [c.name, c.platformLabel, num(c.impressions), num(c.clicks), money(c.spend), num(c.conversions), roas(c.roas)])}
+              />
+            </>
+          )}
         </Section>
       )}
 

@@ -123,7 +123,14 @@ export async function GET(req: NextRequest) {
       ["Blended", b.spend, b.revenue, b.conversions, b.impressions, b.clicks, r1(b.roas), r1(b.ctr), r1(b.cpc)],
       ...data.ads.platforms.map((p): Cell[] => [p.label, p.spend, p.revenue, p.conversions, p.impressions, p.clicks, r1(p.roas), r1(p.ctr), r1(p.cpc)]),
       ...(data.ads.window.from ? [["Window", `${data.ads.window.from} → ${data.ads.window.to}`] as Cell[]] : []),
+      ...(data.ads.summary ? [["Summary", data.ads.summary.headline] as Cell[]] : []),
     ]);
+    if (data.ads.campaigns.length > 0) {
+      addSheet("Ads Campaigns", [
+        ["Campaign", "Platform", "Impressions", "Clicks", "Spend", "Conversions", "Attributed Rev", "ROAS"],
+        ...data.ads.campaigns.map((c): Cell[] => [c.name, c.platformLabel, c.impressions, c.clicks, c.spend, c.conversions, c.revenue, r1(c.roas)]),
+      ]);
+    }
   }
 
   if (show("screenshots") && data.screenshots.length > 0) {

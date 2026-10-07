@@ -246,6 +246,18 @@ export async function buildWeeklyDocx(
         ),
       );
     }
+    if (ads.summary) {
+      children.push(new Paragraph({ spacing: { after: 80 }, children: [new TextRun({ text: ads.summary.headline, size: 20 })] }));
+    }
+    if (ads.campaigns.length > 0) {
+      children.push(subHeading("Campaigns"));
+      children.push(
+        table(
+          ["Campaign", "Platform", "Impr.", "Clicks", "Spend", "Conv.", "ROAS"],
+          ads.campaigns.slice(0, 15).map((c) => [c.name, c.platformLabel, num(c.impressions), num(c.clicks), money(c.spend), num(c.conversions), roas(c.roas)]),
+        ),
+      );
+    }
   }
 
   if (show("screenshots") && screenshots.length > 0) {
