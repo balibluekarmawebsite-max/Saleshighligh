@@ -6,6 +6,7 @@ import { WeeklyReportStatus } from "@prisma/client";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { NARRATIVE_MODEL } from "@/lib/weekly/ai-prompts";
 import { OVERVIEW_BLOCKS, isLockedStatus } from "@/lib/weekly/editor-data";
 import { weekMeta } from "@/lib/weekly/week";
 
@@ -61,6 +62,70 @@ export async function saveOverview(
   await logAudit("weekly_overview_save", `${property} ${week}`, {});
   revalidatePath(`/weekly/${property}/${week}/editor`);
   return { ok: true, message: "Saved." };
+}
+
+/**
+ * Save a single Section A overview block from the AI drafting flow. Marks the
+ * block as `aiDraft` when the text is still the model's output (not yet edited
+ * by a human), records a `WeeklyAiDraft` provenance row, and audits the save.
+ */
+export async function saveWeeklyOverviewBlock(input: {
+  property: string;
+  week: string;
+  key: string;
+  body: string;
+  aiGenerated: boolean;
+}): Promise<ActionResult> {
+  const property = input.property.toUpperCase();
+  const week = input.week;
+  const def = OVERVIEW_BLOCKS.find((b) => b.key === input.key);
+  if (!def) return { ok: false, message: "Unknown section." };
+
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { ok: false, message: `You don't have edit access to ${property}.` };
+  }
+  const report = await findReport(property, week);
+  if (!report) return { ok: false, message: "Report not found." };
+  if (isLockedStatus(report.status)) {
+    return { ok: false, message: "This report is approved/locked — reopen it to edit." };
+  }
+
+  const body = input.body.trim();
+  if (!body) return { ok: false, message: "Nothing to save." };
+
+  await prisma.weeklyOverviewBlock.upsert({
+    where: { reportWeekId_key: { reportWeekId: report.id, key: def.key } },
+    update: { heading: def.heading, body, aiDraft: input.aiGenerated },
+    create: {
+      reportWeekId: report.id,
+      key: def.key,
+      heading: def.heading,
+      body,
+      aiDraft: input.aiGenerated,
+      sortOrder: OVERVIEW_BLOCKS.indexOf(def),
+    },
+  });
+
+  await prisma.weeklyAiDraft.create({
+    data: {
+      reportWeekId: report.id,
+      section: "overview",
+      fieldKey: def.key,
+      mode: input.aiGenerated ? "ai" : "edited",
+      model: NARRATIVE_MODEL,
+      output: body,
+      status: "saved",
+      userId: user && user.id !== "system" ? user.id : null,
+    },
+  });
+
+  await logAudit("weekly_ai_block_save", `${property} ${week}`, {
+    block: def.key,
+    ai: input.aiGenerated,
+  });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: input.aiGenerated ? "Saved as AI draft." : "Saved." };
 }
 
 /** Advance or reopen a report's status. (Plain form-action signature.) */

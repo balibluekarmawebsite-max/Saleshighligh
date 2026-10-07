@@ -4,6 +4,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { Check, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { OverviewAiBlock } from "@/components/weekly/overview-ai-block";
 import { saveOverview } from "@/lib/weekly/editor-actions";
 import { type WeeklyEditorBlock } from "@/lib/weekly/editor-data";
 
@@ -58,6 +59,7 @@ export function OverviewEditor({
             placeholder={locked ? "" : "Write this section…"}
             className="w-full resize-y rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           />
+          {!locked && <OverviewAiBlock property={property} week={week} blockKey={b.key} />}
         </div>
       ))}
 

@@ -1,9 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Check, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { SaveState } from "@/lib/ai/use-narrative-draft";
+
+const DEFAULT_FOOTER =
+  "Saving updates this period's narrative and keeps a version history; reload to see it applied. Admin auth for editing lands in a later phase.";
 
 /** Editable AI-draft buffer with Save / Discard, shared by the narrative panels. */
 export function AiDraftEditor({
@@ -13,6 +17,8 @@ export function AiDraftEditor({
   onChange,
   onSave,
   onDiscard,
+  rows = 8,
+  footer = DEFAULT_FOOTER,
 }: {
   draft: string | null;
   streaming: boolean;
@@ -20,6 +26,8 @@ export function AiDraftEditor({
   onChange: (value: string) => void;
   onSave: () => void;
   onDiscard: () => void;
+  rows?: number;
+  footer?: ReactNode;
 }) {
   if (draft == null) return null;
   return (
@@ -35,10 +43,10 @@ export function AiDraftEditor({
             </span>
           )}
           {saveState === "error" && <span className="text-xs text-variance-negative">Save failed</span>}
-          <Button size="sm" variant="ghost" onClick={onDiscard} disabled={streaming}>
+          <Button type="button" size="sm" variant="ghost" onClick={onDiscard} disabled={streaming}>
             Discard
           </Button>
-          <Button size="sm" onClick={onSave} disabled={streaming || saveState === "saving"}>
+          <Button type="button" size="sm" onClick={onSave} disabled={streaming || saveState === "saving"}>
             {saveState === "saving" ? "Saving…" : "Save"}
           </Button>
         </div>
@@ -47,12 +55,10 @@ export function AiDraftEditor({
         value={draft}
         onChange={(e) => onChange(e.target.value)}
         readOnly={streaming}
-        rows={8}
+        rows={rows}
         className="w-full resize-y rounded border border-border bg-background p-2 text-sm leading-relaxed text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
       />
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        Saving updates this period&apos;s narrative and keeps a version history; reload to see it applied. Admin auth for editing lands in a later phase.
-      </p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{footer}</p>
     </div>
   );
 }
