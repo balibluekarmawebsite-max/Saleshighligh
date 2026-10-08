@@ -1,19 +1,18 @@
 import { readFile } from "node:fs/promises";
 
-import Anthropic from "@anthropic-ai/sdk";
 import type { NextRequest } from "next/server";
 
 import { requireRole } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { storagePath } from "@/lib/storage";
-import { NARRATIVE_MODEL } from "@/lib/weekly/ai-prompts";
+import { groqChatStream, isGroqConfigured, type GroqImage } from "@/lib/weekly/groq";
 import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MEDIA: Record<string, "image/png" | "image/jpeg" | "image/webp"> = {
+const MEDIA: Record<string, GroqImage["mediaType"]> = {
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -29,9 +28,8 @@ Rules:
 - If a value is not legible, say so rather than guessing.`;
 
 /**
- * AI vision summary for a weekly SM screenshot (Phase 10). Reads the stored
- * image, asks Claude (vision) to summarise it, and streams the text back.
- * EDITOR/ADMIN only; the API key stays server-side.
+ * AI vision summary for a weekly SM screenshot. Reads the stored image, asks
+ * Groq (vision) to summarise it, and streams the text back. EDITOR/ADMIN only.
  */
 export async function POST(req: NextRequest) {
   let id: string;
@@ -47,18 +45,8 @@ export async function POST(req: NextRequest) {
   const guard = await requireRole(["ADMIN", "EDITOR"]);
   if ("response" in guard) return guard.response;
 
-  const hasCredential =
-    !!process.env.ANTHROPIC_API_KEY ||
-    !!process.env.ANTHROPIC_AUTH_TOKEN ||
-    process.env.ANTHROPIC_USE_PROFILE === "true";
-  if (!hasCredential) {
-    return Response.json(
-      {
-        error:
-          "AI generation is not configured — set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN), or run `ant auth login` and set ANTHROPIC_USE_PROFILE=true, on the server.",
-      },
-      { status: 501 },
-    );
+  if (!isGroqConfigured()) {
+    return Response.json({ error: "AI is not configured — set GROQ_API_KEY on the server." }, { status: 501 });
   }
 
   const shot = await prisma.weeklyScreenshot.findUnique({
@@ -76,38 +64,20 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "The image file could not be read on the server." }, { status: 500 });
   }
 
-  let client: Anthropic;
-  try {
-    client = new Anthropic();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "no usable credential";
-    return Response.json({ error: `AI credential could not be resolved: ${message}` }, { status: 501 });
-  }
-
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const messageStream = client.messages.stream({
-          model: NARRATIVE_MODEL,
-          max_tokens: 600,
-          temperature: 0.2,
-          system: SYSTEM,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data } },
-                {
-                  type: "text",
-                  text: `This screenshot is categorised as "${screenshotCategoryLabel(shot.category)}". Summarise it for the weekly report.`,
-                },
-              ],
-            },
-          ],
-        });
-        messageStream.on("text", (text) => controller.enqueue(encoder.encode(text)));
-        await messageStream.finalMessage();
+        await groqChatStream(
+          {
+            system: SYSTEM,
+            user: `This screenshot is categorised as "${screenshotCategoryLabel(shot.category)}". Summarise it for the weekly report.`,
+            image: { data, mediaType },
+            maxTokens: 600,
+            temperature: 0.2,
+          },
+          (text) => controller.enqueue(encoder.encode(text)),
+        );
       } catch (err) {
         const message = err instanceof Error ? err.message : "unknown error";
         controller.enqueue(encoder.encode(`\n[Generation failed: ${message}]`));

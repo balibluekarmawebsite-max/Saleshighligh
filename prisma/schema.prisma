@@ -1141,6 +1141,8 @@ model WeeklyScreenshot {
   id           String   @id @default(cuid())
   reportWeekId String
   category     String   @default("other")
+  /// Which Section A overview block this screenshot illustrates (null = general SM).
+  blockKey     String?
   title        String?
   imageUrl     String
   imageKey     String

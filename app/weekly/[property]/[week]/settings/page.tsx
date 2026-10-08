@@ -1,9 +1,8 @@
 import { Check, Minus } from "lucide-react";
 
 import { getCurrentUser, isAdmin } from "@/lib/auth-helpers";
-import { NARRATIVE_MODEL } from "@/lib/weekly/ai-prompts";
 import { adsApiBase, isAdsSyncConfigured } from "@/lib/weekly/ads-sync";
-import { groqModel, groqVisionModel, isGroqConfigured } from "@/lib/weekly/import/ai";
+import { groqModel, groqVisionModel, isGroqConfigured } from "@/lib/weekly/groq";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +43,6 @@ export default async function WeeklySettingsPage({
 }) {
   const user = await getCurrentUser();
   const admin = isAdmin(user);
-  const aiConfigured =
-    !!process.env.ANTHROPIC_API_KEY ||
-    !!process.env.ANTHROPIC_AUTH_TOKEN ||
-    process.env.ANTHROPIC_USE_PROFILE === "true";
   const authOn = !!process.env.AUTH_SECRET;
 
   return (
@@ -68,26 +63,15 @@ export default async function WeeklySettingsPage({
         <Row label="Percentages" value="1 decimal place" />
       </Card>
 
-      <Card title="AI narrative">
-        <Row label="Status" value={<Flag on={aiConfigured} />} />
-        <Row label="Model" value={<code className="text-xs">{NARRATIVE_MODEL}</code>} />
-        <Row label="Actions" value="Draft · Rewrite · Shorten · Translate · Anomaly check" />
-        {!aiConfigured && (
-          <p className="pt-2 text-xs text-muted-foreground">
-            Set <code>ANTHROPIC_API_KEY</code> on the server to enable AI drafting.
-          </p>
-        )}
-      </Card>
-
-      <Card title="AI data import (Groq)">
+      <Card title="AI (Groq)">
         <Row label="Status" value={<Flag on={isGroqConfigured()} />} />
-        <Row label="Text / CSV model" value={<code className="text-xs">{groqModel()}</code>} />
-        <Row label="Screenshot (vision) model" value={<code className="text-xs">{groqVisionModel()}</code>} />
-        <Row label="Reads" value="CSV · Excel · screenshot · pasted text → section rows" />
+        <Row label="Text model" value={<code className="text-xs">{groqModel()}</code>} />
+        <Row label="Vision model" value={<code className="text-xs">{groqVisionModel()}</code>} />
+        <Row label="Powers" value="Narrative draft · Rewrite · Shorten · Translate · Anomaly check · Data import · Screenshot summaries" />
         {!isGroqConfigured() && (
           <p className="pt-2 text-xs text-muted-foreground">
-            Set <code>GROQ_API_KEY</code> on the server to enable AI-assisted import. Override the
-            models with <code>GROQ_MODEL</code> / <code>GROQ_VISION_MODEL</code>.
+            Set <code>GROQ_API_KEY</code> on the server to enable AI. Override the models with{" "}
+            <code>GROQ_MODEL</code> / <code>GROQ_VISION_MODEL</code>.
           </p>
         )}
       </Card>

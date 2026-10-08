@@ -5,7 +5,7 @@ import { type WeeklyProgressItem } from "@/lib/weekly/dashboard-data";
 import { type WeeklySectionId } from "@/lib/weekly/sections";
 import { weekLabel } from "@/lib/weekly/week";
 
-/** The 7 Section A overview blocks, in report order. */
+/** The Section A overview blocks, in report order. Each can hold text + screenshots. */
 export const OVERVIEW_BLOCKS: { key: string; heading: string }[] = [
   { key: "financial", heading: "1. Financial" },
   { key: "market", heading: "2. Market Overview" },
@@ -13,7 +13,10 @@ export const OVERVIEW_BLOCKS: { key: string; heading: string }[] = [
   { key: "countries", heading: "4. Countries" },
   { key: "booking_window", heading: "5. Booking Window" },
   { key: "booking_ranking", heading: "6. Booking.com Ranking" },
-  { key: "learning", heading: "7. Learning & Growth / Trainings" },
+  { key: "building_image", heading: "7. Building Hotel Image" },
+  { key: "promotion", heading: "8. Promotion Analysis" },
+  { key: "roas", heading: "9. ROAS / Digital Ads" },
+  { key: "learning", heading: "10. Learning & Growth" },
 ];
 
 /** The 5 Section H social metrics, in report order (label ↔ stored metricKey). */

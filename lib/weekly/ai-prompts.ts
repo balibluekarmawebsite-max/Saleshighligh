@@ -35,6 +35,12 @@ const BLOCK_GUIDANCE: Record<string, string> = {
 
   booking_ranking: `Comment on Booking.com visibility and ranking for the week. The weekly dataset usually does not capture ranking figures — if the context has none, state in one sentence that Booking.com ranking detail was not provided for this week, and do not invent any.`,
 
+  building_image: `Draft a brief "Building Hotel Image" note: the brand-building and partnership initiatives for the week (e.g. influencer collaborations, listings, media barters, retargeting, newsletters). The weekly dataset does not carry these figures, so write one or two sentences of professional, forward-looking commentary and do not invent numbers.`,
+
+  promotion: `Draft a short "Promotion Analysis" note grounded in the weekly market-segment and channel production where available (fields "segments", "channels"): which promotions/segments drove pickup this week and what to run next. Quote only figures present in the context; if none, keep it to one or two sentences of qualitative commentary.`,
+
+  roas: `Draft a short Digital Ads / ROAS note. If the context has no ads figures, state in one sentence that the ROAS summary is shown from the ads panel and keep commentary brief; never invent ad spend, revenue or ROAS numbers.`,
+
   learning: `Draft a brief, forward-looking Learning & Growth / Trainings note for the team. The weekly dataset does not carry training figures here, so keep it to one or two sentences of professional commentary and do not cite or invent any numbers.`,
 };
 

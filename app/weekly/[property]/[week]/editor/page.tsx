@@ -113,7 +113,16 @@ export default async function WeeklyEditorPage({
   const sections: EditorSectionTab[] = [
     {
       key: "A", code: "A", label: "Overview", done: data.completion.A,
-      node: <OverviewSection property={p} week={w} locked={readOnly} blocks={data.overview} />,
+      node: (
+        <OverviewSection
+          property={p}
+          week={w}
+          locked={readOnly}
+          blocks={data.overview}
+          screenshots={screenshots}
+          adsSummary={ads.summary}
+        />
+      ),
     },
     {
       key: "B", code: "B", label: "YTD Actual & Forecast", done: data.completion.B,
@@ -202,7 +211,7 @@ export default async function WeeklyEditorPage({
           <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
             Upload Booking.com / social screenshots and summarise each with AI.
           </p>
-          <ScreenshotManager property={p} week={w} locked={readOnly} screenshots={screenshots} />
+          <ScreenshotManager property={p} week={w} locked={readOnly} screenshots={screenshots.filter((s) => !s.blockKey)} />
         </div>
       ),
     },

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 export interface WeeklyScreenshotRow {
   id: string;
   category: string;
+  blockKey: string | null;
   title: string | null;
   imageUrl: string;
   summary: string | null;
@@ -29,6 +30,7 @@ export async function getWeeklyScreenshots(
     select: {
       id: true,
       category: true,
+      blockKey: true,
       title: true,
       imageUrl: true,
       summary: true,

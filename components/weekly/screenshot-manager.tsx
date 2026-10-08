@@ -15,7 +15,15 @@ import { SCREENSHOT_CATEGORIES } from "@/lib/weekly/screenshots";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-function ScreenshotCard({ shot, locked }: { shot: WeeklyScreenshotRow; locked: boolean }) {
+function ScreenshotCard({
+  shot,
+  locked,
+  hideCategory = false,
+}: {
+  shot: WeeklyScreenshotRow;
+  locked: boolean;
+  hideCategory?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState(shot.title ?? "");
@@ -92,7 +100,7 @@ function ScreenshotCard({ shot, locked }: { shot: WeeklyScreenshotRow; locked: b
           alt={title || "screenshot"}
           className="w-full rounded-md border border-border object-contain"
         />
-        {!locked && (
+        {!locked && !hideCategory && (
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -163,24 +171,35 @@ function ScreenshotCard({ shot, locked }: { shot: WeeklyScreenshotRow; locked: b
   );
 }
 
-/** Upload + manage the weekly SM screenshots (Booking.com, Instagram, …) with AI summaries. */
+/**
+ * Upload + manage weekly SM screenshots with AI summaries. In per-block mode
+ * (blockKey set) the category pickers are hidden and uploads are attached to
+ * that Section A block with `defaultCategory`.
+ */
 export function ScreenshotManager({
   property,
   week,
   locked,
   screenshots,
+  blockKey,
+  defaultCategory = "booking_com",
+  compact = false,
 }: {
   property: string;
   week: string;
   locked: boolean;
   screenshots: WeeklyScreenshotRow[];
+  blockKey?: string;
+  defaultCategory?: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [category, setCategory] = useState<string>("booking_com");
+  const [category, setCategory] = useState<string>(blockKey ? defaultCategory : "booking_com");
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const perBlock = !!blockKey;
 
   function onUpload() {
     setError(null);
@@ -189,7 +208,8 @@ export function ScreenshotManager({
     const fd = new FormData();
     fd.set("property", property);
     fd.set("week", week);
-    fd.set("category", category);
+    fd.set("category", perBlock ? defaultCategory : category);
+    if (blockKey) fd.set("blockKey", blockKey);
     fd.set("title", title);
     fd.set("file", file);
     startTransition(async () => {
@@ -202,30 +222,34 @@ export function ScreenshotManager({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {!locked && (
-        <div className="flex flex-wrap items-end gap-3 border-b border-border pb-4">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-muted-foreground">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
-            >
-              {SCREENSHOT_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-muted-foreground">Title (optional)</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Last 30 days"
-              className="h-9 w-48 rounded-md border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
+        <div className="flex flex-wrap items-end gap-3 border-b border-border pb-3">
+          {!perBlock && (
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-muted-foreground">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+              >
+                {SCREENSHOT_CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!compact && (
+            <div className="space-y-1">
+              <label className="block text-xs font-medium text-muted-foreground">Title (optional)</label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Last 30 days"
+                className="h-9 w-48 rounded-md border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -240,13 +264,17 @@ export function ScreenshotManager({
       {error && <p className="text-sm text-variance-negative">{error}</p>}
 
       {screenshots.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          {locked ? "No screenshots for this week." : "No screenshots yet — upload a Booking.com or social screenshot above, then let AI summarise it."}
+        <p className={compact ? "text-xs text-muted-foreground" : "py-8 text-center text-sm text-muted-foreground"}>
+          {locked
+            ? "No screenshots."
+            : perBlock
+              ? "No screenshots for this block yet — upload one above, then let AI summarise it."
+              : "No screenshots yet — upload a Booking.com or social screenshot above, then let AI summarise it."}
         </p>
       ) : (
         <div className="space-y-3">
           {screenshots.map((s) => (
-            <ScreenshotCard key={s.id} shot={s} locked={locked} />
+            <ScreenshotCard key={s.id} shot={s} locked={locked} hideCategory={perBlock} />
           ))}
         </div>
       )}

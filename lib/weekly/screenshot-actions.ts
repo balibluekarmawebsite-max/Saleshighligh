@@ -62,6 +62,7 @@ export async function uploadWeeklyScreenshot(formData: FormData): Promise<Screen
   const week = String(formData.get("week") ?? "");
   const categoryRaw = String(formData.get("category") ?? "other");
   const category = isCategory(categoryRaw) ? categoryRaw : "other";
+  const blockKey = String(formData.get("blockKey") ?? "").trim() || null;
   const title = String(formData.get("title") ?? "").trim() || null;
   const file = formData.get("file");
 
@@ -96,6 +97,7 @@ export async function uploadWeeklyScreenshot(formData: FormData): Promise<Screen
     data: {
       reportWeekId: report.id,
       category,
+      blockKey,
       title,
       imageUrl: url,
       imageKey: key,
