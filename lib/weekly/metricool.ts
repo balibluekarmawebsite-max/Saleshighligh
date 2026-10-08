@@ -100,32 +100,57 @@ export async function getPropertyBlogId(propertyCode: string): Promise<string | 
 
 // ── Analytics ────────────────────────────────────────────────────────────────
 //
-// The v1 `/stats` endpoints take dates as YYYYMMDD and cover the metrics we
-// need for Section H. Two shapes matter:
-//   • GET /stats/aggregation/{metric}?start=&end=  → one aggregated value for a
-//     "flow" metric (reach, impressions, profile views, website clicks) over a
-//     range.
-//   • GET /stats/timeline/{metric}?start=&end=     → a daily series; for a
-//     "stock" metric (followers) we take the last value in the range so that
-//     this-week minus last-week is the net gain.
-// Endpoint paths + metric names confirmed against Metricool's documented API
-// (PDF: /stats/timeling/igFollowers example) and its published clients.
+// Section H pulls five metrics per network from two Metricool APIs (confirmed
+// live against the account):
+//   • Followers — v1 `GET /stats/timeline/{ig|fb}Followers?start=&end=`
+//     (YYYYMMDD), returns [[epochOrDate, "value"], …]; take the LAST value → the
+//     follower count, so this-week − last-week is net growth.
+//   • Reach / Impressions(Views) / Profile visits / Website clicks — v2
+//     `GET /v2/analytics/aggregation?from=&to=&metric=&network=&subject=`
+//     (ISO datetimes with tz), returns {"data": N}. The modern IG/FB insight
+//     metrics live only here, not on v1. The exact metric + subject names vary
+//     per account/network, so they are configured via METRICOOL_METRIC_MAP.
 //
-// Response envelopes vary (a bare number, {total}, {values:[…]}, [[ts,val],…]),
-// so both readers are deliberately tolerant and never throw on an odd shape —
-// they return null, and the caller tries the next candidate metric name.
+// Values come back as strings and timestamps as epoch-ms, so the readers coerce
+// strings → numbers and never throw on an odd/empty shape — they return null and
+// the metric is simply left blank.
 
 /** Format a Date as the `YYYYMMDD` the v1 stats endpoints expect (UTC). */
 export function toYmd(d: Date): string {
   return d.toISOString().slice(0, 10).replace(/-/g, "");
 }
 
-const finite = (v: unknown): number | null =>
-  typeof v === "number" && Number.isFinite(v) ? v : null;
+/** Metricool timezone for the v2 analytics window (Bali = UTC+8, no DST). */
+export function metricoolTimezone(): string {
+  return process.env.METRICOOL_TIMEZONE || "Asia/Makassar";
+}
+function metricoolTzOffset(): string {
+  return process.env.METRICOOL_TZ_OFFSET || "+08:00";
+}
+
+/** A Date → ISO datetime in Metricool's timezone, e.g. `2026-10-02T00:00:00+08:00`. */
+export function toTzIso(d: Date, endOfDay: boolean): string {
+  const day = d.toISOString().slice(0, 10);
+  return `${day}T${endOfDay ? "23:59:59" : "00:00:00"}${metricoolTzOffset()}`;
+}
+
+// Metricool returns numeric values as strings ("1361.0") and timestamps as
+// epoch-millis, so coerce numeric strings to numbers here.
+const finite = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const t = v.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
 
 /** Pull a numeric value out of one timeline point (number, [ts,val], or {value}). */
 function pointValue(pt: unknown): number | null {
-  if (finite(pt) !== null) return pt as number;
+  const f = finite(pt);
+  if (f !== null) return f;
   if (Array.isArray(pt)) {
     // [timestamp, value] — value is the last numeric element.
     for (let i = pt.length - 1; i >= 0; i--) {
@@ -146,7 +171,8 @@ function pointValue(pt: unknown): number | null {
 
 /** Tolerantly reduce an aggregation response to a single total. */
 export function readAggregate(data: unknown): number | null {
-  if (finite(data) !== null) return data as number;
+  const f = finite(data);
+  if (f !== null) return f;
   if (Array.isArray(data)) {
     const vals = data.map(pointValue).filter((v): v is number => v !== null);
     return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
@@ -181,16 +207,21 @@ export function readLast(data: unknown): number | null {
   return readAggregate(data);
 }
 
-/** GET /stats/aggregation/{metric} for a blog over [start,end] (YYYYMMDD). */
-export async function metricoolAggregate(
+/**
+ * GET /v2/analytics/aggregation — one aggregate value for a modern insight
+ * metric. Returns {"data": N} (N may be a string); readAggregate unwraps it.
+ */
+export async function metricoolV2Aggregate(
   blogId: string,
+  network: string,
   metric: string,
-  start: string,
-  end: string,
+  subject: string,
+  fromIso: string,
+  toIso: string,
 ): Promise<number | null> {
-  const data = await metricoolGet<unknown>(`/stats/aggregation/${encodeURIComponent(metric)}`, {
+  const data = await metricoolGet<unknown>("/v2/analytics/aggregation", {
     blogId,
-    params: { start, end },
+    params: { from: fromIso, to: toIso, metric, network, subject, timezone: metricoolTimezone() },
   });
   return readAggregate(data);
 }
@@ -209,109 +240,127 @@ export async function metricoolTimelineLast(
   return readLast(data);
 }
 
-/** Networks we pull for Section H (confirmed with the user: Instagram + Facebook). */
-export const METRICOOL_NETWORKS: { platform: string; prefix: string }[] = [
-  { platform: "Instagram", prefix: "ig" },
-  { platform: "Facebook", prefix: "fb" },
+/** Networks we pull for Section H (Instagram + Facebook). `apiName` is the v2 `network` param. */
+export const METRICOOL_NETWORKS: { platform: string; prefix: string; apiName: string }[] = [
+  { platform: "Instagram", prefix: "ig", apiName: "instagram" },
+  { platform: "Facebook", prefix: "fb", apiName: "facebook" },
 ];
 
 type MetricKind = "flow" | "stock";
 
+/** How one Section-H metric is fetched for one network. */
+export interface MetricSource {
+  source: "timeline" | "v2agg";
+  name?: string; // v1 timeline metric name (e.g. "igFollowers")
+  metric?: string; // v2 metric name (e.g. "reach")
+  subject?: string; // v2 subject (e.g. "account")
+}
+
 /**
- * The 5 Section H metric rows → Metricool metric-name candidates, in priority
- * order. The exact spelling varies by Metricool API version, so we try each
- * candidate until one returns a usable value and remember which worked (shown
- * in the sync diagnostic). `flow` metrics are summed via /aggregation; `stock`
- * metrics (followers) take the last /timeline value so growth = net gain.
+ * The 5 Section H metrics, their kind, and the DEFAULT per-network source.
  *
- * Override a single mapping without a redeploy via the METRICOOL_METRIC_MAP env
- * (JSON, e.g. {"instagram":{"impression":"igViews"}}); an override becomes the
- * only candidate tried for that (network, metric).
+ * - Followers come from the v1 timeline (`{ig|fb}Followers`) — confirmed working.
+ * - Reach / Impressions(Views) / Profile visits / Website clicks come from the
+ *   v2 aggregation endpoint. The metric + subject names below are best-effort
+ *   defaults; the real names differ per account and are set via
+ *   METRICOOL_METRIC_MAP (no redeploy needed) — until then these stay blank.
  */
-const METRIC_CANDIDATES: Record<string, { kind: MetricKind; names: (prefix: string) => string[] }> = {
-  account_reached: { kind: "flow", names: (p) => [`${p}Reach`, "reach"] },
-  impression: { kind: "flow", names: (p) => [`${p}Impressions`, "impressions", `${p}Views`, "views"] },
-  profile_visit: {
-    kind: "flow",
-    names: (p) => [`${p}ProfileViews`, `${p}ProfileVisits`, `${p}PageViews`, "profileViews", "profileVisits"],
-  },
-  website_visit: {
-    kind: "flow",
-    names: (p) => [`${p}WebsiteClicks`, `${p}WebsiteTaps`, `${p}WebsiteVisits`, "websiteClicks", "clicks"],
-  },
-  followers: { kind: "stock", names: (p) => [`${p}Followers`, "followers"] },
+const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string) => MetricSource }> = {
+  account_reached: { kind: "flow", def: () => ({ source: "v2agg", metric: "reach", subject: "account" }) },
+  impression: { kind: "flow", def: () => ({ source: "v2agg", metric: "views", subject: "account" }) },
+  profile_visit: { kind: "flow", def: () => ({ source: "v2agg", metric: "profileVisits", subject: "account" }) },
+  website_visit: { kind: "flow", def: () => ({ source: "v2agg", metric: "websiteClicks", subject: "account" }) },
+  followers: { kind: "stock", def: (p) => ({ source: "timeline", name: `${p}Followers` }) },
 };
 
 /** The Section H metric keys Metricool can fill, in report order. */
-export const METRICOOL_METRIC_KEYS = Object.keys(METRIC_CANDIDATES);
+export const METRICOOL_METRIC_KEYS = Object.keys(SECTION_H);
 
-function metricMapOverride(): Record<string, Record<string, string>> {
+export function metricKind(metricKey: string): MetricKind {
+  return SECTION_H[metricKey]?.kind ?? "flow";
+}
+
+/**
+ * Per-network metric overrides from METRICOOL_METRIC_MAP (JSON). Keyed by the
+ * network's api name ("instagram"/"facebook") then the Section-H metric key.
+ * A value may be:
+ *   - a string  → the v2 metric name (keeps the default subject), or the
+ *                 timeline name for followers; or
+ *   - an object → {source?, name?, metric?, subject?} merged over the default.
+ * Example (set after confirming names against the account):
+ *   {"instagram":{"account_reached":{"metric":"reach","subject":"account"},
+ *                 "impression":{"metric":"views","subject":"account"}},
+ *    "facebook":{"impression":{"metric":"views","subject":"account"}}}
+ */
+function metricMapOverride(): Record<string, Record<string, unknown>> {
   const raw = process.env.METRICOOL_METRIC_MAP;
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, Record<string, string>>) : {};
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, Record<string, unknown>>) : {};
   } catch {
     return {};
   }
 }
 
-/** Ordered candidate metric names for one (network, Section-H metric key). */
-export function candidateMetricNames(networkPlatform: string, prefix: string, metricKey: string): string[] {
-  const spec = METRIC_CANDIDATES[metricKey];
-  if (!spec) return [];
-  const override = metricMapOverride()[networkPlatform.toLowerCase()]?.[metricKey];
-  if (override) return [override];
-  return spec.names(prefix);
-}
-
-export function metricKind(metricKey: string): MetricKind {
-  return METRIC_CANDIDATES[metricKey]?.kind ?? "flow";
-}
-
-/** Fetch one *exact* Metricool metric name over a range (no candidate probing). */
-export async function fetchMetricByName(
-  blogId: string,
-  name: string,
-  kind: MetricKind,
-  start: string,
-  end: string,
-): Promise<number | null> {
-  try {
-    return kind === "stock"
-      ? await metricoolTimelineLast(blogId, name, start, end)
-      : await metricoolAggregate(blogId, name, start, end);
-  } catch {
-    return null;
+/** Resolve the fetch source for one (network api name, metric key), applying env overrides. */
+export function resolveMetricSource(apiName: string, prefix: string, metricKey: string): MetricSource | null {
+  const spec = SECTION_H[metricKey];
+  if (!spec) return null;
+  const base = spec.def(prefix);
+  const ov = metricMapOverride()[apiName.toLowerCase()]?.[metricKey];
+  if (ov == null) return base;
+  if (typeof ov === "string") {
+    return base.source === "timeline" ? { ...base, name: ov } : { ...base, metric: ov };
   }
+  if (typeof ov === "object") {
+    const o = ov as Partial<MetricSource>;
+    const merged: MetricSource = { ...base, ...o };
+    if (!o.source) {
+      if (o.metric || o.subject) merged.source = "v2agg";
+      else if (o.name) merged.source = "timeline";
+    }
+    return merged;
+  }
+  return base;
+}
+
+/** A short human label for a source (shown in the sync diagnostic). */
+export function sourceLabel(s: MetricSource | null): string | null {
+  if (!s) return null;
+  return s.source === "timeline"
+    ? `${s.name ?? "?"} (timeline)`
+    : `${s.metric ?? "?"}@${s.subject ?? "account"} (v2)`;
 }
 
 /**
- * Fetch one Section-H metric for one blog over a range, trying each candidate
- * name until one returns a value. Returns the value and the name that worked
- * (or the attempted names when nothing resolved) — no throw on a missing metric.
+ * Fetch one metric value for a resolved source over a [from,to] Date range.
+ * Returns null on an invalid metric / no data (never throws), so a metric that
+ * isn't configured yet simply stays blank.
  */
-export async function fetchMetricValue(
+export async function fetchMetricForRange(
   blogId: string,
-  networkPlatform: string,
-  prefix: string,
-  metricKey: string,
-  start: string,
-  end: string,
-): Promise<{ value: number | null; metric: string | null; tried: string[] }> {
-  const names = candidateMetricNames(networkPlatform, prefix, metricKey);
-  const kind = metricKind(metricKey);
-  const tried: string[] = [];
-  for (const name of names) {
-    tried.push(name);
-    try {
-      const value = kind === "stock"
-        ? await metricoolTimelineLast(blogId, name, start, end)
-        : await metricoolAggregate(blogId, name, start, end);
-      if (value !== null) return { value, metric: name, tried };
-    } catch {
-      // metric name not valid for this account/network — try the next candidate
+  apiName: string,
+  source: MetricSource,
+  from: Date,
+  to: Date,
+): Promise<number | null> {
+  try {
+    if (source.source === "timeline" && source.name) {
+      return await metricoolTimelineLast(blogId, source.name, toYmd(from), toYmd(to));
     }
+    if (source.source === "v2agg" && source.metric) {
+      return await metricoolV2Aggregate(
+        blogId,
+        apiName,
+        source.metric,
+        source.subject ?? "account",
+        toTzIso(from, false),
+        toTzIso(to, true),
+      );
+    }
+  } catch {
+    // invalid metric / no data for this account — leave the metric blank
   }
-  return { value: null, metric: null, tried };
+  return null;
 }

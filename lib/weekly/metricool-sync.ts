@@ -4,8 +4,9 @@
  * into WeeklySocialMetric, so growth is computed from real data.
  *
  * Window: the report's own startDate..endDate is "this week"; the same window
- * shifted back 7 days is "last week". For each network we try every candidate
- * metric name (see metricool.ts) and keep the one that returns a value.
+ * shifted back 7 days is "last week". Each (network, metric) resolves to a
+ * single configured source (see metricool.ts) used for both weeks, so growth
+ * always compares the same underlying metric.
  *
  * Safety: a platform is only rewritten when at least one of its metrics
  * resolved a value — a failed/empty pull never wipes manually-entered rows.
@@ -15,12 +16,11 @@ import { prisma } from "@/lib/prisma";
 import { SOCIAL_METRIC_ROWS } from "@/lib/weekly/editor-data";
 import {
   METRICOOL_NETWORKS,
-  fetchMetricByName,
-  fetchMetricValue,
+  fetchMetricForRange,
   getPropertyBlogId,
   listMetricoolBrands,
-  metricKind,
-  toYmd,
+  resolveMetricSource,
+  sourceLabel,
 } from "@/lib/weekly/metricool";
 
 export interface MetricoolMetricResult {
@@ -102,39 +102,28 @@ export async function syncMetricoolIntoReport(
     thisWeek: number | null;
     sortOrder: number;
   }
-  const tFrom = toYmd(thisFrom);
-  const tTo = toYmd(thisTo);
-  const lFrom = toYmd(lastFrom);
-  const lTo = toYmd(lastTo);
-
-  // Fetch every (network × metric) concurrently. Within a metric, probe the
-  // candidate names for THIS week, then pin LAST week to the exact name that
-  // resolved — so growth always compares the same underlying metric.
+  // Fetch every (network × metric) concurrently. Each metric resolves to one
+  // configured source (metricool.ts), used for BOTH weeks so growth compares the
+  // same underlying metric.
   const networks: MetricoolNetworkResult[] = await Promise.all(
     METRICOOL_NETWORKS.map(async (net) => {
       const metrics: MetricoolMetricResult[] = await Promise.all(
         SYNC_ROWS.map(async (row): Promise<MetricoolMetricResult> => {
-          const now = await fetchMetricValue(blogId, net.platform, net.prefix, row.key, tFrom, tTo);
-          let lastWeek: number | null;
-          let metric = now.metric;
-          let tried = now.tried;
-          if (now.metric) {
-            // Pin last week to the same metric name (no re-probing).
-            lastWeek = await fetchMetricByName(blogId, now.metric, metricKind(row.key), lFrom, lTo);
-          } else {
-            // Nothing this week — still try last week so its value isn't lost.
-            const prev = await fetchMetricValue(blogId, net.platform, net.prefix, row.key, lFrom, lTo);
-            lastWeek = prev.value;
-            metric = prev.metric;
-            tried = prev.tried;
+          const source = resolveMetricSource(net.apiName, net.prefix, row.key);
+          const label = sourceLabel(source);
+          let thisWeek: number | null = null;
+          let lastWeek: number | null = null;
+          if (source) {
+            thisWeek = round(await fetchMetricForRange(blogId, net.apiName, source, thisFrom, thisTo));
+            lastWeek = round(await fetchMetricForRange(blogId, net.apiName, source, lastFrom, lastTo));
           }
           return {
             key: row.key,
             label: row.label,
-            metric,
-            thisWeek: round(now.value),
-            lastWeek: round(lastWeek),
-            tried,
+            metric: label,
+            thisWeek,
+            lastWeek,
+            tried: label ? [label] : [],
           };
         }),
       );
