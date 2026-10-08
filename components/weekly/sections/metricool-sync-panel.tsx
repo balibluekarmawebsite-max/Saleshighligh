@@ -23,6 +23,16 @@ function fmtDate(iso: string): string {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** "2026-09-25" + "2026-10-01" → "25 Sep – 1 Oct 2026". */
+function fmtRange(fromIso: string, toIso: string): string {
+  const from = new Date(`${fromIso}T00:00:00Z`);
+  const to = new Date(`${toIso}T00:00:00Z`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return `${fromIso} → ${toIso}`;
+  const f = from.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  const t = to.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${f} – ${t}`;
+}
+
 /** Section H — pull Instagram + Facebook metrics from Metricool into the grid below. */
 export function MetricoolSyncPanel({
   property,
@@ -31,6 +41,7 @@ export function MetricoolSyncPanel({
   configured,
   blogId,
   initialMeta,
+  propertyName,
 }: {
   property: string;
   week: string;
@@ -38,6 +49,7 @@ export function MetricoolSyncPanel({
   configured: boolean;
   blogId: string | null;
   initialMeta: MetricoolSyncResult | null;
+  propertyName?: string;
 }) {
   const router = useRouter();
   const [meta, setMeta] = useState<MetricoolSyncResult | null>(initialMeta);
@@ -86,9 +98,20 @@ export function MetricoolSyncPanel({
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-serif text-base font-semibold text-foreground">Metricool</h3>
+          <h3 className="font-serif text-base font-semibold text-foreground">
+            Metricool{propertyName ? ` · ${propertyName}` : ""}
+          </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Brand <code className="text-xs">{blogId}</code> · pulls Instagram + Facebook for this week and last week.
+            Brand{" "}
+            {meta?.brandLabel ? (
+              <>
+                <span className="font-medium text-foreground">{meta.brandLabel}</span>{" "}
+                <code className="text-xs">({blogId})</code>
+              </>
+            ) : (
+              <code className="text-xs">{blogId}</code>
+            )}{" "}
+            · pulls Instagram + Facebook for this week and last week.
             {meta && <> · Last synced {fmtDate(meta.syncedAt)}</>}
           </p>
         </div>
@@ -110,8 +133,8 @@ export function MetricoolSyncPanel({
       {meta && (
         <div className="mt-3 space-y-4">
           <p className="text-xs text-muted-foreground">
-            This week {meta.window.thisWeek.from} → {meta.window.thisWeek.to} · last week{" "}
-            {meta.window.lastWeek.from} → {meta.window.lastWeek.to}
+            This week {fmtRange(meta.window.thisWeek.from, meta.window.thisWeek.to)} · last week{" "}
+            {fmtRange(meta.window.lastWeek.from, meta.window.lastWeek.to)}
           </p>
           {meta.networks.map((net) => (
             <div key={net.platform}>

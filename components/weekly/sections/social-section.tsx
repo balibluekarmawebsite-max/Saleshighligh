@@ -21,6 +21,9 @@ export function SocialSection({
   metricoolConfigured,
   metricoolBlogId,
   metricoolMeta,
+  propertyName,
+  thisWeekLabel,
+  lastWeekLabel,
 }: {
   property: string;
   week: string;
@@ -32,6 +35,9 @@ export function SocialSection({
   metricoolConfigured: boolean;
   metricoolBlogId: string | null;
   metricoolMeta: MetricoolSyncResult | null;
+  propertyName?: string;
+  thisWeekLabel?: string;
+  lastWeekLabel?: string;
 }) {
   return (
     <div className="space-y-6">
@@ -42,8 +48,17 @@ export function SocialSection({
         configured={metricoolConfigured}
         blogId={metricoolBlogId}
         initialMeta={metricoolMeta}
+        propertyName={propertyName}
       />
-      <SocialGrid property={property} week={week} locked={locked} initial={social} />
+      <SocialGrid
+        property={property}
+        week={week}
+        locked={locked}
+        initial={social}
+        propertyName={propertyName}
+        thisWeekLabel={thisWeekLabel}
+        lastWeekLabel={lastWeekLabel}
+      />
       <SocialNarrative property={property} week={week} locked={locked} blocks={socialNarrative} />
       <GraphicDesignTable property={property} week={week} locked={locked} initial={graphicDesign} />
       {SM_ACTIVITY_SECTIONS.map((s) => (

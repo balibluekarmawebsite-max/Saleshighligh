@@ -27,7 +27,7 @@ import { getWeeklyFullEditorData } from "@/lib/weekly/editor-data";
 import { isMetricoolConfigured, getPropertyBlogId } from "@/lib/weekly/metricool";
 import { getMetricoolSyncMeta } from "@/lib/weekly/metricool-actions";
 import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
-import { weekLabel } from "@/lib/weekly/week";
+import { shiftWeekId, weekLabel } from "@/lib/weekly/week";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -125,7 +125,7 @@ export default async function WeeklyEditorPage({
           locked={readOnly}
           blocks={data.overview}
           screenshots={screenshots}
-          adsSummary={ads.summary}
+          ads={ads}
         />
       ),
     },
@@ -205,6 +205,9 @@ export default async function WeeklyEditorPage({
           metricoolConfigured={metricoolConfigured}
           metricoolBlogId={metricoolBlogId}
           metricoolMeta={metricoolMeta}
+          propertyName={week.propertyName}
+          thisWeekLabel={weekLabel(w)}
+          lastWeekLabel={weekLabel(shiftWeekId(w, -1))}
         />
       ),
     },

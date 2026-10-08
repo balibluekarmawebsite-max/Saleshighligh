@@ -15,8 +15,11 @@ import { prisma } from "@/lib/prisma";
 import { SOCIAL_METRIC_ROWS } from "@/lib/weekly/editor-data";
 import {
   METRICOOL_NETWORKS,
+  fetchMetricByName,
   fetchMetricValue,
   getPropertyBlogId,
+  listMetricoolBrands,
+  metricKind,
   toYmd,
 } from "@/lib/weekly/metricool";
 
@@ -37,6 +40,7 @@ export interface MetricoolNetworkResult {
 
 export interface MetricoolSyncResult {
   blogId: string;
+  brandLabel: string | null;
   window: {
     thisWeek: { from: string; to: string };
     lastWeek: { from: string; to: string };
@@ -75,6 +79,11 @@ export async function syncMetricoolIntoReport(
     throw new Error("No Metricool brand assigned to this property — set one in Settings → Social Media.");
   }
 
+  // Resolve the brand's human label (for the preview + Excel note); non-fatal.
+  const brandLabel = await listMetricoolBrands()
+    .then((brands) => brands.find((b) => b.blogId === blogId)?.label ?? null)
+    .catch(() => null);
+
   const thisFrom = report.startDate;
   const thisTo = report.endDate;
   const lastFrom = shift(thisFrom, -7);
@@ -93,42 +102,65 @@ export async function syncMetricoolIntoReport(
     thisWeek: number | null;
     sortOrder: number;
   }
-  const networks: MetricoolNetworkResult[] = [];
-  const writes: { platform: string; data: SocialMetricRow[] }[] = [];
+  const tFrom = toYmd(thisFrom);
+  const tTo = toYmd(thisTo);
+  const lFrom = toYmd(lastFrom);
+  const lTo = toYmd(lastTo);
 
-  for (const net of METRICOOL_NETWORKS) {
-    const metrics: MetricoolMetricResult[] = [];
-    for (const row of SYNC_ROWS) {
-      const now = await fetchMetricValue(blogId, net.platform, net.prefix, row.key, toYmd(thisFrom), toYmd(thisTo));
-      // Reuse the name that worked this week for last week when we found one.
-      const prev = await fetchMetricValue(blogId, net.platform, net.prefix, row.key, toYmd(lastFrom), toYmd(lastTo));
-      metrics.push({
-        key: row.key,
-        label: row.label,
-        metric: now.metric ?? prev.metric,
-        thisWeek: round(now.value),
-        lastWeek: round(prev.value),
-        tried: now.tried,
-      });
-    }
+  // Fetch every (network × metric) concurrently. Within a metric, probe the
+  // candidate names for THIS week, then pin LAST week to the exact name that
+  // resolved — so growth always compares the same underlying metric.
+  const networks: MetricoolNetworkResult[] = await Promise.all(
+    METRICOOL_NETWORKS.map(async (net) => {
+      const metrics: MetricoolMetricResult[] = await Promise.all(
+        SYNC_ROWS.map(async (row): Promise<MetricoolMetricResult> => {
+          const now = await fetchMetricValue(blogId, net.platform, net.prefix, row.key, tFrom, tTo);
+          let lastWeek: number | null;
+          let metric = now.metric;
+          let tried = now.tried;
+          if (now.metric) {
+            // Pin last week to the same metric name (no re-probing).
+            lastWeek = await fetchMetricByName(blogId, now.metric, metricKind(row.key), lFrom, lTo);
+          } else {
+            // Nothing this week — still try last week so its value isn't lost.
+            const prev = await fetchMetricValue(blogId, net.platform, net.prefix, row.key, lFrom, lTo);
+            lastWeek = prev.value;
+            metric = prev.metric;
+            tried = prev.tried;
+          }
+          return {
+            key: row.key,
+            label: row.label,
+            metric,
+            thisWeek: round(now.value),
+            lastWeek: round(lastWeek),
+            tried,
+          };
+        }),
+      );
+      return { platform: net.platform, wrote: metrics.some((m) => m.thisWeek !== null || m.lastWeek !== null), metrics };
+    }),
+  );
 
-    const resolved = metrics.filter((m) => m.thisWeek !== null || m.lastWeek !== null);
-    const wrote = resolved.length > 0;
-    networks.push({ platform: net.platform, wrote, metrics });
-
-    if (wrote) {
-      writes.push({
+  // Write resolved metrics per network. The delete is scoped to the metric keys
+  // we actually resolved, so a metric that didn't come back (e.g. a manually
+  // entered one Metricool doesn't serve) keeps its existing value.
+  const writes: { platform: string; keys: string[]; data: SocialMetricRow[] }[] = [];
+  for (const net of networks) {
+    const resolved = net.metrics.filter((m) => m.thisWeek !== null || m.lastWeek !== null);
+    if (!resolved.length) continue;
+    writes.push({
+      platform: net.platform,
+      keys: resolved.map((m) => m.key),
+      data: resolved.map((m) => ({
+        reportWeekId: reportId,
         platform: net.platform,
-        data: resolved.map((m, i) => ({
-          reportWeekId: reportId,
-          platform: net.platform,
-          metricKey: m.key,
-          lastWeek: m.lastWeek,
-          thisWeek: m.thisWeek,
-          sortOrder: i,
-        })),
-      });
-    }
+        metricKey: m.key,
+        lastWeek: m.lastWeek,
+        thisWeek: m.thisWeek,
+        sortOrder: SYNC_ROWS.findIndex((r) => r.key === m.key),
+      })),
+    });
   }
 
   const rows = writes.reduce((n, w) => n + w.data.length, 0);
@@ -137,11 +169,13 @@ export async function syncMetricoolIntoReport(
   if (writes.length) {
     await prisma.$transaction([
       ...writes.map((w) =>
-        prisma.weeklySocialMetric.deleteMany({ where: { reportWeekId: reportId, platform: w.platform } }),
+        prisma.weeklySocialMetric.deleteMany({
+          where: { reportWeekId: reportId, platform: w.platform, metricKey: { in: w.keys } },
+        }),
       ),
       ...writes.map((w) => prisma.weeklySocialMetric.createMany({ data: w.data })),
     ]);
   }
 
-  return { blogId, window, networks, rows, syncedAt };
+  return { blogId, brandLabel, window, networks, rows, syncedAt };
 }

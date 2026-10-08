@@ -5,9 +5,11 @@ import { useFormState } from "react-dom";
 import { ImageIcon, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { AdsOverviewBody } from "@/components/weekly/ads-overview";
 import { AiTextActions } from "@/components/weekly/ai-text-actions";
 import { ScreenshotManager } from "@/components/weekly/screenshot-manager";
 import { saveOverview } from "@/lib/weekly/editor-actions";
+import type { WeeklyAdsData } from "@/lib/weekly/ads-data";
 import { type WeeklyEditorBlock } from "@/lib/weekly/editor-data";
 import { type WeeklyScreenshotRow } from "@/lib/weekly/screenshot-data";
 import {
@@ -17,12 +19,6 @@ import {
   SectionHeading,
 } from "@/components/weekly/sections/shared";
 import { cn } from "@/lib/utils";
-
-export interface AdsSummary {
-  headline: string;
-  highlights: string[];
-  recommendations: string[];
-}
 
 /** Default screenshot category per block (drives the AI vision hint + export label). */
 const BLOCK_CATEGORY: Record<string, string> = {
@@ -73,14 +69,14 @@ export function OverviewSection({
   locked,
   blocks,
   screenshots,
-  adsSummary,
+  ads,
 }: {
   property: string;
   week: string;
   locked: boolean;
   blocks: WeeklyEditorBlock[];
   screenshots: WeeklyScreenshotRow[];
-  adsSummary: AdsSummary | null;
+  ads: WeeklyAdsData;
 }) {
   const seed = () => Object.fromEntries(blocks.map((b) => [b.key, b.body]));
   const [bodies, setBodies] = useState<Record<string, string>>(seed);
@@ -173,51 +169,52 @@ export function OverviewSection({
                 )}
               </label>
 
-              {b.key === "roas" && adsSummary && (
-                <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-                  <p className="font-medium text-foreground">{adsSummary.headline}</p>
-                  {adsSummary.highlights.length > 0 && (
-                    <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-muted-foreground">
-                      {adsSummary.highlights.map((h, i) => (
-                        <li key={i}>{h}</li>
-                      ))}
-                    </ul>
+              {b.key === "roas" ? (
+                ads.hasData && ads.blended ? (
+                  <div className="rounded-lg border border-border bg-muted/20 p-4">
+                    <AdsOverviewBody ads={ads} />
+                    <p className="mt-3 text-[11px] text-muted-foreground">
+                      Pulled live from the Digital Ads panel for this report period — no manual entry needed.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-sm text-muted-foreground">
+                    No ads data for this week yet. Sync the Digital Ads &amp; ROAS section (I) to populate this.
+                  </div>
+                )
+              ) : (
+                <>
+                  <textarea
+                    id={`block_${b.key}`}
+                    name={`block_${b.key}`}
+                    value={bodies[b.key] ?? ""}
+                    onChange={(e) => setBody(b.key, e.target.value)}
+                    disabled={locked}
+                    readOnly={drafting === b.key}
+                    rows={3}
+                    placeholder={locked ? "" : "Write this section…"}
+                    className={`${CELL} resize-y`}
+                  />
+
+                  {!locked && (
+                    <AiTextActions
+                      value={bodies[b.key] ?? ""}
+                      onResult={(t) => setBody(b.key, t)}
+                      disabled={drafting === b.key}
+                      leading={
+                        <button
+                          type="button"
+                          onClick={() => draft(b.key)}
+                          disabled={drafting !== null}
+                          className="inline-flex items-center gap-1 font-medium text-[hsl(var(--brand-gold))] transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {drafting === b.key ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Sparkles className="h-3 w-3" aria-hidden />}
+                          Draft with AI
+                        </button>
+                      }
+                    />
                   )}
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    Pulled from the Digital Ads panel — add your commentary below.
-                  </p>
-                </div>
-              )}
-
-              <textarea
-                id={`block_${b.key}`}
-                name={`block_${b.key}`}
-                value={bodies[b.key] ?? ""}
-                onChange={(e) => setBody(b.key, e.target.value)}
-                disabled={locked}
-                readOnly={drafting === b.key}
-                rows={3}
-                placeholder={locked ? "" : "Write this section…"}
-                className={`${CELL} resize-y`}
-              />
-
-              {!locked && (
-                <AiTextActions
-                  value={bodies[b.key] ?? ""}
-                  onResult={(t) => setBody(b.key, t)}
-                  disabled={drafting === b.key}
-                  leading={
-                    <button
-                      type="button"
-                      onClick={() => draft(b.key)}
-                      disabled={drafting !== null}
-                      className="inline-flex items-center gap-1 font-medium text-[hsl(var(--brand-gold))] transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {drafting === b.key ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Sparkles className="h-3 w-3" aria-hidden />}
-                      Draft with AI
-                    </button>
-                  }
-                />
+                </>
               )}
 
               {/* Per-block screenshots */}

@@ -133,6 +133,7 @@ export interface WeeklyExportData {
   metricoolSync: {
     syncedAt: string;
     blogId: string;
+    brandLabel: string | null;
     thisWeek: { from: string; to: string };
     lastWeek: { from: string; to: string };
   } | null;
@@ -377,6 +378,7 @@ export async function getWeeklyExportData(
       metricoolSync = {
         syncedAt: v.syncedAt,
         blogId: v.blogId,
+        brandLabel: typeof v.brandLabel === "string" ? v.brandLabel : null,
         thisWeek: { from: String(w.thisWeek.from ?? ""), to: String(w.thisWeek.to ?? "") },
         lastWeek: { from: String(w.lastWeek.from ?? ""), to: String(w.lastWeek.to ?? "") },
       };
@@ -384,6 +386,16 @@ export async function getWeeklyExportData(
   }
 
   const ads = await getWeeklyAds(propertyCode, week);
+
+  // ROAS is integration-fed (no manual entry): if its narrative is empty, build
+  // one from the Digital Ads summary so Word/Excel still carry the ROAS story.
+  const roasText =
+    ads.summary && ads.hasData
+      ? [ads.summary.headline, ...ads.summary.highlights.map((h) => `• ${h}`)].join("\n")
+      : null;
+  const overviewOut = overview.map((b) =>
+    b.key === "roas" && (!b.body || !b.body.trim()) && roasText ? { ...b, body: roasText } : b,
+  );
 
   return {
     property,
@@ -397,7 +409,7 @@ export async function getWeeklyExportData(
       weekNumber: report.weekNumber,
     },
     headlineMonthLabel,
-    overview,
+    overview: overviewOut,
     monthly: { rows: monthlyRows, totals: monthlyTotalsRow },
     segments: { rows: segmentRows, totals: segTotals },
     rateCodes: { rows: rateCodeRows, totals: rcTotals },

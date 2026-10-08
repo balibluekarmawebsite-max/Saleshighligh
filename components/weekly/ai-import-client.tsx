@@ -77,7 +77,7 @@ export function AiImportClient({
           )}
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {AI_IMPORT_SECTIONS.map((s) => {
+            {AI_IMPORT_SECTIONS.filter((s) => s.id !== "social").map((s) => {
               const done = completion[s.completionKey];
               return (
                 <div key={s.id} className="flex flex-col rounded-lg border border-border p-4">
@@ -107,6 +107,12 @@ export function AiImportClient({
               );
             })}
           </div>
+
+          <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Social Media (Section H)</span> is now pulled directly from
+            Metricool — sync it from the report&apos;s Section H, or assign the brand in Settings → Social Media. No manual
+            import needed.
+          </p>
 
           <WorkbookPanel
             property={property}

@@ -30,11 +30,17 @@ export function SocialGrid({
   week,
   locked,
   initial,
+  propertyName,
+  thisWeekLabel,
+  lastWeekLabel,
 }: {
   property: string;
   week: string;
   locked: boolean;
   initial: ByPlatform;
+  propertyName?: string;
+  thisWeekLabel?: string;
+  lastWeekLabel?: string;
 }) {
   const [platform, setPlatform] = useState<string>(SOCIAL_PLATFORMS[0]);
   const [byPlatform, setByPlatform] = useState<ByPlatform>(initial);
@@ -71,7 +77,11 @@ export function SocialGrid({
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <SectionHeading
             title="H · Social Media Insight"
-            subtitle="Last 7 days vs previous week. Growth is calculated."
+            subtitle={
+              thisWeekLabel
+                ? `${platform}${propertyName ? ` · ${propertyName}` : ""} — this week ${thisWeekLabel}${lastWeekLabel ? ` vs last week ${lastWeekLabel}` : ""}. Growth is calculated.`
+                : "This week vs the previous week. Growth is calculated."
+            }
           />
           <div className="flex items-center gap-2">
             <select
@@ -142,6 +152,8 @@ export function SocialGrid({
         </div>
         <div className="mt-5">
           <SocialGrowthChart
+            thisWeekLabel={thisWeekLabel}
+            lastWeekLabel={lastWeekLabel}
             data={SOCIAL_METRIC_ROWS.map((m) => {
               const v = valOf(m.key);
               return { name: m.label, lastWeek: toNum(v.lastWeek), thisWeek: toNum(v.thisWeek) };

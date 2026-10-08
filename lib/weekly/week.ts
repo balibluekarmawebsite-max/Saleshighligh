@@ -61,6 +61,14 @@ export function weekMeta(weekId: string): WeekMeta | null {
   };
 }
 
+/** The week id (Thursday end) `weeks` before/after `weekId` (negative = earlier). */
+export function shiftWeekId(weekId: string, weeks: number): string {
+  if (!isWeekId(weekId)) return weekId;
+  const d = new Date(`${weekId}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + weeks * 7);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Human label for a week id, e.g. "25 Sep – 1 Oct 2026" (Fri–Thu span). */
 export function weekLabel(weekId: string): string {
   if (!isWeekId(weekId)) return weekId;

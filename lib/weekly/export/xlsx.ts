@@ -320,8 +320,9 @@ function socialSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
     const m = d.metricoolSync;
     const when = new Date(m.syncedAt);
     const whenStr = Number.isNaN(when.getTime()) ? m.syncedAt : when.toISOString().slice(0, 16).replace("T", " ");
+    const brand = m.brandLabel ? `${m.brandLabel} (${m.blogId})` : m.blogId;
     const src = ws.addRow([
-      `Source: Metricool (brand ${m.blogId}) · synced ${whenStr} UTC · this week ${m.thisWeek.from}–${m.thisWeek.to}, last week ${m.lastWeek.from}–${m.lastWeek.to}`,
+      `Source: Metricool (brand ${brand}) · synced ${whenStr} UTC · this week ${m.thisWeek.from}–${m.thisWeek.to}, last week ${m.lastWeek.from}–${m.lastWeek.to}`,
     ]);
     src.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
     ws.mergeCells(src.number, 1, src.number, cols.length);

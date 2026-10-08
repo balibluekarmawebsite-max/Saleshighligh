@@ -11,8 +11,21 @@ const num = (n: number | null) => (n == null ? "—" : formatNumber(Math.round(n
 const pct = (n: number | null) => (n == null ? "—" : `${n.toFixed(2)}%`);
 const roas = (n: number | null) => (n == null ? "—" : `${n.toFixed(2)}×`);
 
-/** Rich Digital Ads & ROAS preview: summary, KPI cards + sparklines, trend, split, campaigns. */
+/** Rich Digital Ads & ROAS preview wrapped in a titled dashboard card. */
 export function AdsOverview({ ads }: { ads: WeeklyAdsData }) {
+  if (!ads.hasData || !ads.blended) return null;
+  return (
+    <SectionCard
+      title="Digital Ads & ROAS"
+      description={ads.window.from ? `Ads window ${ads.window.from} → ${ads.window.to}` : "Google & Meta performance"}
+    >
+      <AdsOverviewBody ads={ads} />
+    </SectionCard>
+  );
+}
+
+/** The rich Digital Ads & ROAS content (no card chrome): summary, KPI cards + sparklines, trend, split, campaigns. */
+export function AdsOverviewBody({ ads }: { ads: WeeklyAdsData }) {
   const b = ads.blended;
   if (!ads.hasData || !b) return null;
 
@@ -45,11 +58,7 @@ export function AdsOverview({ ads }: { ads: WeeklyAdsData }) {
   const topCampaigns = ads.campaigns.slice(0, 12);
 
   return (
-    <SectionCard
-      title="Digital Ads & ROAS"
-      description={ads.window.from ? `Ads window ${ads.window.from} → ${ads.window.to}` : "Google & Meta performance"}
-    >
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Summary */}
         {ads.summary && (
           <div className="rounded-lg border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/5 p-4">
@@ -157,7 +166,6 @@ export function AdsOverview({ ads }: { ads: WeeklyAdsData }) {
             </div>
           </div>
         )}
-      </div>
-    </SectionCard>
+    </div>
   );
 }

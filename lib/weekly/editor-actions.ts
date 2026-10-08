@@ -47,20 +47,26 @@ export async function saveOverview(
   }
 
   await prisma.$transaction(
-    OVERVIEW_BLOCKS.map((def, i) => {
+    // Only touch blocks the form actually submitted — some blocks (e.g. ROAS,
+    // which is integration-fed) render no textarea, so skipping absent fields
+    // avoids clobbering their stored value.
+    OVERVIEW_BLOCKS.flatMap((def, i) => {
+      if (!formData.has(`block_${def.key}`)) return [];
       const body = String(formData.get(`block_${def.key}`) ?? "").trim();
-      return prisma.weeklyOverviewBlock.upsert({
-        where: { reportWeekId_key: { reportWeekId: report.id, key: def.key } },
-        update: { heading: def.heading, body: body || null, aiDraft: false },
-        create: {
-          reportWeekId: report.id,
-          key: def.key,
-          heading: def.heading,
-          body: body || null,
-          aiDraft: false,
-          sortOrder: i,
-        },
-      });
+      return [
+        prisma.weeklyOverviewBlock.upsert({
+          where: { reportWeekId_key: { reportWeekId: report.id, key: def.key } },
+          update: { heading: def.heading, body: body || null, aiDraft: false },
+          create: {
+            reportWeekId: report.id,
+            key: def.key,
+            heading: def.heading,
+            body: body || null,
+            aiDraft: false,
+            sortOrder: i,
+          },
+        }),
+      ];
     }),
   );
 

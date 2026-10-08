@@ -42,9 +42,8 @@ export async function metricoolGet<T = unknown>(
   if (!token || !userId) throw new Error("Metricool is not configured (METRICOOL_USER_TOKEN / METRICOOL_USER_ID).");
 
   const url = new URL(`${metricoolApiBase()}${path.startsWith("/") ? "" : "/"}${path}`);
-  // Metricool accepts the token both in the header and as a query param; send
-  // both (matches Metricool's own clients) so either gate is satisfied.
-  url.searchParams.set("userToken", token);
+  // Per Metricool's docs the token authenticates via the X-Mc-Auth header only;
+  // keep it out of the query string so the secret never lands in a URL/log.
   url.searchParams.set("userId", userId);
   if (opts.blogId) url.searchParams.set("blogId", opts.blogId);
   for (const [k, v] of Object.entries(opts.params ?? {})) url.searchParams.set(k, v);
@@ -268,6 +267,23 @@ export function candidateMetricNames(networkPlatform: string, prefix: string, me
 
 export function metricKind(metricKey: string): MetricKind {
   return METRIC_CANDIDATES[metricKey]?.kind ?? "flow";
+}
+
+/** Fetch one *exact* Metricool metric name over a range (no candidate probing). */
+export async function fetchMetricByName(
+  blogId: string,
+  name: string,
+  kind: MetricKind,
+  start: string,
+  end: string,
+): Promise<number | null> {
+  try {
+    return kind === "stock"
+      ? await metricoolTimelineLast(blogId, name, start, end)
+      : await metricoolAggregate(blogId, name, start, end);
+  } catch {
+    return null;
+  }
 }
 
 /**
