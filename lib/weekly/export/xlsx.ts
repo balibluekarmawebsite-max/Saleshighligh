@@ -316,6 +316,16 @@ function socialSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
     { h: "Growth %", w: 12, a: "R", f: PCTRED },
   ];
   titleRow(ws, "H · Social Media Insight", cols.length, 14);
+  if (d.metricoolSync) {
+    const m = d.metricoolSync;
+    const when = new Date(m.syncedAt);
+    const whenStr = Number.isNaN(when.getTime()) ? m.syncedAt : when.toISOString().slice(0, 16).replace("T", " ");
+    const src = ws.addRow([
+      `Source: Metricool (brand ${m.blogId}) · synced ${whenStr} UTC · this week ${m.thisWeek.from}–${m.thisWeek.to}, last week ${m.lastWeek.from}–${m.lastWeek.to}`,
+    ]);
+    src.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+    ws.mergeCells(src.number, 1, src.number, cols.length);
+  }
   if (byPlatform.size === 0) {
     const empty = ws.addRow(["No social metrics for this week."]);
     empty.getCell(1).font = { name: FONT, italic: true, color: { argb: GREY } };

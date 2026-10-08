@@ -130,6 +130,12 @@ export interface WeeklyExportData {
   };
   social: WeeklySocialRow[];
   socialNarrative: { highlights: string | null; strength: string | null; weakness: string | null };
+  metricoolSync: {
+    syncedAt: string;
+    blogId: string;
+    thisWeek: { from: string; to: string };
+    lastWeek: { from: string; to: string };
+  } | null;
   graphicDesign: { task: string; status: string | null }[];
   smActivities: {
     id: string;
@@ -358,6 +364,25 @@ export async function getWeeklyExportData(
     { id: "digital_marketing", title: "Digital Marketing Outsider", rows: activities("digital_marketing") },
   ].filter((s) => s.rows.length > 0);
 
+  // Metricool sync provenance (for the Excel source note), if this week was synced.
+  const syncRow = await prisma.weeklySetting.findFirst({
+    where: { propertyId: report.propertyId, group: "metricool", key: `sync_${week}` },
+    select: { value: true },
+  });
+  let metricoolSync: WeeklyExportData["metricoolSync"] = null;
+  if (syncRow?.value && typeof syncRow.value === "object") {
+    const v = syncRow.value as Record<string, unknown>;
+    const w = v.window as { thisWeek?: { from?: string; to?: string }; lastWeek?: { from?: string; to?: string } } | undefined;
+    if (typeof v.syncedAt === "string" && typeof v.blogId === "string" && w?.thisWeek && w?.lastWeek) {
+      metricoolSync = {
+        syncedAt: v.syncedAt,
+        blogId: v.blogId,
+        thisWeek: { from: String(w.thisWeek.from ?? ""), to: String(w.thisWeek.to ?? "") },
+        lastWeek: { from: String(w.lastWeek.from ?? ""), to: String(w.lastWeek.to ?? "") },
+      };
+    }
+  }
+
   const ads = await getWeeklyAds(propertyCode, week);
 
   return {
@@ -381,6 +406,7 @@ export async function getWeeklyExportData(
     owner,
     social,
     socialNarrative,
+    metricoolSync,
     graphicDesign,
     smActivities,
     screenshots: report.screenshots.map((s) => ({

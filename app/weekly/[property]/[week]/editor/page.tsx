@@ -24,6 +24,8 @@ import {
   setStatus,
 } from "@/lib/weekly/editor-actions";
 import { getWeeklyFullEditorData } from "@/lib/weekly/editor-data";
+import { isMetricoolConfigured, getPropertyBlogId } from "@/lib/weekly/metricool";
+import { getMetricoolSyncMeta } from "@/lib/weekly/metricool-actions";
 import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
 import { weekLabel } from "@/lib/weekly/week";
 import { cn } from "@/lib/utils";
@@ -109,6 +111,9 @@ export default async function WeeklyEditorPage({
   const readOnly = locked || !canEdit;
   const screenshots = await getWeeklyScreenshots(p, w);
   const ads = await getWeeklyAds(p, w);
+  const metricoolConfigured = isMetricoolConfigured();
+  const metricoolBlogId = await getPropertyBlogId(p.toUpperCase());
+  const metricoolMeta = metricoolConfigured ? await getMetricoolSyncMeta(p, w) : null;
 
   const sections: EditorSectionTab[] = [
     {
@@ -197,6 +202,9 @@ export default async function WeeklyEditorPage({
             marketing_outsider: data.marketingOutsider,
             digital_marketing: data.digitalMarketing,
           }}
+          metricoolConfigured={metricoolConfigured}
+          metricoolBlogId={metricoolBlogId}
+          metricoolMeta={metricoolMeta}
         />
       ),
     },
