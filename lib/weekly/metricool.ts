@@ -100,20 +100,24 @@ export async function getPropertyBlogId(propertyCode: string): Promise<string | 
 
 // ── Analytics ────────────────────────────────────────────────────────────────
 //
-// Section H pulls five metrics per network from two Metricool APIs (confirmed
-// live against the account):
+// Section H pulls five metrics per network from Metricool (confirmed live
+// against the account):
 //   • Followers — v1 `GET /stats/timeline/{ig|fb}Followers?start=&end=`
 //     (YYYYMMDD), returns [[epochOrDate, "value"], …]; take the LAST value → the
 //     follower count, so this-week − last-week is net growth.
-//   • Reach / Impressions(Views) / Profile visits / Website clicks — v2
-//     `GET /v2/analytics/aggregation?from=&to=&metric=&network=&subject=`
-//     (ISO datetimes with tz), returns {"data": N}. The modern IG/FB insight
-//     metrics live only here, not on v1. The exact metric + subject names vary
-//     per account/network, so they are configured via METRICOOL_METRIC_MAP.
+//   • Reach / Impressions(Views) / Profile visits / Website clicks — the modern
+//     per-account metrics live on v2 *timelines*
+//     `GET /v2/analytics/timelines?from=&to=&metric=&network=&subject=account`
+//     (ISO datetimes with tz), returning a nested daily series
+//     {"data":[{"metric":"X","values":[{"dateTime":"…","value":N}]}]}; SUM the
+//     days for a flow metric. (The v2 *aggregation* endpoint answers
+//     "NotImplemented" for these; it is kept for post-level metrics.) Exact
+//     metric names vary per account/network, so they are configured via
+//     METRICOOL_METRIC_MAP (discover them with scripts/metricool-discover.ts).
 //
-// Values come back as strings and timestamps as epoch-ms, so the readers coerce
-// strings → numbers and never throw on an odd/empty shape — they return null and
-// the metric is simply left blank.
+// Values come back as strings and timestamps as epoch-ms/ISO, so the readers
+// coerce strings → numbers and never throw on an odd/empty shape — they return
+// null and the metric is simply left blank.
 
 /** Format a Date as the `YYYYMMDD` the v1 stats endpoints expect (UTC). */
 export function toYmd(d: Date): string {
@@ -210,6 +214,9 @@ export function readLast(data: unknown): number | null {
 /**
  * GET /v2/analytics/aggregation — one aggregate value for a modern insight
  * metric. Returns {"data": N} (N may be a string); readAggregate unwraps it.
+ * NB: modern per-account metrics answer "NotImplemented" here — those live on
+ * /v2/analytics/timelines (see metricoolV2Timeline); aggregation is kept for the
+ * post-level metrics that do answer it.
  */
 export async function metricoolV2Aggregate(
   blogId: string,
@@ -224,6 +231,63 @@ export async function metricoolV2Aggregate(
     params: { from: fromIso, to: toIso, metric, network, subject, timezone: metricoolTimezone() },
   });
   return readAggregate(data);
+}
+
+/**
+ * Reduce a /v2/analytics/timelines response to its summed and last values.
+ * The modern per-account metrics come back nested:
+ *   { "data": [ { "metric": "X", "values": [ { "dateTime": "…", "value": N }, … ] } ] }
+ * (values may be strings). Older/other metrics may come back as a flat point
+ * array [[ts,"val"], …]; both shapes are handled. `metric` picks the matching
+ * series when several are returned. Returns { sum, last } (either may be null).
+ */
+export function readV2Timeline(data: unknown, metric?: string): { sum: number | null; last: number | null } {
+  let node: unknown = data;
+  if (node && typeof node === "object" && !Array.isArray(node) && "data" in (node as Record<string, unknown>)) {
+    node = (node as Record<string, unknown>).data;
+  }
+  if (!Array.isArray(node)) return { sum: null, last: null };
+
+  // Array of series objects { metric, values: [{dateTime, value}, …] }.
+  const seriesObjs = node.filter(
+    (x): x is Record<string, unknown> =>
+      !!x && typeof x === "object" && !Array.isArray(x) && Array.isArray((x as Record<string, unknown>).values),
+  );
+  let points: unknown[];
+  if (seriesObjs.length) {
+    const match = metric
+      ? seriesObjs.find((s) => String(s.metric).toLowerCase() === metric.toLowerCase())
+      : undefined;
+    const chosen = match ?? seriesObjs[0];
+    points = (chosen?.values as unknown[]) ?? [];
+  } else {
+    // A flat point array [[ts,"val"], …].
+    points = node;
+  }
+
+  const nums = points.map(pointValue).filter((v): v is number => v !== null);
+  if (!nums.length) return { sum: null, last: null };
+  return { sum: nums.reduce((a, b) => a + b, 0), last: nums[nums.length - 1] ?? null };
+}
+
+/**
+ * GET /v2/analytics/timelines — the daily series for a modern per-account
+ * metric. Returns { sum, last }: sum the days for a flow metric (reach,
+ * impressions, profile/website visits), take last for a stock metric.
+ */
+export async function metricoolV2Timeline(
+  blogId: string,
+  network: string,
+  metric: string,
+  subject: string,
+  fromIso: string,
+  toIso: string,
+): Promise<{ sum: number | null; last: number | null }> {
+  const data = await metricoolGet<unknown>("/v2/analytics/timelines", {
+    blogId,
+    params: { from: fromIso, to: toIso, metric, network, subject, timezone: metricoolTimezone() },
+  });
+  return readV2Timeline(data, metric);
 }
 
 /** GET /stats/timeline/{metric} for a blog over [start,end]; returns the last value. */
@@ -250,26 +314,51 @@ type MetricKind = "flow" | "stock";
 
 /** How one Section-H metric is fetched for one network. */
 export interface MetricSource {
-  source: "timeline" | "v2agg";
+  source: "timeline" | "v2agg" | "v2timeline";
   name?: string; // v1 timeline metric name (e.g. "igFollowers")
   metric?: string; // v2 metric name (e.g. "reach")
   subject?: string; // v2 subject (e.g. "account")
+  reduce?: "sum" | "last"; // v2timeline: sum the days (flow) or take the last (stock)
 }
 
 /**
  * The 5 Section H metrics, their kind, and the DEFAULT per-network source.
  *
  * - Followers come from the v1 timeline (`{ig|fb}Followers`) — confirmed working.
- * - Reach / Impressions(Views) / Profile visits / Website clicks come from the
- *   v2 aggregation endpoint. The metric + subject names below are best-effort
- *   defaults; the real names differ per account and are set via
- *   METRICOOL_METRIC_MAP (no redeploy needed) — until then these stay blank.
+ * - Reach / Impressions(Views) / Profile visits / Website clicks are modern
+ *   per-account metrics: they live on the v2 *timelines* endpoint (the v2
+ *   aggregation endpoint answers "NotImplemented" for them). Their exact metric
+ *   names differ per account/network, so the names below are best-effort
+ *   defaults — a wrong guess simply returns no data (the metric stays blank), so
+ *   it never shows a wrong number. Confirm the real names with
+ *   `scripts/metricool-discover.ts`, then lock them in via METRICOOL_METRIC_MAP
+ *   (no redeploy needed, just a restart).
  */
-const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string) => MetricSource }> = {
-  account_reached: { kind: "flow", def: () => ({ source: "v2agg", metric: "reach", subject: "account" }) },
-  impression: { kind: "flow", def: () => ({ source: "v2agg", metric: "views", subject: "account" }) },
-  profile_visit: { kind: "flow", def: () => ({ source: "v2agg", metric: "profileVisits", subject: "account" }) },
-  website_visit: { kind: "flow", def: () => ({ source: "v2agg", metric: "websiteClicks", subject: "account" }) },
+const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiName: string) => MetricSource }> = {
+  account_reached: {
+    kind: "flow",
+    def: (_p, api) => ({ source: "v2timeline", metric: api === "facebook" ? "pageReach" : "reach", subject: "account" }),
+  },
+  impression: {
+    kind: "flow",
+    def: (_p, api) => ({
+      source: "v2timeline",
+      metric: api === "facebook" ? "page_media_view" : "impressions",
+      subject: "account",
+    }),
+  },
+  profile_visit: {
+    kind: "flow",
+    def: (_p, api) => ({
+      source: "v2timeline",
+      metric: api === "facebook" ? "pageViews" : "profileViews",
+      subject: "account",
+    }),
+  },
+  website_visit: {
+    kind: "flow",
+    def: () => ({ source: "v2timeline", metric: "websiteClicks", subject: "account" }),
+  },
   followers: { kind: "stock", def: (p) => ({ source: "timeline", name: `${p}Followers` }) },
 };
 
@@ -303,22 +392,39 @@ function metricMapOverride(): Record<string, Record<string, unknown>> {
   }
 }
 
+/** Default reduce for a v2timeline source: stock → last, flow → sum. */
+function defaultReduce(metricKey: string): "sum" | "last" {
+  return metricKind(metricKey) === "stock" ? "last" : "sum";
+}
+
 /** Resolve the fetch source for one (network api name, metric key), applying env overrides. */
 export function resolveMetricSource(apiName: string, prefix: string, metricKey: string): MetricSource | null {
   const spec = SECTION_H[metricKey];
   if (!spec) return null;
-  const base = spec.def(prefix);
+  const base = spec.def(prefix, apiName.toLowerCase());
+  if (base.source === "v2timeline" && !base.reduce) base.reduce = defaultReduce(metricKey);
+
   const ov = metricMapOverride()[apiName.toLowerCase()]?.[metricKey];
   if (ov == null) return base;
+
   if (typeof ov === "string") {
+    // A bare string is the metric name (or the timeline name for followers).
     return base.source === "timeline" ? { ...base, name: ov } : { ...base, metric: ov };
   }
   if (typeof ov === "object") {
     const o = ov as Partial<MetricSource>;
     const merged: MetricSource = { ...base, ...o };
-    if (!o.source) {
-      if (o.metric || o.subject) merged.source = "v2agg";
-      else if (o.name) merged.source = "timeline";
+    // Infer the endpoint only when the override moves a timeline (followers) base
+    // onto a v2 metric without naming the source — account metrics live on v2
+    // timelines. An override on a v2 base keeps that base's endpoint.
+    if (!o.source && base.source === "timeline" && (o.metric || o.subject)) {
+      merged.source = "v2timeline";
+    }
+    if (merged.source === "v2timeline") {
+      if (!merged.reduce) merged.reduce = defaultReduce(metricKey);
+    } else {
+      // reduce only applies to v2timeline; drop it if the override moved away.
+      delete merged.reduce;
     }
     return merged;
   }
@@ -328,9 +434,9 @@ export function resolveMetricSource(apiName: string, prefix: string, metricKey: 
 /** A short human label for a source (shown in the sync diagnostic). */
 export function sourceLabel(s: MetricSource | null): string | null {
   if (!s) return null;
-  return s.source === "timeline"
-    ? `${s.name ?? "?"} (timeline)`
-    : `${s.metric ?? "?"}@${s.subject ?? "account"} (v2)`;
+  if (s.source === "timeline") return `${s.name ?? "?"} (timeline)`;
+  const tag = s.source === "v2timeline" ? "v2tl" : "v2";
+  return `${s.metric ?? "?"}@${s.subject ?? "account"} (${tag})`;
 }
 
 /**
@@ -348,6 +454,17 @@ export async function fetchMetricForRange(
   try {
     if (source.source === "timeline" && source.name) {
       return await metricoolTimelineLast(blogId, source.name, toYmd(from), toYmd(to));
+    }
+    if (source.source === "v2timeline" && source.metric) {
+      const r = await metricoolV2Timeline(
+        blogId,
+        apiName,
+        source.metric,
+        source.subject ?? "account",
+        toTzIso(from, false),
+        toTzIso(to, true),
+      );
+      return source.reduce === "last" ? r.last : r.sum;
     }
     if (source.source === "v2agg" && source.metric) {
       return await metricoolV2Aggregate(

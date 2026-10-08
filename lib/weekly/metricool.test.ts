@@ -4,6 +4,7 @@ import {
   metricKind,
   readAggregate,
   readLast,
+  readV2Timeline,
   resolveMetricSource,
   sourceLabel,
   toTzIso,
@@ -69,6 +70,42 @@ describe("readLast (tolerant timeline, string values + epoch timestamps)", () =>
   });
 });
 
+describe("readV2Timeline (nested per-account series, string values)", () => {
+  it("sums and takes last from the nested {data:[{metric,values:[{dateTime,value}]}]} shape", () => {
+    const resp = {
+      data: [
+        {
+          metric: "pageViews",
+          values: [
+            { dateTime: "2026-09-01T12:00:00+0200", value: "100" },
+            { dateTime: "2026-09-02T12:00:00+0200", value: "250" },
+            { dateTime: "2026-09-03T12:00:00+0200", value: 400 },
+          ],
+        },
+      ],
+    };
+    expect(readV2Timeline(resp)).toEqual({ sum: 750, last: 400 });
+  });
+
+  it("picks the matching series by metric name when several are returned", () => {
+    const resp = {
+      data: [
+        { metric: "reach", values: [{ dateTime: "d1", value: 5 }] },
+        { metric: "impressions", values: [{ dateTime: "d1", value: 9 }, { dateTime: "d2", value: 11 }] },
+      ],
+    };
+    expect(readV2Timeline(resp, "impressions")).toEqual({ sum: 20, last: 11 });
+    expect(readV2Timeline(resp, "reach")).toEqual({ sum: 5, last: 5 });
+  });
+
+  it("handles a flat [[ts,val]] series and empty/odd shapes", () => {
+    expect(readV2Timeline({ data: [["1767243600000", "3"], ["1767330000000", "4"]] })).toEqual({ sum: 7, last: 4 });
+    expect(readV2Timeline({ data: [] })).toEqual({ sum: null, last: null });
+    expect(readV2Timeline(null)).toEqual({ sum: null, last: null });
+    expect(readV2Timeline({ data: [{ metric: "x", values: [] }] })).toEqual({ sum: null, last: null });
+  });
+});
+
 describe("metricKind", () => {
   it("classifies followers as stock and the rest as flow", () => {
     expect(metricKind("followers")).toBe("stock");
@@ -82,34 +119,56 @@ describe("resolveMetricSource", () => {
     delete process.env.METRICOOL_METRIC_MAP;
   });
 
-  it("defaults followers to the v1 timeline and flow metrics to v2 aggregation", () => {
+  it("defaults followers to the v1 timeline and flow metrics to the v2 timelines endpoint", () => {
     expect(resolveMetricSource("instagram", "ig", "followers")).toEqual({ source: "timeline", name: "igFollowers" });
     expect(resolveMetricSource("facebook", "fb", "followers")).toEqual({ source: "timeline", name: "fbFollowers" });
     expect(resolveMetricSource("instagram", "ig", "account_reached")).toEqual({
-      source: "v2agg",
+      source: "v2timeline",
       metric: "reach",
       subject: "account",
+      reduce: "sum",
     });
+    // Facebook defaults use the page-level names observed on the account.
+    expect(resolveMetricSource("facebook", "fb", "impression")).toEqual({
+      source: "v2timeline",
+      metric: "page_media_view",
+      subject: "account",
+      reduce: "sum",
+    });
+    expect(resolveMetricSource("facebook", "fb", "profile_visit")?.metric).toBe("pageViews");
   });
 
-  it("merges an object env override (metric + subject) over the default", () => {
+  it("merges an object env override (metric + subject) without flipping the endpoint", () => {
     process.env.METRICOOL_METRIC_MAP = JSON.stringify({
       instagram: { impression: { metric: "views", subject: "account" } },
     });
     expect(resolveMetricSource("instagram", "ig", "impression")).toEqual({
-      source: "v2agg",
+      source: "v2timeline",
       metric: "views",
       subject: "account",
+      reduce: "sum",
     });
     // other metrics unaffected
     expect(resolveMetricSource("instagram", "ig", "account_reached")?.metric).toBe("reach");
   });
 
-  it("accepts a string override as the v2 metric name", () => {
+  it("lets an override name a different source (e.g. back to v2 aggregation)", () => {
+    process.env.METRICOOL_METRIC_MAP = JSON.stringify({
+      instagram: { impression: { source: "v2agg", metric: "views", subject: "posts" } },
+    });
+    expect(resolveMetricSource("instagram", "ig", "impression")).toEqual({
+      source: "v2agg",
+      metric: "views",
+      subject: "posts",
+    });
+  });
+
+  it("accepts a string override as the metric name (endpoint unchanged)", () => {
     process.env.METRICOOL_METRIC_MAP = JSON.stringify({ facebook: { impression: "pageViews" } });
     const s = resolveMetricSource("facebook", "fb", "impression");
-    expect(s?.source).toBe("v2agg");
+    expect(s?.source).toBe("v2timeline");
     expect(s?.metric).toBe("pageViews");
+    expect(s?.reduce).toBe("sum");
   });
 
   it("returns null for an unknown metric key", () => {
