@@ -3,12 +3,14 @@ import {
   BedDouble,
   CalendarRange,
   ClipboardList,
-  FilePen,
+  Download,
+  FileText,
   Flower2,
   LayoutDashboard,
   LineChart,
   ListChecks,
   Megaphone,
+  Settings,
   Share2,
   Upload,
   UtensilsCrossed,
@@ -43,6 +45,8 @@ export interface DashNavItem {
   href: string;
   icon: LucideIcon;
   children?: { label: string; href: string }[];
+  /** Extra relative paths that should also mark this item active (e.g. editor → Weekly Reports). */
+  aliases?: string[];
 }
 
 // ─── Sales Highlight (monthly) ──────────────────────────────────────────────
@@ -71,11 +75,12 @@ export const DASHBOARD_NAV: DashNavItem[] = [
 
 export const WEEKLY_NAV: DashNavItem[] = [
   { label: "Dashboard", href: "dashboard", icon: LayoutDashboard },
-  { label: "Weekly Reports", href: "reports", icon: CalendarRange },
-  { label: "Report Editor", href: "editor", icon: FilePen },
-  { label: "Department Inputs", href: "departments", icon: ClipboardList },
-  { label: "Import", href: "import", icon: Upload },
   { label: "Trends", href: "trends", icon: LineChart },
+  { label: "Weekly Reports", href: "reports", icon: FileText, aliases: ["editor"] },
+  { label: "Data Import", href: "import", icon: Upload },
+  { label: "Department Inputs", href: "departments", icon: ClipboardList },
+  { label: "Export Center", href: "export", icon: Download },
+  { label: "Settings", href: "settings", icon: Settings },
 ];
 
 export interface AdminNavItem {

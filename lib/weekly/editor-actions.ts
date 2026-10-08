@@ -271,6 +271,304 @@ export async function saveSection(
   return { ok: true, message: "Saved." };
 }
 
+/** Money / decimal string → number (strips thousands separators). */
+const money = (v: unknown): number | null => {
+  const s = (v ?? "").toString().trim().replace(/[,\s]/g, "");
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Percent input (e.g. "77.0") → stored occupancy fraction (0.77), 4 dp. */
+const occFrac = (v: unknown): number | null => {
+  const s = (v ?? "").toString().trim().replace(/[%\s]/g, "");
+  if (s === "") return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.round((n / 100) * 10000) / 10000;
+};
+
+/** Shared write guard: edit access, report exists, not locked. */
+async function authReportForWrite(
+  property: string,
+  week: string,
+): Promise<{ error: ActionResult } | { id: string }> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { error: { ok: false, message: `You don't have edit access to ${property}.` } };
+  }
+  const report = await findReport(property, week);
+  if (!report) return { error: { ok: false, message: "Report not found." } };
+  if (isLockedStatus(report.status)) {
+    return { error: { ok: false, message: "This report is approved/locked — reopen it to edit." } };
+  }
+  return { id: report.id };
+}
+
+function parseRows(formData: FormData, field = "rows"): Record<string, string>[] | null {
+  try {
+    const parsed: unknown = JSON.parse(String(formData.get(field) ?? "[]"));
+    return Array.isArray(parsed) ? (parsed as Record<string, string>[]) : [];
+  } catch {
+    return null;
+  }
+}
+
+/** Section B — replace the 12-month Actual/Budget/LY grid. */
+export async function saveMonthlyStats(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  const data = rows
+    .map((r) => ({
+      reportWeekId: guard.id,
+      month: Number(r.month),
+      rnSold: int(r.rnSold),
+      occActual: occFrac(r.occActual),
+      occBudget: occFrac(r.occBudget),
+      occLy: occFrac(r.occLy),
+      arrActual: money(r.arrActual),
+      arrBudget: money(r.arrBudget),
+      arrLy: money(r.arrLy),
+      revActual: money(r.revActual),
+      revBudget: money(r.revBudget),
+      revLy: money(r.revLy),
+    }))
+    .filter(
+      (r) =>
+        Number.isInteger(r.month) &&
+        r.month >= 1 &&
+        r.month <= 12 &&
+        [
+          r.rnSold, r.occActual, r.occBudget, r.occLy,
+          r.arrActual, r.arrBudget, r.arrLy, r.revActual, r.revBudget, r.revLy,
+        ].some((v) => v != null),
+    );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklyMonthlyStat.deleteMany({ where: { reportWeekId: guard.id } });
+    if (data.length) await tx.weeklyMonthlyStat.createMany({ data });
+  });
+
+  await logAudit("weekly_monthly_save", `${property} ${week}`, { rows: data.length });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Section C — replace the weekly market-segment production grid. */
+export async function saveSegments(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  const data = rows
+    .filter((r) => str(r.label))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      label: str(r.label) as string,
+      segmentGroup: str(r.segmentGroup),
+      rnSold: int(r.rnSold),
+      grossRevenue: money(r.grossRevenue),
+      sortOrder: i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklySegmentProduction.deleteMany({ where: { reportWeekId: guard.id } });
+    if (data.length) await tx.weeklySegmentProduction.createMany({ data });
+  });
+
+  await logAudit("weekly_segments_save", `${property} ${week}`, { rows: data.length });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Section D — replace the rate-code / promotion production grid. */
+export async function saveRateCodes(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  const data = rows
+    .filter((r) => str(r.label))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      label: str(r.label) as string,
+      rnSold: int(r.rnSold),
+      grossRevenue: money(r.grossRevenue),
+      sortOrder: i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklyRateCodeProduction.deleteMany({ where: { reportWeekId: guard.id } });
+    if (data.length) await tx.weeklyRateCodeProduction.createMany({ data });
+  });
+
+  await logAudit("weekly_ratecodes_save", `${property} ${week}`, { rows: data.length });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Sections E/F — replace one year's channel room-night grid (other years kept). */
+export async function saveChannels(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const year = Number(formData.get("year"));
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    return { ok: false, message: "Invalid year." };
+  }
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  const m = (v: unknown): number => int(v) ?? 0;
+  const seen = new Set<string>();
+  const data = rows
+    .filter((r) => {
+      const label = str(r.sourceLabel);
+      if (!label || seen.has(label)) return false;
+      seen.add(label);
+      return true;
+    })
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      year,
+      sourceLabel: str(r.sourceLabel) as string,
+      jan: m(r.jan), feb: m(r.feb), mar: m(r.mar), apr: m(r.apr),
+      may: m(r.may), jun: m(r.jun), jul: m(r.jul), aug: m(r.aug),
+      sep: m(r.sep), oct: m(r.oct), nov: m(r.nov), dec: m(r.dec),
+      sortOrder: i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklyChannelRn.deleteMany({ where: { reportWeekId: guard.id, year } });
+    if (data.length) await tx.weeklyChannelRn.createMany({ data });
+  });
+
+  await logAudit("weekly_channels_save", `${property} ${week}`, { year, rows: data.length });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Section H — replace one platform's social metrics (other platforms kept). */
+export async function saveWeeklySocial(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const platform = str(formData.get("platform")) ?? "Instagram";
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  const data = rows
+    .filter((r) => str(r.metricKey) && (int(r.lastWeek) != null || int(r.thisWeek) != null))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      platform,
+      metricKey: str(r.metricKey) as string,
+      lastWeek: int(r.lastWeek),
+      thisWeek: int(r.thisWeek),
+      sortOrder: i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklySocialMetric.deleteMany({ where: { reportWeekId: guard.id, platform } });
+    if (data.length) await tx.weeklySocialMetric.createMany({ data });
+  });
+
+  await logAudit("weekly_social_save", `${property} ${week}`, { platform, rows: data.length });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Owner Overview — replace both the repeater-guest and channel-mix grids. */
+export async function saveOwnerOverview(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const repeaters = parseRows(formData, "repeaters");
+  const mix = parseRows(formData, "mix");
+  if (!repeaters || !mix) return { ok: false, message: "Could not read the rows." };
+
+  const repData = repeaters
+    .filter((r) => str(r.label))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      label: str(r.label) as string,
+      roomNights: int(r.roomNights),
+      revenue: money(r.revenue),
+      sortOrder: i,
+    }));
+  const mixData = mix
+    .filter((r) => str(r.label))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      label: str(r.label) as string,
+      rnSold: int(r.rnSold),
+      grossRevenue: money(r.grossRevenue),
+      sortOrder: i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklyOwnerRepeater.deleteMany({ where: { reportWeekId: guard.id } });
+    if (repData.length) await tx.weeklyOwnerRepeater.createMany({ data: repData });
+    await tx.weeklyOwnerChannelMix.deleteMany({ where: { reportWeekId: guard.id } });
+    if (mixData.length) await tx.weeklyOwnerChannelMix.createMany({ data: mixData });
+  });
+
+  await logAudit("weekly_owner_save", `${property} ${week}`, {
+    repeaters: repData.length,
+    mix: mixData.length,
+  });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Delete a week's whole report (cascades). Editors for unlocked weeks; admin for locked. */
+export async function deleteWeek(formData: FormData): Promise<void> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) return;
+
+  const report = await findReport(property, week);
+  if (!report) return;
+  if (isLockedStatus(report.status) && !isAdmin(user)) return;
+
+  await prisma.weeklyReport.delete({ where: { id: report.id } });
+  await logAudit("weekly_delete", `${property} ${week}`, { status: report.status });
+  revalidatePath("/weekly", "layout");
+}
+
 /** Create a draft report for a week if it doesn't exist. (Plain form-action.) */
 export async function createWeek(formData: FormData): Promise<void> {
   const property = String(formData.get("property") ?? "").toUpperCase();

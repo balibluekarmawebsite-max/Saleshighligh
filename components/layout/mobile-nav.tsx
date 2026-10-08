@@ -44,7 +44,9 @@ export function MobileNav({
           rel !== null &&
           (item.href === ""
             ? rel === ""
-            : rel === item.href || rel.startsWith(`${item.href}/`));
+            : rel === item.href ||
+              rel.startsWith(`${item.href}/`) ||
+              (item.aliases?.some((a) => rel === a || rel.startsWith(`${a}/`)) ?? false));
         return (
           <Link
             key={item.href || "overview"}

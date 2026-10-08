@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Settings } from "lucide-react";
+import { BarChart3, Building2, Settings } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import {
@@ -36,6 +36,7 @@ export function Sidebar({
   const pathname = usePathname();
   const project = projectForPath(pathname);
   const isGroup = property === "GROUP";
+  const isWeekly = project === "weekly";
 
   const base = project === "weekly" ? "weekly" : "dashboard";
   const rel = currentRel(pathname, base);
@@ -53,37 +54,41 @@ export function Sidebar({
           <span className="text-sm font-bold tracking-tight text-primary-foreground">BK</span>
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-semibold text-foreground">Blue Karma</p>
-          <p className="text-xs text-muted-foreground">Reporting</p>
+          <p className="text-sm font-semibold text-foreground">
+            {isWeekly ? "Weekly Reports" : "Blue Karma"}
+          </p>
+          <p className="text-xs text-muted-foreground">{isWeekly ? property : "Reporting"}</p>
         </div>
       </div>
 
-      {/* Project switcher */}
-      <div className="space-y-1 border-b border-border px-3 py-3">
-        <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Projects
-        </p>
-        {PROJECTS.map((p) => {
-          const ProjIcon = p.icon;
-          const activeProj = p.key === project;
-          return (
-            <Link
-              key={p.key}
-              href={p.href}
-              aria-current={activeProj ? "page" : undefined}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors",
-                activeProj
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
-              )}
-            >
-              <ProjIcon className="h-4 w-4 shrink-0" />
-              <span>{p.label}</span>
-            </Link>
-          );
-        })}
-      </div>
+      {/* Project switcher (hidden in the focused Weekly shell) */}
+      {!isWeekly && (
+        <div className="space-y-1 border-b border-border px-3 py-3">
+          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Projects
+          </p>
+          {PROJECTS.map((p) => {
+            const ProjIcon = p.icon;
+            const activeProj = p.key === project;
+            return (
+              <Link
+                key={p.key}
+                href={p.href}
+                aria-current={activeProj ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors",
+                  activeProj
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground",
+                )}
+              >
+                <ProjIcon className="h-4 w-4 shrink-0" />
+                <span>{p.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       {/* Active project's sections */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -104,7 +109,9 @@ export function Sidebar({
               rel !== null &&
               (item.href === ""
                 ? rel === ""
-                : rel === item.href || rel.startsWith(`${item.href}/`));
+                : rel === item.href ||
+                  rel.startsWith(`${item.href}/`) ||
+                  (item.aliases?.some((a) => rel === a || rel.startsWith(`${a}/`)) ?? false));
             return (
               <div key={item.href || "overview"}>
                 <Link
@@ -156,32 +163,44 @@ export function Sidebar({
         )}
       </nav>
 
-      {/* Shared admin + sign out */}
+      {/* Shared admin (or a way back to Sales Highlight in the Weekly shell) + sign out */}
       <div className="space-y-1 border-t border-border px-3 py-4">
-        <p className="flex items-center gap-2 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Settings className="h-3.5 w-3.5" /> Admin
-        </p>
-        {ADMIN_NAV.map((item) => {
-          const active = pathname.startsWith(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.ready ? item.href : "#"}
-              aria-disabled={!item.ready}
-              className={cn(
-                "flex items-center justify-between rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-accent text-accent-foreground"
-                  : item.ready
-                    ? "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground"
-                    : "cursor-not-allowed text-muted-foreground/50",
-              )}
-            >
-              <span>{item.label}</span>
-              {!item.ready && <span className="text-[10px]">soon</span>}
-            </Link>
-          );
-        })}
+        {isWeekly ? (
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground"
+          >
+            <BarChart3 className="h-4 w-4 shrink-0" />
+            <span>Sales Highlight</span>
+          </Link>
+        ) : (
+          <>
+            <p className="flex items-center gap-2 px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <Settings className="h-3.5 w-3.5" /> Admin
+            </p>
+            {ADMIN_NAV.map((item) => {
+              const active = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.ready ? item.href : "#"}
+                  aria-disabled={!item.ready}
+                  className={cn(
+                    "flex items-center justify-between rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-accent text-accent-foreground"
+                      : item.ready
+                        ? "text-muted-foreground hover:bg-accent/60 hover:text-accent-foreground"
+                        : "cursor-not-allowed text-muted-foreground/50",
+                  )}
+                >
+                  <span>{item.label}</span>
+                  {!item.ready && <span className="text-[10px]">soon</span>}
+                </Link>
+              );
+            })}
+          </>
+        )}
         {userEmail && (
           <div className="mt-2 border-t border-border pt-2">
             <SignOutButton email={userEmail} />
