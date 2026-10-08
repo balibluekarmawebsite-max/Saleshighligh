@@ -3,6 +3,7 @@ import { Check, Minus } from "lucide-react";
 import { getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { NARRATIVE_MODEL } from "@/lib/weekly/ai-prompts";
 import { adsApiBase, isAdsSyncConfigured } from "@/lib/weekly/ads-sync";
+import { groqModel, groqVisionModel, isGroqConfigured } from "@/lib/weekly/import/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,19 @@ export default async function WeeklySettingsPage({
         {!aiConfigured && (
           <p className="pt-2 text-xs text-muted-foreground">
             Set <code>ANTHROPIC_API_KEY</code> on the server to enable AI drafting.
+          </p>
+        )}
+      </Card>
+
+      <Card title="AI data import (Groq)">
+        <Row label="Status" value={<Flag on={isGroqConfigured()} />} />
+        <Row label="Text / CSV model" value={<code className="text-xs">{groqModel()}</code>} />
+        <Row label="Screenshot (vision) model" value={<code className="text-xs">{groqVisionModel()}</code>} />
+        <Row label="Reads" value="CSV · Excel · screenshot · pasted text → section rows" />
+        {!isGroqConfigured() && (
+          <p className="pt-2 text-xs text-muted-foreground">
+            Set <code>GROQ_API_KEY</code> on the server to enable AI-assisted import. Override the
+            models with <code>GROQ_MODEL</code> / <code>GROQ_VISION_MODEL</code>.
           </p>
         )}
       </Card>

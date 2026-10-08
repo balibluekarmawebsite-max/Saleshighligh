@@ -474,9 +474,7 @@ export async function getWeeklyFullEditorData(
 
   const completion: Record<WeeklyEditorSectionKey, boolean> = {
     A: report.overviewBlocks.some((b) => b.body != null && b.body.trim() !== ""),
-    B: report.monthlyStats.some(
-      (m) => m.rnSold != null || m.revActual != null || m.occActual != null,
-    ),
+    B: report.monthlyStats.length > 0,
     C: report.segmentProductions.length > 0,
     D: report.rateCodeProductions.length > 0,
     EF: report.channelRns.length > 0,

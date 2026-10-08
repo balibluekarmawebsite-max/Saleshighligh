@@ -163,7 +163,7 @@ const str = (v: unknown): string | null => {
   return s === "" ? null : s;
 };
 const int = (v: unknown): number | null => {
-  const s = (v ?? "").toString().trim();
+  const s = (v ?? "").toString().trim().replace(/[,\s]/g, "");
   if (s === "") return null;
   const n = Number(s);
   return Number.isFinite(n) ? Math.round(n) : null;

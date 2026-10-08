@@ -74,7 +74,7 @@ export function WeeklyEditorShell({ sections }: { sections: EditorSectionTab[] }
         </div>
       </nav>
 
-      <div className="min-w-0">{current?.node}</div>
+      <div key={current?.key} className="min-w-0">{current?.node}</div>
     </div>
   );
 }

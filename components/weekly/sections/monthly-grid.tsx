@@ -36,7 +36,6 @@ export function MonthlyGrid({
   const rnTotal = sumCol(rows, "rnSold");
   const revAct = sumCol(rows, "revActual");
   const revBud = sumCol(rows, "revBudget");
-  const revLy = sumCol(rows, "revLy");
 
   const cell = (i: number, key: string, align = "text-right") => (
     <input
@@ -109,7 +108,7 @@ export function MonthlyGrid({
                 <td className="py-2 px-2 text-right text-muted-foreground">—</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revAct, rnTotal))}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revBud, rnTotal))}</td>
-                <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revLy, rnTotal))}</td>
+                <td className="py-2 px-2 text-right text-muted-foreground">—</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(revAct)}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(revBud)}</td>
               </tr>
