@@ -11,6 +11,7 @@ export const WEEKLY_EXPORT_SECTIONS = [
   { id: "screenshots", label: "Screenshots & Summaries" },
   { id: "departments", label: "Department Activities & Training" },
   { id: "plans", label: "Action Plans" },
+  { id: "owner", label: "Owner Overview" },
 ] as const;
 
 export type WeeklyExportSectionId = (typeof WEEKLY_EXPORT_SECTIONS)[number]["id"];

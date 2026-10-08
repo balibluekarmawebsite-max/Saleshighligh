@@ -74,6 +74,27 @@ export interface WeeklySocialRow {
   growthPct: number | null;
 }
 
+export interface WeeklyChannelYearBlock {
+  year: number;
+  rows: WeeklyChannelRow[];
+  ytdTotal: number;
+}
+
+export interface WeeklyOwnerRepeaterRow {
+  label: string;
+  roomNights: number | null;
+  revenue: number | null;
+  adr: number | null;
+}
+
+export interface WeeklyOwnerMixRow {
+  label: string;
+  rnSold: number | null;
+  grossRevenue: number | null;
+  arr: number | null;
+  share: number | null;
+}
+
 export interface WeeklyScreenshotExport {
   id: string;
   category: string;
@@ -100,6 +121,13 @@ export interface WeeklyExportData {
   segments: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
   rateCodes: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
   channels: { rows: WeeklyChannelRow[]; ytdTotal: number };
+  channelsByYear: WeeklyChannelYearBlock[];
+  owner: {
+    repeaters: WeeklyOwnerRepeaterRow[];
+    repeaterTotals: { roomNights: number; revenue: number; adr: number | null };
+    channelMix: WeeklyOwnerMixRow[];
+    channelMixTotals: { rnSold: number; revenue: number; arr: number | null };
+  };
   social: WeeklySocialRow[];
   screenshots: WeeklyScreenshotExport[];
   ads: WeeklyAdsData;
@@ -147,6 +175,8 @@ export async function getWeeklyExportData(
       activities: { orderBy: { sortOrder: "asc" } },
       trainings: { orderBy: { sortOrder: "asc" } },
       actionPlans: { orderBy: { sortOrder: "asc" } },
+      ownerRepeaters: { orderBy: { sortOrder: "asc" } },
+      ownerChannelMix: { orderBy: { sortOrder: "asc" } },
       screenshots: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
     },
   });
@@ -246,6 +276,48 @@ export async function getWeeklyExportData(
     share: sharePercent(c.ytd, channelYtdTotal),
   }));
 
+  // All years, grouped into per-year blocks (for the styled Excel export).
+  const channelYears = Array.from(new Set(report.channelRns.map((c) => c.year))).sort((a, b) => a - b);
+  const channelsByYear: WeeklyChannelYearBlock[] = channelYears.map((year) => {
+    const src = report.channelRns
+      .filter((c) => c.year === year)
+      .map((c) => {
+        const months = [
+          c.jan, c.feb, c.mar, c.apr, c.may, c.jun,
+          c.jul, c.aug, c.sep, c.oct, c.nov, c.dec,
+        ];
+        return { year, source: c.sourceLabel, months, ytd: channelYtd(months) };
+      });
+    const ytdTotal = src.reduce((s, c) => s + c.ytd, 0);
+    return { year, ytdTotal, rows: src.map((c) => ({ ...c, share: sharePercent(c.ytd, ytdTotal) })) };
+  });
+
+  // ── Owner Overview: repeater-guest months + channel mix ─────────────────────
+  const repeaters: WeeklyOwnerRepeaterRow[] = report.ownerRepeaters.map((o) => {
+    const revenue = dec(o.revenue);
+    return { label: o.label, roomNights: o.roomNights, revenue, adr: rate(revenue, o.roomNights) };
+  });
+  const repRn = repeaters.reduce((s, r) => s + (r.roomNights ?? 0), 0);
+  const repRev = repeaters.reduce((s, r) => s + (r.revenue ?? 0), 0);
+  const mixRev = report.ownerChannelMix.reduce((s, o) => s + (dec(o.grossRevenue) ?? 0), 0);
+  const channelMix: WeeklyOwnerMixRow[] = report.ownerChannelMix.map((o) => {
+    const revenue = dec(o.grossRevenue);
+    return {
+      label: o.label,
+      rnSold: o.rnSold,
+      grossRevenue: revenue,
+      arr: rate(revenue, o.rnSold),
+      share: sharePercent(revenue, mixRev),
+    };
+  });
+  const mixRn = channelMix.reduce((s, r) => s + (r.rnSold ?? 0), 0);
+  const owner = {
+    repeaters,
+    repeaterTotals: { roomNights: repRn, revenue: repRev, adr: rate(repRev, repRn) },
+    channelMix,
+    channelMixTotals: { rnSold: mixRn, revenue: mixRev, arr: rate(mixRev, mixRn) },
+  };
+
   // ── Section H: social media ─────────────────────────────────────────────────
   const social: WeeklySocialRow[] = report.socialMetrics.map((m) => ({
     platform: m.platform,
@@ -281,6 +353,8 @@ export async function getWeeklyExportData(
     segments: { rows: segmentRows, totals: segTotals },
     rateCodes: { rows: rateCodeRows, totals: rcTotals },
     channels: { rows: channelRows, ytdTotal: channelYtdTotal },
+    channelsByYear,
+    owner,
     social,
     screenshots: report.screenshots.map((s) => ({
       id: s.id,

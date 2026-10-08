@@ -7,7 +7,7 @@ const nextConfig = {
   experimental: {
     // Keep heavy/native server-only deps external so the bundler doesn't try to
     // trace them into route bundles (xlsx=CJS, playwright=native, pptxgenjs/docx=large).
-    serverComponentsExternalPackages: ["xlsx", "playwright", "pptxgenjs", "docx"],
+    serverComponentsExternalPackages: ["xlsx", "exceljs", "playwright", "pptxgenjs", "docx"],
     // Monthly workbooks can be a few hundred KB; allow generous upload bodies.
     serverActions: { bodySizeLimit: "10mb" },
   },
