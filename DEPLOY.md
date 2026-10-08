@@ -322,3 +322,84 @@ the CLI login is an auth convenience, **not** a way to bill a Claude.ai
 subscription. Leave it unset and the "Generate with AI" buttons simply show
 "not configured"; nothing else is affected.
 ```
+
+## 9. Weekly auto-sync (Metricool + ads, every Friday)
+
+The app exposes `GET /api/cron/weekly-sync`, which — for every property — makes
+sure the current reporting week's report exists (creating a DRAFT if the team
+hasn't yet), then pulls **Metricool** (Instagram + Facebook → Section H) and
+**ads/ROAS** (when each is configured). It's resilient: one property failing
+never stops the others, and a locked (approved/exported) report is left
+untouched.
+
+### 9.1 Protect it with a secret
+
+Generate a secret and put it in `.env`, then restart:
+
+```bash
+echo "CRON_SECRET=\"$(openssl rand -base64 32)\"" >> ~/Saleshighligh/.env
+sudo systemctl restart bk-dashboard
+```
+
+The endpoint refuses to run without `CRON_SECRET` set. The scheduler must send
+it as `Authorization: Bearer <CRON_SECRET>` (or `x-cron-secret: <secret>`, or
+`?key=<secret>`). A signed-in **admin** can also trigger it from the browser.
+
+### 9.2 Schedule it (Friday 06:00 Bali time)
+
+The reporting week runs Fri→Thu, so running Friday morning fills the week that
+just ended. **Bali is UTC+8**, so Friday 06:00 WITA = **Thursday 22:00 UTC**.
+
+**Option A — crontab.** If the VM's clock is set to `Asia/Makassar`
+(`timedatectl set-timezone Asia/Makassar`), schedule it in local time:
+
+```cron
+# m h dom mon dow  — Friday 06:00 local (Asia/Makassar)
+0 6 * * 5 curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://dashboard.bluekarmasecrets.com/api/cron/weekly-sync >> /var/log/bk-weekly-sync.log 2>&1
+```
+
+If the VM stays on **UTC**, use `0 22 * * 4` (Thursday 22:00 UTC) instead — same
+instant.
+
+**Option B — systemd timer.** Create `/etc/systemd/system/bk-weekly-sync.service`:
+
+```ini
+[Unit]
+Description=BK weekly Metricool + ads auto-sync
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://dashboard.bluekarmasecrets.com/api/cron/weekly-sync
+```
+
+and `/etc/systemd/system/bk-weekly-sync.timer`:
+
+```ini
+[Unit]
+Description=Run BK weekly auto-sync every Friday 06:00 Bali time
+[Timer]
+OnCalendar=Fri *-*-* 06:00:00 Asia/Makassar
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Then: `sudo systemctl daemon-reload && sudo systemctl enable --now
+bk-weekly-sync.timer` (check with `systemctl list-timers bk-weekly-sync`).
+`Persistent=true` catches up a run the box missed while powered off.
+
+> **On Vercel instead?** `vercel.json` already declares the cron
+> (`0 22 * * 4`); Vercel runs it in UTC and sends `Authorization: Bearer
+> $CRON_SECRET` automatically — just set `CRON_SECRET` in the project env.
+
+### 9.3 Run it on demand
+
+```bash
+# current week
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://.../api/cron/weekly-sync
+# a specific past week (its Thursday end date)
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" "https://.../api/cron/weekly-sync?week=2026-10-01"
+```
+
+The JSON response lists, per property, whether the report was created, how many
+Metricool/ads rows were written, and any per-property errors. Runs are recorded
+in the audit log (`/admin/activity`, action `weekly_auto_sync`).
