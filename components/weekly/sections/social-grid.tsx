@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
 
+import { SocialGrowthChart } from "@/components/charts/social-growth-chart";
 import { growth, growthPercent } from "@/lib/weekly/calculations";
 import { SOCIAL_METRIC_ROWS, SOCIAL_PLATFORMS } from "@/lib/weekly/editor-data";
 import { saveWeeklySocial } from "@/lib/weekly/editor-actions";
@@ -139,6 +140,15 @@ export function SocialGrid({
             </tbody>
           </table>
         </div>
+        <div className="mt-5">
+          <SocialGrowthChart
+            data={SOCIAL_METRIC_ROWS.map((m) => {
+              const v = valOf(m.key);
+              return { name: m.label, lastWeek: toNum(v.lastWeek), thisWeek: toNum(v.thisWeek) };
+            })}
+          />
+        </div>
+
         <p className="mt-3 text-xs text-muted-foreground">
           Each platform saves separately — switch the selector to enter another platform.
         </p>

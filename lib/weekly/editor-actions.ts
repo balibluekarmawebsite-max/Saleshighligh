@@ -7,7 +7,12 @@ import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { NARRATIVE_MODEL } from "@/lib/weekly/ai-prompts";
-import { OVERVIEW_BLOCKS, isLockedStatus } from "@/lib/weekly/editor-data";
+import {
+  ALL_TEXT_BLOCKS,
+  OVERVIEW_BLOCKS,
+  SOCIAL_NARRATIVE_BLOCKS,
+  isLockedStatus,
+} from "@/lib/weekly/editor-data";
 import { weekMeta } from "@/lib/weekly/week";
 
 export interface ActionResult {
@@ -64,6 +69,39 @@ export async function saveOverview(
   return { ok: true, message: "Saved." };
 }
 
+/** Section H — save the Overall Highlights / Strength / Weakness blocks. */
+export async function saveSocialNarrative(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+
+  await prisma.$transaction(
+    SOCIAL_NARRATIVE_BLOCKS.map((def) => {
+      const body = String(formData.get(`block_${def.key}`) ?? "").trim();
+      return prisma.weeklyOverviewBlock.upsert({
+        where: { reportWeekId_key: { reportWeekId: guard.id, key: def.key } },
+        update: { heading: def.heading, body: body || null, aiDraft: false },
+        create: {
+          reportWeekId: guard.id,
+          key: def.key,
+          heading: def.heading,
+          body: body || null,
+          aiDraft: false,
+          sortOrder: ALL_TEXT_BLOCKS.findIndex((b) => b.key === def.key),
+        },
+      });
+    }),
+  );
+
+  await logAudit("weekly_social_narrative_save", `${property} ${week}`, {});
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
 /**
  * Save a single Section A overview block from the AI drafting flow. Marks the
  * block as `aiDraft` when the text is still the model's output (not yet edited
@@ -78,7 +116,7 @@ export async function saveWeeklyOverviewBlock(input: {
 }): Promise<ActionResult> {
   const property = input.property.toUpperCase();
   const week = input.week;
-  const def = OVERVIEW_BLOCKS.find((b) => b.key === input.key);
+  const def = ALL_TEXT_BLOCKS.find((b) => b.key === input.key);
   if (!def) return { ok: false, message: "Unknown section." };
 
   const user = await getCurrentUser();
@@ -103,7 +141,7 @@ export async function saveWeeklyOverviewBlock(input: {
       heading: def.heading,
       body,
       aiDraft: input.aiGenerated,
-      sortOrder: OVERVIEW_BLOCKS.indexOf(def),
+      sortOrder: ALL_TEXT_BLOCKS.indexOf(def),
     },
   });
 
@@ -199,7 +237,12 @@ export async function saveSection(
   await prisma.$transaction(async (tx) => {
     switch (sectionId) {
       case "sales":
-      case "ecommerce": {
+      case "ecommerce":
+      case "sm_marketing":
+      case "marketing":
+      case "marketing_outsider":
+      case "digital_marketing":
+      case "graphic_design": {
         await tx.weeklyActivity.deleteMany({ where: { reportWeekId: rid, department: sectionId } });
         const data = rows
           .filter((r) => str(r.title))

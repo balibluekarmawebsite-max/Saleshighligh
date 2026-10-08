@@ -12,7 +12,7 @@ import { OverviewSection } from "@/components/weekly/sections/overview-section";
 import { OwnerOverview } from "@/components/weekly/sections/owner-overview";
 import { PlansCards } from "@/components/weekly/sections/plans-cards";
 import { ProductionGrid } from "@/components/weekly/sections/production-grid";
-import { SocialGrid } from "@/components/weekly/sections/social-grid";
+import { SocialSection } from "@/components/weekly/sections/social-section";
 import { TrainingTable } from "@/components/weekly/sections/training-table";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { weeklyHref } from "@/lib/nav";
@@ -183,7 +183,22 @@ export default async function WeeklyEditorPage({
     },
     {
       key: "H", code: "H", label: "Social Media", done: data.completion.H,
-      node: <SocialGrid property={p} week={w} locked={readOnly} initial={data.social} />,
+      node: (
+        <SocialSection
+          property={p}
+          week={w}
+          locked={readOnly}
+          social={data.social}
+          socialNarrative={data.socialNarrative}
+          graphicDesign={data.graphicDesign}
+          activityRows={{
+            sm_marketing: data.smMarketing,
+            marketing: data.marketing,
+            marketing_outsider: data.marketingOutsider,
+            digital_marketing: data.digitalMarketing,
+          }}
+        />
+      ),
     },
     {
       key: "I", code: "I", label: "Training", done: data.completion.I,

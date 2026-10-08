@@ -129,6 +129,13 @@ export interface WeeklyExportData {
     channelMixTotals: { rnSold: number; revenue: number; arr: number | null };
   };
   social: WeeklySocialRow[];
+  socialNarrative: { highlights: string | null; strength: string | null; weakness: string | null };
+  graphicDesign: { task: string; status: string | null }[];
+  smActivities: {
+    id: string;
+    title: string;
+    rows: { dateLabel: string | null; title: string | null; notes: string | null }[];
+  }[];
   screenshots: WeeklyScreenshotExport[];
   ads: WeeklyAdsData;
   departments: {
@@ -334,6 +341,23 @@ export async function getWeeklyExportData(
       .filter((a) => a.department === dept)
       .map((a) => ({ dateLabel: a.dateLabel, title: a.title, notes: a.notes }));
 
+  // ── Section H extras: summary narrative, graphic design, SM activity logs ────
+  const blockBody = (key: string) => report.overviewBlocks.find((b) => b.key === key)?.body ?? null;
+  const socialNarrative = {
+    highlights: blockBody("sm_highlights"),
+    strength: blockBody("sm_strength"),
+    weakness: blockBody("sm_weakness"),
+  };
+  const graphicDesign = report.activities
+    .filter((a) => a.department === "graphic_design")
+    .map((a) => ({ task: a.title ?? "", status: a.notes }));
+  const smActivities = [
+    { id: "sm_marketing", title: "Social Media & Marketing Activity", rows: activities("sm_marketing") },
+    { id: "marketing", title: "Marketing Activity", rows: activities("marketing") },
+    { id: "marketing_outsider", title: "Marketing Outsider", rows: activities("marketing_outsider") },
+    { id: "digital_marketing", title: "Digital Marketing Outsider", rows: activities("digital_marketing") },
+  ].filter((s) => s.rows.length > 0);
+
   const ads = await getWeeklyAds(propertyCode, week);
 
   return {
@@ -356,6 +380,9 @@ export async function getWeeklyExportData(
     channelsByYear,
     owner,
     social,
+    socialNarrative,
+    graphicDesign,
+    smActivities,
     screenshots: report.screenshots.map((s) => ({
       id: s.id,
       category: s.category,

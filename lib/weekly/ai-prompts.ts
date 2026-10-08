@@ -42,6 +42,12 @@ const BLOCK_GUIDANCE: Record<string, string> = {
   roas: `Draft a short Digital Ads / ROAS note. If the context has no ads figures, state in one sentence that the ROAS summary is shown from the ads panel and keep commentary brief; never invent ad spend, revenue or ROAS numbers.`,
 
   learning: `Draft a brief, forward-looking Learning & Growth / Trainings note for the team. The weekly dataset does not carry training figures here, so keep it to one or two sentences of professional commentary and do not cite or invent any numbers.`,
+
+  sm_highlights: `Draft the "Overall Highlights" for the week's social media performance, grounded in the social metrics in the context (field "social": each metric's last week, this week and % change). Write 1–2 sentences summarising the headline movements across the platform's metrics (website visits, profile visits, account reach, impressions, followers), quoting the figures and percentage changes exactly as given. Do not invent numbers.`,
+
+  sm_strength: `Draft the "Strength" note for the week's social media performance. In one sentence, name the metric(s) that improved most (from field "social"), quoting the figure/percentage, and what it indicates about audience interest. Use only figures present in the context.`,
+
+  sm_weakness: `Draft the "Weakness" note for the week's social media performance. In one sentence, name the metric(s) that were flat or softest relative to the others (from field "social"), quoting the figure/percentage, and frame it as an opportunity. Use only figures present in the context; do not invent numbers.`,
 };
 
 /** The block-specific weekly system prompt, combined with the shared guardrails. */

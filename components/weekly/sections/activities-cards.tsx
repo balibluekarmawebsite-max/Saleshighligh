@@ -30,7 +30,7 @@ export function ActivitiesCards({
   property: string;
   week: string;
   locked: boolean;
-  sectionId: "sales" | "ecommerce";
+  sectionId: string;
   title: string;
   subtitle: string;
   subjectLabel: string;

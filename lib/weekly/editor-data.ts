@@ -31,6 +31,29 @@ export const SOCIAL_METRIC_ROWS: { key: string; label: string }[] = [
 /** Platforms offered in the Section H selector. */
 export const SOCIAL_PLATFORMS = ["Instagram", "Facebook", "TikTok", "YouTube"] as const;
 
+/** Section H — the three social-insight narrative blocks (stored as overview blocks). */
+export const SOCIAL_NARRATIVE_BLOCKS: { key: string; heading: string }[] = [
+  { key: "sm_highlights", heading: "Overall Highlights" },
+  { key: "sm_strength", heading: "Strength" },
+  { key: "sm_weakness", heading: "Weakness" },
+];
+
+/** Section H — dated activity logs (each stored as WeeklyActivity under its own department). */
+export const SM_ACTIVITY_SECTIONS: { id: string; title: string; subjectLabel: string; addLabel: string }[] = [
+  { id: "sm_marketing", title: "Social Media & Marketing Activity", subjectLabel: "Subject", addLabel: "Add activity" },
+  { id: "marketing", title: "Marketing Activity", subjectLabel: "Subject", addLabel: "Add activity" },
+  { id: "marketing_outsider", title: "Marketing Outsider", subjectLabel: "Subject", addLabel: "Add activity" },
+  { id: "digital_marketing", title: "Digital Marketing Outsider", subjectLabel: "Subject", addLabel: "Add activity" },
+];
+
+/** Every WeeklyActivity department that stores date/subject/notes activity rows. */
+export const ACTIVITY_DEPARTMENTS = [
+  "sales", "ecommerce", "sm_marketing", "marketing", "marketing_outsider", "digital_marketing", "graphic_design",
+];
+
+/** All text blocks that can be AI-drafted + saved (Section A + Section H narrative). */
+export const ALL_TEXT_BLOCKS = [...OVERVIEW_BLOCKS, ...SOCIAL_NARRATIVE_BLOCKS];
+
 /** Statuses that lock a report from further editing. */
 export function isLockedStatus(status: string): boolean {
   return status === "APPROVED" || status === "EXPORTED";
@@ -309,6 +332,12 @@ export interface WeeklyFullEditorData {
   channelsByYear: Record<string, SectionRow[]>;
   channelYears: number[];
   social: Record<string, Record<string, { lastWeek: string; thisWeek: string }>>;
+  socialNarrative: WeeklyEditorBlock[];
+  graphicDesign: SectionRow[];
+  smMarketing: SectionRow[];
+  marketing: SectionRow[];
+  marketingOutsider: SectionRow[];
+  digitalMarketing: SectionRow[];
   sales: SectionRow[];
   ecommerce: SectionRow[];
   trainings: SectionRow[];
@@ -354,6 +383,11 @@ export async function getWeeklyFullEditorData(
     };
   });
 
+  const socialNarrative: WeeklyEditorBlock[] = SOCIAL_NARRATIVE_BLOCKS.map((def) => {
+    const existing = byKey.get(def.key);
+    return { key: def.key, heading: def.heading, body: existing?.body ?? "", aiDraft: existing?.aiDraft ?? false };
+  });
+
   const emptyCompletion: Record<WeeklyEditorSectionKey, boolean> = {
     A: false, B: false, C: false, D: false, EF: false,
     G: false, G2: false, H: false, I: false, J: false, OWNER: false,
@@ -369,6 +403,12 @@ export async function getWeeklyFullEditorData(
       channelsByYear: {},
       channelYears: [],
       social: {},
+      socialNarrative,
+      graphicDesign: [],
+      smMarketing: [],
+      marketing: [],
+      marketingOutsider: [],
+      digitalMarketing: [],
       sales: [],
       ecommerce: [],
       trainings: [],
@@ -509,6 +549,12 @@ export async function getWeeklyFullEditorData(
     channelsByYear,
     channelYears,
     social,
+    socialNarrative,
+    graphicDesign: activities("graphic_design"),
+    smMarketing: activities("sm_marketing"),
+    marketing: activities("marketing"),
+    marketingOutsider: activities("marketing_outsider"),
+    digitalMarketing: activities("digital_marketing"),
     sales: activities("sales"),
     ecommerce: activities("ecommerce"),
     trainings,

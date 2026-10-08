@@ -335,6 +335,64 @@ function socialSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
       row.eachCell((cell, col) => dataCell(cell, cols[col - 1]!));
     }
   }
+
+  // Summary: Overall Highlights / Strength / Weakness.
+  const n = d.socialNarrative;
+  if (n.highlights || n.strength || n.weakness) {
+    ws.addRow([]);
+    titleRow(ws, "Summary", cols.length, 12);
+    const note = (label: string, body: string | null) => {
+      if (!body) return;
+      const h = ws.addRow([label]);
+      h.getCell(1).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
+      const bodyRow = ws.addRow([body]);
+      bodyRow.getCell(1).font = { name: FONT, size: 11, color: { argb: INK } };
+      bodyRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      ws.mergeCells(bodyRow.number, 1, bodyRow.number, cols.length);
+    };
+    note("Overall Highlights", n.highlights);
+    note("Strength", n.strength);
+    note("Weakness", n.weakness);
+  }
+
+  setWidths(ws, cols);
+}
+
+function graphicDesignSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
+  if (d.graphicDesign.length === 0) return;
+  const ws = wb.addWorksheet("Graphic Design");
+  const cols: Col[] = [
+    { h: "Task", w: 70, a: "L" },
+    { h: "Status", w: 16, a: "L" },
+  ];
+  table(ws, {
+    title: "Graphic Design Report",
+    cols,
+    rows: d.graphicDesign.map((g) => [g.task, g.status ?? ""]),
+    freeze: true,
+  });
+}
+
+function smActivitySheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
+  if (d.smActivities.length === 0) return;
+  const ws = wb.addWorksheet("SM Activity");
+  const cols: Col[] = [
+    { h: "Date", w: 20, a: "L" },
+    { h: "Subject", w: 34, a: "L" },
+    { h: "Activity", w: 70, a: "L" },
+  ];
+  titleRow(ws, "Social Media & Marketing Activity", cols.length, 14);
+  for (const block of d.smActivities) {
+    ws.addRow([]);
+    const t = ws.addRow([block.title]);
+    t.getCell(1).font = { name: FONT, bold: true, size: 12, color: { argb: GOLD } };
+    const header = ws.addRow(cols.map((c) => c.h));
+    header.eachCell((cell, col) => headerCell(cell, cols[col - 1]?.a ?? "L"));
+    for (const r of block.rows) {
+      const row = ws.addRow([r.dateLabel ?? "", r.title ?? "", r.notes ?? ""]);
+      row.eachCell((cell, col) => dataCell(cell, cols[col - 1]!));
+    }
+  }
   setWidths(ws, cols);
 }
 
@@ -505,7 +563,11 @@ export async function buildWeeklyXlsxBuffer(
     activitySheet(wb, "G2-Ecommerce", "G2 · E-commerce Activities", "Task", d.departments.ecommerce);
     trainingSheet(wb, d);
   }
-  if (show("social")) socialSheet(wb, d);
+  if (show("social")) {
+    socialSheet(wb, d);
+    graphicDesignSheet(wb, d);
+    smActivitySheet(wb, d);
+  }
   if (show("plans")) plansSheet(wb, d);
   if (show("owner")) ownerSheet(wb, d);
   if (show("ads")) adsSheet(wb, d);
