@@ -332,18 +332,32 @@ hasn't yet), then pulls **Metricool** (Instagram + Facebook → Section H) and
 never stops the others, and a locked (approved/exported) report is left
 untouched.
 
+> **Deploy this code first.** The `/api/cron/weekly-sync` route ships in this
+> commit — make sure the server is running a build that includes it (see §8.7:
+> `git pull && npm ci && npm run build && sudo systemctl restart bk-dashboard`).
+> Confirm with `curl -i http://127.0.0.1:3000/api/cron/weekly-sync`: a JSON 503
+> ("CRON_SECRET is not set") means the route is live; a 404 or a redirect to
+> `/login` means the build predates it.
+
 ### 9.1 Protect it with a secret
 
-Generate a secret and put it in `.env`, then restart:
+Put `CRON_SECRET` in the app's `.env` — the one in the service's
+**WorkingDirectory**, not `~`. Derive the path from systemd so it's always
+right (adjust the unit name if yours differs):
 
 ```bash
-echo "CRON_SECRET=\"$(openssl rand -base64 32)\"" >> ~/Saleshighligh/.env
+APP=$(systemctl show -p WorkingDirectory --value bk-dashboard)
+echo "App dir: $APP"
+grep -q '^CRON_SECRET=' "$APP/.env" \
+  || echo "CRON_SECRET=\"$(openssl rand -base64 32)\"" >> "$APP/.env"
 sudo systemctl restart bk-dashboard
 ```
 
 The endpoint refuses to run without `CRON_SECRET` set. The scheduler must send
 it as `Authorization: Bearer <CRON_SECRET>` (or `x-cron-secret: <secret>`, or
 `?key=<secret>`). A signed-in **admin** can also trigger it from the browser.
+Read the value back when you need it for the scheduler:
+`grep CRON_SECRET "$APP/.env"`.
 
 ### 9.2 Schedule it (Friday 06:00 Bali time)
 
@@ -353,22 +367,26 @@ just ended. **Bali is UTC+8**, so Friday 06:00 WITA = **Thursday 22:00 UTC**.
 **Option A — crontab.** If the VM's clock is set to `Asia/Makassar`
 (`timedatectl set-timezone Asia/Makassar`), schedule it in local time:
 
+The scheduler runs **on the box**, so hit the app on localhost (the port in the
+service — `3000` by default) and skip TLS/domain entirely.
+
 ```cron
 # m h dom mon dow  — Friday 06:00 local (Asia/Makassar)
-0 6 * * 5 curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://dashboard.bluekarmasecrets.com/api/cron/weekly-sync >> /var/log/bk-weekly-sync.log 2>&1
+0 6 * * 5 curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" http://127.0.0.1:3000/api/cron/weekly-sync >> /var/log/bk-weekly-sync.log 2>&1
 ```
 
 If the VM stays on **UTC**, use `0 22 * * 4` (Thursday 22:00 UTC) instead — same
 instant.
 
-**Option B — systemd timer.** Create `/etc/systemd/system/bk-weekly-sync.service`:
+**Option B — systemd timer (recommended).** Create
+`/etc/systemd/system/bk-weekly-sync.service`:
 
 ```ini
 [Unit]
 Description=BK weekly Metricool + ads auto-sync
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://dashboard.bluekarmasecrets.com/api/cron/weekly-sync
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" http://127.0.0.1:3000/api/cron/weekly-sync
 ```
 
 and `/etc/systemd/system/bk-weekly-sync.timer`:
@@ -394,10 +412,10 @@ bk-weekly-sync.timer` (check with `systemctl list-timers bk-weekly-sync`).
 ### 9.3 Run it on demand
 
 ```bash
-# current week
-curl -H "Authorization: Bearer YOUR_CRON_SECRET" https://.../api/cron/weekly-sync
+# current week (run on the server; use the public URL from elsewhere)
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" http://127.0.0.1:3000/api/cron/weekly-sync
 # a specific past week (its Thursday end date)
-curl -H "Authorization: Bearer YOUR_CRON_SECRET" "https://.../api/cron/weekly-sync?week=2026-10-01"
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" "http://127.0.0.1:3000/api/cron/weekly-sync?week=2026-10-01"
 ```
 
 The JSON response lists, per property, whether the report was created, how many
