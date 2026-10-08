@@ -114,22 +114,6 @@ function readTimeline(data: unknown, metric?: string): Series {
   return { sum: nums.reduce((a, b) => a + b, 0), last: nums[nums.length - 1] ?? null, n: nums.length };
 }
 
-/** Reduce a /v2/analytics/aggregation response ({data:N}) to a number. */
-function readAggregate(data: unknown): number | null {
-  const f = finite(data);
-  if (f !== null) return f;
-  if (data && typeof data === "object") {
-    const r = data as Record<string, unknown>;
-    for (const k of ["data", "total", "value", "sum", "count"]) {
-      if (r[k] !== undefined) {
-        const x = finite(r[k]);
-        if (x !== null) return x;
-      }
-    }
-  }
-  return null;
-}
-
 // ── Metricool GET ────────────────────────────────────────────────────────────
 function apiBase(): string {
   return (process.env.METRICOOL_API_BASE || "https://app.metricool.com/api").replace(/\/+$/, "");
@@ -166,51 +150,74 @@ async function mcGet(path: string, params: Record<string, string>): Promise<GetR
 }
 
 // ── candidate metric names per network (broad; wrong guesses just return —) ──
+// Confirmed on BKV so far: instagram reach / views / followers return data.
+// The lists add snake_case + the 2024 Instagram metric set so profile-visit and
+// website-click names get covered too.
 const CANDIDATES: Record<string, string[]> = {
   instagram: [
+    // confirmed
     "reach",
-    "impressions",
     "views",
+    "followers",
+    // impressions (older name for views)
+    "impressions",
     "impressionsUnique",
+    // profile visits
     "profileViews",
     "profileVisits",
+    "profile_views",
+    "profile_visits",
+    "visits",
+    // website / link clicks
     "websiteClicks",
     "website_clicks",
-    "getDirectionsClicks",
-    "accountsReached",
-    "accounts_reached",
-    "accountsEngaged",
-    "totalInteractions",
-    "interactions",
-    "engagement",
-    "follows",
-    "followers",
-    "igFollowers",
-    "likes",
-    "comments",
-    "saves",
-    "shares",
-    "reelsPlays",
-    "storyReplies",
+    "websiteTaps",
+    "linkClicks",
+    "link_clicks",
     "externalLinkTaps",
     "profileLinksTaps",
+    "profile_links_taps",
+    // engagement family
+    "accountsEngaged",
+    "accounts_engaged",
+    "accountsReached",
+    "accounts_reached",
+    "totalInteractions",
+    "total_interactions",
+    "interactions",
+    "engagement",
+    // followers / reach variants + contacts
+    "follows",
+    "follower_count",
+    "followerCount",
+    "igFollowers",
+    "getDirectionsClicks",
+    "get_directions_clicks",
     "emailContacts",
+    "email_contacts",
     "phoneCallClicks",
+    "phone_call_clicks",
     "textMessageClicks",
+    "text_message_clicks",
   ],
   facebook: [
+    // previously observed on this account
+    "pageViews",
+    "page_media_view",
+    "pageFollows",
+    "postsCount",
+    // reach / impressions
     "pageReach",
     "page_reach",
     "pageImpressions",
     "page_impressions",
     "pageImpressionsUnique",
     "page_impressions_unique",
-    "page_media_view",
     "pageMediaView",
-    "pageViews",
     "page_views",
     "pageViews_total",
-    "pageFollows",
+    "page_views_total",
+    // fans / engagement / actions
     "pageFans",
     "page_fans",
     "pageFanAdds",
@@ -220,18 +227,24 @@ const CANDIDATES: Record<string, string[]> = {
     "page_post_engagements",
     "pageConsumptions",
     "page_consumptions",
+    "pageVideoViews",
+    "page_video_views",
     "pageTotalActions",
     "page_total_actions",
-    "postsCount",
+    "pageCtaClicks",
+    "page_cta_clicks",
+    // bare names (in case FB shares IG naming on this account)
     "reach",
     "impressions",
     "views",
     "websiteClicks",
     "profileVisits",
-    "pageCtaClicks",
-    "page_cta_clicks",
+    "followers",
   ],
 };
+
+/** The FB names we've seen work before — re-checked without a subject param too. */
+const FB_KNOWN = ["pageViews", "page_media_view", "pageFollows", "postsCount"];
 
 function fmt(n: number | null): string {
   return n === null ? "—" : n.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -262,60 +275,98 @@ async function resolveTarget(arg: string): Promise<{ blogId: string; label: stri
   }
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Spacing between calls so the sweep doesn't trip Metricool's rate limit. */
+const THROTTLE_MS = 220;
+
+/** Pull a short failure reason (title/code/message) out of an error body. */
+function reason(r: GetResult): string {
+  const j = r.json;
+  if (j && typeof j === "object") {
+    const o = j as Record<string, unknown>;
+    const t = o.title ?? o.error ?? o.message ?? o.code;
+    if (typeof t === "string" && t) return `${r.status} ${t}`;
+  }
+  return `HTTP ${r.status}`;
+}
+
+function bump(m: Map<string, number>, k: string): void {
+  m.set(k, (m.get(k) ?? 0) + 1);
+}
+
+/**
+ * Sweep a list of metric names against /v2/analytics/timelines and print the
+ * ones that return data. Non-hits are tallied by reason (so "rate-limited" is
+ * distinguishable from "invalid name" and "no data"). subject is included only
+ * when given. 429s are retried once after a longer pause.
+ */
+async function sweepTimelines(
+  blogId: string,
+  network: string,
+  names: string[],
+  fromIso: string,
+  toIso: string,
+  subject: string | null,
+): Promise<void> {
+  const label = subject === null ? "(no subject)" : `(subject=${subject})`;
+  console.log(`\n  /v2/analytics/timelines  ${label}`);
+  const breakdown = new Map<string, number>();
+  let hits = 0;
+  for (const metric of names) {
+    const params: Record<string, string> = { from: fromIso, to: toIso, metric, network, timezone: timezone() };
+    if (subject !== null) params.subject = subject;
+
+    let r: GetResult;
+    try {
+      r = await mcGet("/v2/analytics/timelines", params);
+      if (r.status === 429) {
+        await sleep(2500);
+        r = await mcGet("/v2/analytics/timelines", params);
+      }
+    } catch (err) {
+      bump(breakdown, `request-failed (${err instanceof Error ? err.message : "error"})`);
+      await sleep(THROTTLE_MS);
+      continue;
+    }
+
+    if (!r.ok) {
+      bump(breakdown, reason(r));
+      await sleep(THROTTLE_MS);
+      continue;
+    }
+    const s = readTimeline(r.json, metric);
+    if (s.sum === null) {
+      bump(breakdown, "200 but empty");
+      await sleep(THROTTLE_MS);
+      continue;
+    }
+    hits++;
+    console.log(
+      `    ✓ ${metric.padEnd(22)} sum=${fmt(s.sum).padStart(14)}   last=${fmt(s.last).padStart(12)}   (n=${s.n})`,
+    );
+    await sleep(THROTTLE_MS);
+  }
+  if (!hits) console.log(`    (no data from ${names.length} candidates)`);
+  if (breakdown.size) {
+    const parts = [...breakdown.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v}× ${k}`);
+    console.log(`    skipped: ${parts.join("  ·  ")}`);
+  }
+}
+
 async function probeNetwork(blogId: string, network: string, fromIso: string, toIso: string): Promise<void> {
   const names = CANDIDATES[network] ?? [];
   console.log(`\n=== ${network.toUpperCase()} — ${blogId} ===`);
 
-  // 1) /v2/analytics/timelines (subject=account) — where the box metrics live.
-  console.log(`\n  /v2/analytics/timelines  (subject=account)`);
-  let hitsTl = 0;
-  for (const metric of names) {
-    let r: GetResult;
-    try {
-      r = await mcGet("/v2/analytics/timelines", {
-        from: fromIso,
-        to: toIso,
-        metric,
-        network,
-        subject: "account",
-        timezone: timezone(),
-      });
-    } catch (err) {
-      console.log(`    ✗ ${metric.padEnd(24)} (request failed: ${err instanceof Error ? err.message : "error"})`);
-      continue;
-    }
-    if (!r.ok) continue; // invalid metric for this account — skip quietly
-    const s = readTimeline(r.json, metric);
-    if (s.sum === null) continue;
-    hitsTl++;
-    console.log(`    ✓ ${metric.padEnd(24)} sum=${fmt(s.sum).padStart(14)}   last=${fmt(s.last).padStart(12)}   (n=${s.n})`);
-  }
-  if (!hitsTl) console.log(`    (none of ${names.length} candidates returned data)`);
+  // Primary: account-level timelines (where the Section-H box metrics live).
+  await sweepTimelines(blogId, network, names, fromIso, toIso, "account");
 
-  // 2) /v2/analytics/aggregation (subject=account) — same names, aggregate form.
-  console.log(`\n  /v2/analytics/aggregation  (subject=account)`);
-  let hitsAgg = 0;
-  for (const metric of names) {
-    let r: GetResult;
-    try {
-      r = await mcGet("/v2/analytics/aggregation", {
-        from: fromIso,
-        to: toIso,
-        metric,
-        network,
-        subject: "account",
-        timezone: timezone(),
-      });
-    } catch {
-      continue;
-    }
-    if (!r.ok) continue;
-    const v = readAggregate(r.json);
-    if (v === null) continue;
-    hitsAgg++;
-    console.log(`    ✓ ${metric.padEnd(24)} data=${fmt(v).padStart(14)}`);
+  // Facebook: the frontend's own timeline requests carried no subject param, so
+  // re-check the names we've seen work without it — distinguishes a bad subject
+  // from a bad name / rate limit.
+  if (network === "facebook") {
+    await sweepTimelines(blogId, network, FB_KNOWN, fromIso, toIso, null);
   }
-  if (!hitsAgg) console.log(`    (none of ${names.length} candidates returned data)`);
 }
 
 async function main(): Promise<void> {
@@ -350,6 +401,7 @@ async function main(): Promise<void> {
   console.log(`Legend : "sum" totals the daily values (use for flow metrics:`);
   console.log(`         reach / impressions / profile visits / website clicks);`);
   console.log(`         "last" is the latest day's value (use for stock: followers).`);
+  console.log(`Note   : throttled ~${THROTTLE_MS}ms/request — a full run takes ~30–60s. Please wait.`);
 
   for (const network of networks) {
     await probeNetwork(blogId, network, fromIso, toIso);
