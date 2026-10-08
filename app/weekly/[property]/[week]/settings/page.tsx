@@ -1,8 +1,10 @@
 import { Check, Minus } from "lucide-react";
 
+import { MetricoolSettings } from "@/components/weekly/metricool-settings";
 import { getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { adsApiBase, isAdsSyncConfigured } from "@/lib/weekly/ads-sync";
 import { groqModel, groqVisionModel, isGroqConfigured } from "@/lib/weekly/groq";
+import { getPropertyBlogId, isMetricoolConfigured } from "@/lib/weekly/metricool";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,8 @@ export default async function WeeklySettingsPage({
   const user = await getCurrentUser();
   const admin = isAdmin(user);
   const authOn = !!process.env.AUTH_SECRET;
+  const metricoolOn = isMetricoolConfigured();
+  const metricoolBlogId = await getPropertyBlogId(params.property);
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -74,6 +78,19 @@ export default async function WeeklySettingsPage({
             <code>GROQ_MODEL</code> / <code>GROQ_VISION_MODEL</code>.
           </p>
         )}
+      </Card>
+
+      <Card title="Social Media (Metricool)">
+        <Row label="Status" value={<Flag on={metricoolOn} />} />
+        <Row label="This property's brand" value={metricoolBlogId ? <code className="text-xs">{metricoolBlogId}</code> : "—"} />
+        <div className="pt-3">
+          <MetricoolSettings
+            property={params.property}
+            currentBlogId={metricoolBlogId}
+            configured={metricoolOn}
+            isAdmin={admin}
+          />
+        </div>
       </Card>
 
       <Card title="Ads integration">
