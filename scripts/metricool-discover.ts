@@ -312,6 +312,8 @@ async function sweepTimelines(
   const label = subject === null ? "(no subject)" : `(subject=${subject})`;
   console.log(`\n  /v2/analytics/timelines  ${label}`);
   const breakdown = new Map<string, number>();
+  const emptyNames: string[] = []; // valid names (200) that returned no datapoints
+  let firstError: { reason: string; body: string } | null = null;
   let hits = 0;
   for (const metric of names) {
     const params: Record<string, string> = { from: fromIso, to: toIso, metric, network, timezone: timezone() };
@@ -332,12 +334,14 @@ async function sweepTimelines(
 
     if (!r.ok) {
       bump(breakdown, reason(r));
+      if (!firstError) firstError = { reason: reason(r), body: r.text.replace(/\s+/g, " ").trim().slice(0, 240) };
       await sleep(THROTTLE_MS);
       continue;
     }
     const s = readTimeline(r.json, metric);
     if (s.sum === null) {
       bump(breakdown, "200 but empty");
+      emptyNames.push(metric);
       await sleep(THROTTLE_MS);
       continue;
     }
@@ -348,10 +352,12 @@ async function sweepTimelines(
     await sleep(THROTTLE_MS);
   }
   if (!hits) console.log(`    (no data from ${names.length} candidates)`);
+  if (emptyNames.length) console.log(`    valid but empty (name OK, no data): ${emptyNames.join(", ")}`);
   if (breakdown.size) {
     const parts = [...breakdown.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => `${v}× ${k}`);
     console.log(`    skipped: ${parts.join("  ·  ")}`);
   }
+  if (firstError) console.log(`    first error body: ${firstError.body}`);
 }
 
 async function probeNetwork(blogId: string, network: string, fromIso: string, toIso: string): Promise<void> {
