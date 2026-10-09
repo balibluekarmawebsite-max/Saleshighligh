@@ -1,9 +1,9 @@
 import type { NextRequest } from "next/server";
-import type { Browser } from "playwright";
 
 import { requireRole } from "@/lib/auth-helpers";
 import { logAudit } from "@/lib/audit";
 import { periodToDate } from "@/lib/dashboard-data";
+import { pdfRenderOrigin, renderPrintPdf } from "@/lib/export/pdf-render";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
@@ -32,60 +32,28 @@ export async function GET(req: NextRequest) {
   if (sections) printParams.set("sections", sections);
   if (process.env.AUTH_SECRET) printParams.set("token", process.env.AUTH_SECRET);
   const qs = printParams.toString();
-  const printUrl = `${url.origin}/print/${property}/${period}${qs ? `?${qs}` : ""}`;
+  const printUrl = `${pdfRenderOrigin()}/print/${property}/${period}${qs ? `?${qs}` : ""}`;
 
-  let chromium: typeof import("playwright").chromium;
+  const result = await renderPrintPdf(printUrl);
+  if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
+
   try {
-    ({ chromium } = await import("playwright"));
+    const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
+    if (prop) {
+      await prisma.exportHistory.create({
+        data: { propertyId: prop.id, period: periodToDate(period), format: "pdf", scope: "single" },
+      });
+    }
+    await logAudit("export.pdf", `${property} ${period}`);
   } catch {
-    return Response.json({ error: "PDF export requires the 'playwright' package on the server." }, { status: 501 });
+    /* ignore audit failures */
   }
 
-  let browser: Browser;
-  try {
-    browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
-  } catch (err) {
-    const execPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
-    if (!execPath) {
-      const message = err instanceof Error ? err.message : "unknown error";
-      return Response.json(
-        { error: `Could not launch Chromium for PDF export: ${message}. Install the browser (npx playwright install chromium) or set PLAYWRIGHT_CHROMIUM_PATH.` },
-        { status: 500 },
-      );
-    }
-    browser = await chromium.launch({ headless: true, executablePath: execPath, args: ["--no-sandbox"] });
-  }
-
-  try {
-    const page = await browser.newPage();
-    await page.goto(printUrl, { waitUntil: "networkidle", timeout: 60_000 });
-    const pdf = await page.pdf({
-      format: "A4",
-      landscape: true,
-      printBackground: true,
-      margin: { top: "12mm", bottom: "12mm", left: "12mm", right: "12mm" },
-    });
-
-    try {
-      const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
-      if (prop) {
-        await prisma.exportHistory.create({
-          data: { propertyId: prop.id, period: periodToDate(period), format: "pdf", scope: "single" },
-        });
-      }
-      await logAudit("export.pdf", `${property} ${period}`);
-    } catch {
-      /* ignore audit failures */
-    }
-
-    return new Response(new Uint8Array(pdf), {
-      headers: {
-        "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="${property}-${period}-sales-highlight.pdf"`,
-        "cache-control": "no-store",
-      },
-    });
-  } finally {
-    await browser.close();
-  }
+  return new Response(result.pdf, {
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${property}-${period}-sales-highlight.pdf"`,
+      "cache-control": "no-store",
+    },
+  });
 }
