@@ -468,18 +468,85 @@ async function listBrands(targetBlogId: string): Promise<void> {
   }
 }
 
+/** Compact IG/FB (+ other) connection summary for one brand, with handles. */
+function brandConnections(o: Record<string, unknown>): string {
+  const val = (k: string): string | null => {
+    const v = o[k];
+    if (v == null || v === "") return null;
+    return typeof v === "string" ? v : typeof v === "object" ? "{…}" : String(v);
+  };
+  const ig = val("instagram") ?? val("instagramConnectionType");
+  const fb = val("facebook") ?? val("facebookPageId");
+  const parts = [`IG:${ig ?? "–"}`, `FB:${fb ?? "–"}`];
+  const others: string[] = [];
+  for (const [k, short] of [
+    ["twitter", "TW"],
+    ["linkedinCompany", "LI"],
+    ["tiktok", "TT"],
+    ["youtube", "YT"],
+    ["gmb", "GMB"],
+    ["pinterest", "PIN"],
+    ["threads", "TH"],
+    ["facebookGroupId", "FBgrp"],
+    ["facebookAds", "FBads"],
+  ] as const) {
+    if (val(k)) others.push(short);
+  }
+  if (others.length) parts.push(others.join(","));
+  return parts.join("   ");
+}
+
+/** Print every brand on the login with its connected networks (the "brands" mode). */
+async function listAllBrands(): Promise<void> {
+  let r: GetResult;
+  try {
+    r = await mcGet("/admin/simpleProfiles", {});
+  } catch (err) {
+    console.log(`Could not fetch brands: ${err instanceof Error ? err.message : "error"}`);
+    return;
+  }
+  if (!r.ok) {
+    console.log(`Could not fetch brands: ${reason(r)}`);
+    return;
+  }
+  const data = r.json;
+  const arr: unknown[] = Array.isArray(data)
+    ? data
+    : data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).data)
+      ? ((data as Record<string, unknown>).data as unknown[])
+      : [];
+  console.log(`Metricool brands on this login (${arr.length}) — IG/FB handle shown when connected:\n`);
+  for (const b of arr) {
+    if (!b || typeof b !== "object") continue;
+    const o = b as Record<string, unknown>;
+    const blogId = String(o.blogId ?? o.id ?? "");
+    const lbl = String(o.label ?? o.brand ?? o.title ?? o.name ?? "");
+    console.log(`  ${blogId.padEnd(10)} ${lbl.padEnd(26)} ${brandConnections(o)}`);
+  }
+  console.log(
+    `\nAssign the blogId whose IG/FB is a property's real account to that property` +
+      ` (Settings → Social Media). A brand showing "IG:– FB:–" has neither connected.`,
+  );
+}
+
 async function main(): Promise<void> {
   loadEnv();
   const target = process.argv[2];
   const netArg = (process.argv[3] || "").toLowerCase();
   if (!target) {
-    console.error("Usage: npx tsx scripts/metricool-discover.ts <blogId|propertyCode> [instagram|facebook]");
+    console.error("Usage: npx tsx scripts/metricool-discover.ts <blogId|propertyCode|brands> [instagram|facebook]");
     process.exit(1);
     return;
   }
   if (!process.env.METRICOOL_USER_TOKEN || !process.env.METRICOOL_USER_ID) {
     console.error("METRICOOL_USER_TOKEN / METRICOOL_USER_ID not found (looked in .env and the environment).");
     process.exit(1);
+    return;
+  }
+
+  // "brands" mode: just map every brand → connected networks, then exit.
+  if (target.toLowerCase() === "brands") {
+    await listAllBrands();
     return;
   }
 
