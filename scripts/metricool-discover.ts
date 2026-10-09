@@ -405,8 +405,34 @@ async function fetchValidMetrics(
   return { validList: null, note: `${reason(r)} — ${r.text.replace(/\s+/g, " ").trim().slice(0, 240)}`, status: r.status };
 }
 
+/**
+ * v1 follower check (/stats/timeline/{ig|fb}Followers) for a blog. v1 is the
+ * endpoint our follower sync already uses; comparing it to v2 proves whether the
+ * API TOKEN can see this brand's network at all (v1) versus its v2 analytics.
+ */
+async function v1Followers(blogId: string, prefix: string, startYmd: string, endYmd: string): Promise<string> {
+  const metric = `${prefix}Followers`;
+  let r: GetResult;
+  try {
+    r = await mcGet(`/stats/timeline/${metric}`, { blogId, start: startYmd, end: endYmd });
+  } catch (err) {
+    return `request failed: ${err instanceof Error ? err.message : "error"}`;
+  }
+  if (!r.ok) return reason(r);
+  const s = readTimeline(r.json);
+  return s.last !== null ? `last=${fmt(s.last)}` : "200 but empty";
+}
+
 async function probeNetwork(blogId: string, network: string, fromIso: string, toIso: string): Promise<void> {
   console.log(`\n=== ${network.toUpperCase()} — blogId ${blogId} ===`);
+
+  // v1 followers first — if this sees the account but v2 doesn't, it's a v2/token
+  // access difference, not a wrong blog.
+  const prefix = network === "facebook" ? "fb" : "ig";
+  const startYmd = fromIso.slice(0, 10).replace(/-/g, "");
+  const endYmd = toIso.slice(0, 10).replace(/-/g, "");
+  const v1 = await v1Followers(blogId, prefix, startYmd, endYmd);
+  console.log(`\n  v1 /stats/timeline/${prefix}Followers → ${v1}`);
 
   // Catalog-driven: let the API tell us its valid metric names, then probe those.
   const cat = await fetchValidMetrics(blogId, network, "account", fromIso, toIso);
@@ -464,7 +490,9 @@ async function listBrands(targetBlogId: string): Promise<void> {
     }
     console.log(`\n  connections for target blogId ${targetBlogId}:`);
     console.log(`    ${flags.length ? flags.join("  ·  ") : "(no obvious network fields — raw below)"}`);
-    console.log(`    raw: ${JSON.stringify(target).slice(0, 900)}`);
+    // Full non-null fields only (so a hidden IG/FB connection field can't be missed).
+    const nonNull = Object.fromEntries(Object.entries(target).filter(([, v]) => v !== null && v !== ""));
+    console.log(`    non-null fields: ${JSON.stringify(nonNull)}`);
   }
 }
 
