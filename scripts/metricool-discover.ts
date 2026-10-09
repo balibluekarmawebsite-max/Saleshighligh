@@ -572,6 +572,33 @@ async function listAllBrands(): Promise<void> {
  * actual v1 follower counts + whether v2 analytics are reachable. The brand whose
  * IG/FB follower counts match the Metricool UI is the property's real brand.
  */
+/** Last value of a v2 timelines metric (e.g. followers) for a blog, or null. */
+async function v2MetricLast(
+  blogId: string,
+  network: string,
+  metric: string,
+  fromIso: string,
+  toIso: string,
+): Promise<number | null> {
+  const params: Record<string, string> = {
+    blogId,
+    from: fromIso,
+    to: toIso,
+    metric,
+    network,
+    subject: "account",
+    timezone: timezone(),
+  };
+  let r: GetResult;
+  try {
+    r = await mcGet("/v2/analytics/timelines", params);
+  } catch {
+    return null;
+  }
+  if (!r.ok) return null;
+  return readTimeline(r.json, metric).last;
+}
+
 async function auditAllBrands(extraBlogIds: string[]): Promise<void> {
   let r: GetResult;
   try {
@@ -606,14 +633,11 @@ async function auditAllBrands(extraBlogIds: string[]): Promise<void> {
   const start = new Date(now.getTime() - 35 * 86_400_000).toISOString().slice(0, 10);
   const fromIso = `${start}T00:00:00${off}`;
   const toIso = `${end}T23:59:59${off}`;
-  const startYmd = start.replace(/-/g, "");
-  const endYmd = end.replace(/-/g, "");
 
-  console.log(`Auditing ${arr.length} brands (window ${start} → ${end}). IG/FB v1 = follower count.\n`);
-  const compact = (v: { last: number | null; err: string | null }): string =>
-    v.err ? v.err.slice(0, 14) : v.last !== null ? fmt(v.last) : "empty";
+  console.log(`Auditing ${arr.length} brands (window ${start} → ${end}). Follower counts via v2.\n`);
+  const num = (n: number | null): string => (n === null ? "–" : fmt(n));
   console.log(
-    `  ${"blogId".padEnd(9)} ${"label".padEnd(24)} ${"IGon".padEnd(5)}${"FBon".padEnd(5)} ${"IG v1".padStart(10)} ${"FB v1".padStart(10)}  v2igReach`,
+    `  ${"blogId".padEnd(9)} ${"label".padEnd(24)} ${"IGv2".padEnd(5)}${"FBv2".padEnd(5)} ${"IG foll".padStart(11)} ${"FB foll".padStart(11)}`,
   );
   for (const b of arr) {
     if (!b || typeof b !== "object") continue;
@@ -621,17 +645,19 @@ async function auditAllBrands(extraBlogIds: string[]): Promise<void> {
     const blogId = String(o.blogId ?? o.id ?? "");
     if (!blogId) continue;
     const label = String(o.label ?? o.brand ?? o.title ?? o.name ?? "").slice(0, 23);
-    const igOn = o.instagram || o.instagramConnectionType ? "yes" : "–";
-    const fbOn = o.facebook || o.facebookPageId ? "yes" : "–";
-    const igF = await v1FollowersRaw(blogId, "ig", startYmd, endYmd);
-    const fbF = await v1FollowersRaw(blogId, "fb", startYmd, endYmd);
-    const cat = await fetchValidMetrics(blogId, "instagram", "account", fromIso, toIso);
-    const v2 = cat.validList ? "ok" : `${cat.status || "err"}`;
+    // v2 follower counts (last value of the daily series) — the reliable identifier.
+    const igFoll = await v2MetricLast(blogId, "instagram", "followers", fromIso, toIso);
+    const fbCat = await fetchValidMetrics(blogId, "facebook", "account", fromIso, toIso);
+    const fbMetric = fbCat.validList?.find((m) => /follow/i.test(m)) ?? "pageFollows";
+    const fbFoll = fbCat.validList ? await v2MetricLast(blogId, "facebook", fbMetric, fromIso, toIso) : null;
+    const igCat = await fetchValidMetrics(blogId, "instagram", "account", fromIso, toIso);
+    const igV2 = igCat.validList ? "ok" : `${igCat.status || "err"}`;
+    const fbV2 = fbCat.validList ? "ok" : `${fbCat.status || "err"}`;
     console.log(
-      `  ${blogId.padEnd(9)} ${label.padEnd(24)} ${igOn.padEnd(5)}${fbOn.padEnd(5)} ${compact(igF).padStart(10)} ${compact(fbF).padStart(10)}  ${v2}`,
+      `  ${blogId.padEnd(9)} ${label.padEnd(24)} ${igV2.padEnd(5)}${fbV2.padEnd(5)} ${num(igFoll).padStart(11)} ${num(fbFoll).padStart(11)}`,
     );
   }
-  console.log(`\nThe brand whose IG/FB follower counts match the Metricool UI is the real one for that property.`);
+  console.log(`\nThe brand whose IG/FB follower counts match the Metricool UI (e.g. BKV ≈ 14,650 IG / 960 FB) is the real one.`);
 }
 
 async function main(): Promise<void> {
