@@ -119,16 +119,31 @@ describe("resolveMetricSource", () => {
     delete process.env.METRICOOL_METRIC_MAP;
   });
 
-  it("defaults followers to the v1 timeline and flow metrics to the v2 timelines endpoint", () => {
-    expect(resolveMetricSource("instagram", "ig", "followers")).toEqual({ source: "timeline", name: "igFollowers" });
-    expect(resolveMetricSource("facebook", "fb", "followers")).toEqual({ source: "timeline", name: "fbFollowers" });
+  it("defaults every metric to the v2 timelines endpoint with the confirmed names", () => {
+    // Followers are a stock metric → v2 timelines, last value (NOT the v1 timeline).
+    expect(resolveMetricSource("instagram", "ig", "followers")).toEqual({
+      source: "v2timeline",
+      metric: "followers",
+      subject: "account",
+      reduce: "last",
+    });
+    expect(resolveMetricSource("facebook", "fb", "followers")).toEqual({
+      source: "v2timeline",
+      metric: "pageFollows",
+      subject: "account",
+      reduce: "last",
+    });
+    // Instagram flow metrics (confirmed against the live catalog).
     expect(resolveMetricSource("instagram", "ig", "account_reached")).toEqual({
       source: "v2timeline",
       metric: "reach",
       subject: "account",
       reduce: "sum",
     });
-    // Facebook defaults use the page-level names observed on the account.
+    expect(resolveMetricSource("instagram", "ig", "impression")?.metric).toBe("views");
+    expect(resolveMetricSource("instagram", "ig", "profile_visit")?.metric).toBe("profile_views");
+    expect(resolveMetricSource("instagram", "ig", "website_visit")?.metric).toBe("website_clicks");
+    // Facebook flow metrics; FB has no account-level reach, so it's left blank.
     expect(resolveMetricSource("facebook", "fb", "impression")).toEqual({
       source: "v2timeline",
       metric: "page_media_view",
@@ -136,6 +151,7 @@ describe("resolveMetricSource", () => {
       reduce: "sum",
     });
     expect(resolveMetricSource("facebook", "fb", "profile_visit")?.metric).toBe("pageViews");
+    expect(resolveMetricSource("facebook", "fb", "account_reached")?.metric).toBe("");
   });
 
   it("merges an object env override (metric + subject) without flipping the endpoint", () => {

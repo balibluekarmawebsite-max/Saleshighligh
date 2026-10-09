@@ -324,26 +324,35 @@ export interface MetricSource {
 /**
  * The 5 Section H metrics, their kind, and the DEFAULT per-network source.
  *
- * - Followers come from the v1 timeline (`{ig|fb}Followers`) — confirmed working.
- * - Reach / Impressions(Views) / Profile visits / Website clicks are modern
- *   per-account metrics: they live on the v2 *timelines* endpoint (the v2
- *   aggregation endpoint answers "NotImplemented" for them). Their exact metric
- *   names differ per account/network, so the names below are best-effort
- *   defaults — a wrong guess simply returns no data (the metric stays blank), so
- *   it never shows a wrong number. Confirm the real names with
- *   `scripts/metricool-discover.ts`, then lock them in via METRICOOL_METRIC_MAP
- *   (no redeploy needed, just a restart).
+ * All five come from the v2 *timelines* endpoint (`/v2/analytics/timelines`,
+ * subject=account): flow metrics sum the week's daily values, followers take the
+ * last day's value. The metric names below were confirmed against the live
+ * account (the endpoint's own "Valid values are: […]" catalog + real data) —
+ * see scripts/metricool-discover.ts. Notes:
+ *   - Followers use v2 (`followers` / `pageFollows`), NOT the v1 timeline — v1
+ *     `{ig|fb}Followers` returns 0 for these brands.
+ *   - Instagram impression → `views` (Meta's current name for impressions;
+ *     `impressions` returns the same series). FB impression → `page_media_view`
+ *     (the FB "Views" box).
+ *   - Profile visits: IG `profile_views`, FB `pageViews` (the FB "Page visits" box).
+ *   - Facebook has no account-level reach metric, so FB account_reached is left
+ *     unmapped (blank). IG/FB website clicks are valid names that are often
+ *     empty; they populate only when the account has such activity.
+ * A wrong/empty name simply returns no data (the metric stays blank) — it never
+ * shows a wrong number. Any name can still be overridden per account via
+ * METRICOOL_METRIC_MAP (no redeploy, just a restart).
  */
 const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiName: string) => MetricSource }> = {
   account_reached: {
     kind: "flow",
-    def: (_p, api) => ({ source: "v2timeline", metric: api === "facebook" ? "pageReach" : "reach", subject: "account" }),
+    // Facebook exposes no account-level reach metric → leave FB blank (empty name).
+    def: (_p, api) => ({ source: "v2timeline", metric: api === "facebook" ? "" : "reach", subject: "account" }),
   },
   impression: {
     kind: "flow",
     def: (_p, api) => ({
       source: "v2timeline",
-      metric: api === "facebook" ? "page_media_view" : "impressions",
+      metric: api === "facebook" ? "page_media_view" : "views",
       subject: "account",
     }),
   },
@@ -351,15 +360,27 @@ const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiNam
     kind: "flow",
     def: (_p, api) => ({
       source: "v2timeline",
-      metric: api === "facebook" ? "pageViews" : "profileViews",
+      metric: api === "facebook" ? "pageViews" : "profile_views",
       subject: "account",
     }),
   },
   website_visit: {
     kind: "flow",
-    def: () => ({ source: "v2timeline", metric: "websiteClicks", subject: "account" }),
+    def: (_p, api) => ({
+      source: "v2timeline",
+      metric: api === "facebook" ? "page_website_clicks_logged_in_unique" : "website_clicks",
+      subject: "account",
+    }),
   },
-  followers: { kind: "stock", def: (p) => ({ source: "timeline", name: `${p}Followers` }) },
+  followers: {
+    kind: "stock",
+    def: (_p, api) => ({
+      source: "v2timeline",
+      metric: api === "facebook" ? "pageFollows" : "followers",
+      subject: "account",
+      reduce: "last",
+    }),
+  },
 };
 
 /** The Section H metric keys Metricool can fill, in report order. */
