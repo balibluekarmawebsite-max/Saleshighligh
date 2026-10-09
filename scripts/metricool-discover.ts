@@ -316,7 +316,7 @@ async function sweepTimelines(
   let firstError: { reason: string; body: string } | null = null;
   let hits = 0;
   for (const metric of names) {
-    const params: Record<string, string> = { from: fromIso, to: toIso, metric, network, timezone: timezone() };
+    const params: Record<string, string> = { blogId, from: fromIso, to: toIso, metric, network, timezone: timezone() };
     if (subject !== null) params.subject = subject;
 
     let r: GetResult;
@@ -360,18 +360,111 @@ async function sweepTimelines(
   if (firstError) console.log(`    first error body: ${firstError.body}`);
 }
 
+interface Catalog {
+  validList: string[] | null;
+  note: string;
+  status: number;
+}
+
+/**
+ * Ask Metricool for its own list of valid account metrics by sending a
+ * deliberately-invalid name: its 400 error echoes "Valid values are: [...]".
+ * Catalog-driven beats guessing. Returns the parsed list, or a note explaining
+ * why it couldn't (e.g. a 403 "no connection" for a network that isn't linked).
+ */
+async function fetchValidMetrics(
+  blogId: string,
+  network: string,
+  subject: string,
+  fromIso: string,
+  toIso: string,
+): Promise<Catalog> {
+  const params: Record<string, string> = {
+    blogId,
+    from: fromIso,
+    to: toIso,
+    metric: "__catalog_probe__",
+    network,
+    subject,
+    timezone: timezone(),
+  };
+  let r: GetResult;
+  try {
+    r = await mcGet("/v2/analytics/timelines", params);
+  } catch (err) {
+    return { validList: null, note: `request failed: ${err instanceof Error ? err.message : "error"}`, status: 0 };
+  }
+  const m = /valid values are:\s*\[([^\]]*)\]/i.exec(r.text);
+  if (m && m[1]) {
+    const list = m[1]
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (list.length) return { validList: list, note: `from ${r.status} enum error`, status: r.status };
+  }
+  return { validList: null, note: `${reason(r)} — ${r.text.replace(/\s+/g, " ").trim().slice(0, 240)}`, status: r.status };
+}
+
 async function probeNetwork(blogId: string, network: string, fromIso: string, toIso: string): Promise<void> {
-  const names = CANDIDATES[network] ?? [];
-  console.log(`\n=== ${network.toUpperCase()} — ${blogId} ===`);
+  console.log(`\n=== ${network.toUpperCase()} — blogId ${blogId} ===`);
 
-  // Primary: account-level timelines (where the Section-H box metrics live).
-  await sweepTimelines(blogId, network, names, fromIso, toIso, "account");
+  // Catalog-driven: let the API tell us its valid metric names, then probe those.
+  const cat = await fetchValidMetrics(blogId, network, "account", fromIso, toIso);
+  if (cat.validList && cat.validList.length) {
+    console.log(`\n  valid account metrics reported by API (${cat.validList.length}):`);
+    console.log(`    ${cat.validList.join(", ")}`);
+    await sweepTimelines(blogId, network, cat.validList, fromIso, toIso, "account");
+    return;
+  }
 
-  // Facebook: the frontend's own timeline requests carried no subject param, so
-  // re-check the names we've seen work without it — distinguishes a bad subject
-  // from a bad name / rate limit.
+  // No catalog (e.g. a 403 because the network isn't connected to this blog).
+  console.log(`\n  could not read a metric catalog — ${cat.note}`);
+  await sweepTimelines(blogId, network, CANDIDATES[network] ?? [], fromIso, toIso, "account");
   if (network === "facebook") {
     await sweepTimelines(blogId, network, FB_KNOWN, fromIso, toIso, null);
+  }
+}
+
+/** List the brands on the login (so an unexpected blogId in an error is identifiable). */
+async function listBrands(targetBlogId: string): Promise<void> {
+  let r: GetResult;
+  try {
+    r = await mcGet("/admin/simpleProfiles", {});
+  } catch (err) {
+    console.log(`\nBrands: could not fetch (${err instanceof Error ? err.message : "error"})`);
+    return;
+  }
+  if (!r.ok) {
+    console.log(`\nBrands: ${reason(r)}`);
+    return;
+  }
+  const data = r.json;
+  const arr: unknown[] = Array.isArray(data)
+    ? data
+    : data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).data)
+      ? ((data as Record<string, unknown>).data as unknown[])
+      : [];
+  console.log(`\nMetricool brands on this login (${arr.length}):`);
+  let target: Record<string, unknown> | null = null;
+  for (const b of arr) {
+    if (!b || typeof b !== "object") continue;
+    const o = b as Record<string, unknown>;
+    const blogId = String(o.blogId ?? o.id ?? "");
+    const label = String(o.label ?? o.brand ?? o.title ?? o.name ?? "");
+    const marker = blogId === targetBlogId ? "  ← target" : "";
+    console.log(`  ${blogId.padEnd(10)} ${label}${marker}`);
+    if (blogId === targetBlogId) target = o;
+  }
+  if (target) {
+    const flags: string[] = [];
+    for (const [k, v] of Object.entries(target)) {
+      if (!/facebook|instagram|twitter|tiktok|youtube|linkedin|gmb|google|pinterest|threads|twitch/i.test(k)) continue;
+      const on = v && typeof v === "object" ? Object.keys(v as object).length > 0 : Boolean(v);
+      flags.push(`${k}=${typeof v === "object" ? (on ? "{…}" : "null") : String(v)}`);
+    }
+    console.log(`\n  connections for target blogId ${targetBlogId}:`);
+    console.log(`    ${flags.length ? flags.join("  ·  ") : "(no obvious network fields — raw below)"}`);
+    console.log(`    raw: ${JSON.stringify(target).slice(0, 900)}`);
   }
 }
 
@@ -408,6 +501,8 @@ async function main(): Promise<void> {
   console.log(`         reach / impressions / profile visits / website clicks);`);
   console.log(`         "last" is the latest day's value (use for stock: followers).`);
   console.log(`Note   : throttled ~${THROTTLE_MS}ms/request — a full run takes ~30–60s. Please wait.`);
+
+  await listBrands(blogId);
 
   for (const network of networks) {
     await probeNetwork(blogId, network, fromIso, toIso);
