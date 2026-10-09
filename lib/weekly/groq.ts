@@ -19,7 +19,10 @@ export function groqModel(): string {
 }
 
 export function groqVisionModel(): string {
-  return process.env.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct";
+  // Groq's vision (multimodal) model. Its lineup changes often — override with
+  // GROQ_VISION_MODEL for your account (list yours: GET /openai/v1/models). The
+  // older llama-4-scout id was retired; qwen/qwen3.8-27b is the current one.
+  return process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 }
 
 export interface GroqImage {
