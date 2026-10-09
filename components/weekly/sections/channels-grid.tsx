@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { channelYtd, sharePercent } from "@/lib/weekly/calculations";
 import { saveChannels } from "@/lib/weekly/editor-actions";
 import {
-  CELL,
+  GridCell,
   SaveButton,
   SectionCardShell,
   SectionHeading,
@@ -121,22 +121,23 @@ export function ChannelsGrid({
               {rows.map((row, i) => (
                 <tr key={i} className="border-b border-border/60">
                   <td className="py-1.5 pr-3">
-                    <input
-                      value={row.sourceLabel ?? ""}
-                      onChange={(e) => update(i, "sourceLabel", e.target.value)}
-                      disabled={locked}
-                      className={`${CELL} min-w-[9rem]`}
+                    <GridCell
+                      value={row.sourceLabel}
+                      onChange={(v) => update(i, "sourceLabel", v)}
+                      locked={locked}
+                      fmt="text"
+                      minW="min-w-[9rem]"
                       placeholder="Source"
                     />
                   </td>
                   {MONTHS.map((m) => (
                     <td key={m.key} className="py-1.5 px-1">
-                      <input
-                        inputMode="numeric"
-                        value={row[m.key] ?? ""}
-                        onChange={(e) => update(i, m.key, e.target.value)}
-                        disabled={locked}
-                        className={`${CELL} min-w-[3.25rem] px-1.5 text-right`}
+                      <GridCell
+                        value={row[m.key]}
+                        onChange={(v) => update(i, m.key, v)}
+                        locked={locked}
+                        fmt="num"
+                        minW="min-w-[3.25rem]"
                       />
                     </td>
                   ))}

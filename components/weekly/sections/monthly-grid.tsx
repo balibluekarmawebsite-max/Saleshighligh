@@ -5,12 +5,13 @@ import { useFormState } from "react-dom";
 import { rate } from "@/lib/weekly/calculations";
 import { saveMonthlyStats } from "@/lib/weekly/editor-actions";
 import {
-  CELL,
+  GridCell,
   SaveButton,
   SectionCardShell,
   SectionHeading,
   dispNum,
   sumCol,
+  type CellFmt,
   type Row,
   useRows,
 } from "@/components/weekly/sections/shared";
@@ -37,13 +38,13 @@ export function MonthlyGrid({
   const revAct = sumCol(rows, "revActual");
   const revBud = sumCol(rows, "revBudget");
 
-  const cell = (i: number, key: string, align = "text-right") => (
-    <input
-      inputMode="numeric"
-      value={rows[i]?.[key] ?? ""}
-      onChange={(e) => update(i, key, e.target.value)}
-      disabled={locked}
-      className={`${CELL} ${align} min-w-[5.5rem]`}
+  const cell = (i: number, key: string, fmt: CellFmt = "num") => (
+    <GridCell
+      value={rows[i]?.[key]}
+      onChange={(v) => update(i, key, v)}
+      locked={locked}
+      fmt={fmt}
+      minW="min-w-[5.5rem]"
     />
   );
 
@@ -89,7 +90,7 @@ export function MonthlyGrid({
                   <td className="py-1.5 pr-3 font-medium text-foreground">{row.monthLabel}</td>
                   <td className="py-1.5 px-2">{cell(i, "rnSold")}</td>
                   {OCC.map((k) => (
-                    <td key={k} className="py-1.5 px-2">{cell(i, k)}</td>
+                    <td key={k} className="py-1.5 px-2">{cell(i, k, "pct2")}</td>
                   ))}
                   {ARR.map((k) => (
                     <td key={k} className="py-1.5 px-2">{cell(i, k)}</td>

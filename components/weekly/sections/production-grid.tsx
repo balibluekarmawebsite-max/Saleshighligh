@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { rate, sharePercent } from "@/lib/weekly/calculations";
 import type { ActionResult } from "@/lib/weekly/editor-actions";
 import {
-  CELL,
+  GridCell,
   SaveButton,
   SectionCardShell,
   SectionHeading,
@@ -90,33 +90,31 @@ export function ProductionGrid({
                 return (
                   <tr key={i} className="border-b border-border/60">
                     <td className="py-1.5 pr-3">
-                      <input
-                        value={row.label ?? ""}
-                        onChange={(e) => update(i, "label", e.target.value)}
-                        disabled={locked}
-                        className={CELL}
+                      <GridCell
+                        value={row.label}
+                        onChange={(v) => update(i, "label", v)}
+                        locked={locked}
+                        fmt="text"
                         placeholder={labelHeader}
                       />
                     </td>
                     <td className="py-1.5 px-3">
-                      <input
-                        inputMode="numeric"
-                        value={row.rnSold ?? ""}
-                        onChange={(e) => update(i, "rnSold", e.target.value)}
-                        disabled={locked}
-                        className={`${CELL} text-right`}
+                      <GridCell
+                        value={row.rnSold}
+                        onChange={(v) => update(i, "rnSold", v)}
+                        locked={locked}
+                        fmt="num"
                       />
                     </td>
                     <td className="py-1.5 px-3 text-right tabular-nums text-muted-foreground">
                       {dispNum(rate(rev, rn))}
                     </td>
                     <td className="py-1.5 px-3">
-                      <input
-                        inputMode="numeric"
-                        value={row.grossRevenue ?? ""}
-                        onChange={(e) => update(i, "grossRevenue", e.target.value)}
-                        disabled={locked}
-                        className={`${CELL} text-right`}
+                      <GridCell
+                        value={row.grossRevenue}
+                        onChange={(v) => update(i, "grossRevenue", v)}
+                        locked={locked}
+                        fmt="num"
                       />
                     </td>
                     <td className="py-1.5 px-3 text-right tabular-nums text-muted-foreground">

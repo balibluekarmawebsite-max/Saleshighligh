@@ -7,6 +7,7 @@ import { Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatNumber } from "@/lib/format";
 import { formatWeeklyPercent } from "@/lib/weekly/format";
+import { cn } from "@/lib/utils";
 import type { ActionResult } from "@/lib/weekly/editor-actions";
 
 export type Row = Record<string, string>;
@@ -53,6 +54,67 @@ export const dispNum = (n: number | null | undefined) =>
   n == null ? "—" : formatNumber(n);
 export const dispPct = (n: number | null | undefined) =>
   n == null ? "—" : formatWeeklyPercent(n);
+
+/**
+ * How a stored (string) row value should be rendered in a read-only cell:
+ *   - "text"  plain text (label), em dash when blank
+ *   - "num"   thousand-separated number / IDR amount (no decimals, no "Rp")
+ *   - "pct"   percent to 1 decimal  (e.g. 81   → "81.0%")
+ *   - "pct2"  percent to 2 decimals (e.g. 81   → "81.00%")
+ */
+export type CellFmt = "text" | "num" | "pct" | "pct2";
+
+/** Format a raw row string for a locked (read-only) grid cell. */
+export function fmtCell(raw: string | undefined | null, fmt: CellFmt = "num"): string {
+  if (fmt === "text") return raw && raw.trim() !== "" ? raw : "—";
+  const n = toNum(raw);
+  if (n == null) return "—";
+  if (fmt === "pct") return `${n.toFixed(1)}%`;
+  if (fmt === "pct2") return `${n.toFixed(2)}%`;
+  return formatNumber(n);
+}
+
+/**
+ * A single grid cell that is an editable `<input>` while the report is open
+ * and a clean, formatted read-only value once it is locked/approved — so the
+ * on-screen report matches the exported workbook instead of showing raw
+ * numbers in disabled boxes.
+ */
+export function GridCell({
+  value,
+  onChange,
+  locked,
+  fmt = "num",
+  align,
+  minW,
+  placeholder,
+}: {
+  value: string | undefined;
+  onChange: (v: string) => void;
+  locked: boolean;
+  fmt?: CellFmt;
+  align?: "text-left" | "text-right";
+  minW?: string;
+  placeholder?: string;
+}) {
+  const a = align ?? (fmt === "text" ? "text-left" : "text-right");
+  if (locked) {
+    return (
+      <span className={cn("block", a, a === "text-right" && "tabular-nums", "text-foreground", minW)}>
+        {fmtCell(value, fmt)}
+      </span>
+    );
+  }
+  return (
+    <input
+      inputMode={fmt === "text" ? "text" : "numeric"}
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(CELL, a, minW)}
+      placeholder={placeholder}
+    />
+  );
+}
 
 /** Section title + subtitle in the editor's display-serif style. */
 export function SectionHeading({ title, subtitle }: { title: string; subtitle?: string }) {
