@@ -26,6 +26,7 @@ const TEAL = "FF0F4C5C";
 const GOLD = "FFC9A227";
 const CREAM = "FFF5F1E6";
 const CARD = "FFF3F5F7";
+const BAR = "FF14B8A6"; // bright teal for the solid data bars (clean, visible)
 const WHITE = "FFFFFFFF";
 const INK = "FF1F2937";
 const GREY = "FF6B7280";
@@ -341,8 +342,9 @@ function adsDashboardBlock(ws: ExcelJS.Worksheet, ads: WeeklyAdsData, ncol: numb
           rules: [
             {
               type: "dataBar",
+              gradient: false, // solid fill reads far more clearly than the fade
               cfvo: [{ type: "num", value: 0 }, { type: "max" }],
-              color: { argb: TEAL },
+              color: { argb: BAR },
             } as unknown as ExcelJS.DataBarRuleType,
           ],
         });
