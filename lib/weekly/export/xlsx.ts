@@ -36,8 +36,8 @@ const LINE = "FFE5E7EB";
 const MONEY = "#,##0";
 const NUM = "#,##0";
 const NUMRED = "#,##0;[Red]-#,##0";
-const PCT = "0.0%";
-const PCTRED = "0.0%;[Red]-0.0%";
+const PCT = "0.00%";
+const PCTRED = "0.00%;[Red]-0.00%";
 
 const FONT = "Calibri";
 const HAIR = { style: "thin" as const, color: { argb: LINE } };
