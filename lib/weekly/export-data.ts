@@ -98,6 +98,7 @@ export interface WeeklyOwnerMixRow {
 export interface WeeklyScreenshotExport {
   id: string;
   category: string;
+  blockKey: string | null;
   title: string | null;
   imageUrl: string;
   imageKey: string;
@@ -424,6 +425,7 @@ export async function getWeeklyExportData(
     screenshots: report.screenshots.map((s) => ({
       id: s.id,
       category: s.category,
+      blockKey: s.blockKey,
       title: s.title,
       imageUrl: s.imageUrl,
       imageKey: s.imageKey,

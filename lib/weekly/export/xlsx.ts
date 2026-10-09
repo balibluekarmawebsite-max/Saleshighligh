@@ -17,6 +17,7 @@ import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 import type {
   WeeklyExportData,
   WeeklyProductionRow,
+  WeeklyScreenshotExport,
 } from "@/lib/weekly/export-data";
 
 // Brand palette (ARGB).
@@ -183,6 +184,64 @@ function embeddableExt(ext: string): "png" | "jpeg" | null {
   return null;
 }
 
+/** Embed a stored image (scaled to keep its aspect ratio) at the sheet's current row. */
+async function embedScreenshotImage(
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  imageKey: string,
+  maxW = 540,
+  maxH = 420,
+): Promise<void> {
+  const ext = imageKey.split(".").pop()?.toLowerCase() ?? "png";
+  const addExt = embeddableExt(ext);
+  if (!addExt) {
+    const note = ws.addRow([`(image stored as .${ext} — open in the app to view)`]);
+    note.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+    return;
+  }
+  try {
+    const buf = await readFile(storagePath(imageKey));
+    const size = readImageSize(buf, ext);
+    let dw = maxW;
+    let dh = Math.round(maxW * 0.62);
+    if (size && size.width > 0 && size.height > 0) {
+      const scale = Math.min(maxW / size.width, maxH / size.height, 1);
+      dw = Math.round(size.width * scale);
+      dh = Math.round(size.height * scale);
+    }
+    const anchorRow0 = ws.rowCount; // 0-indexed top of the next (first blank) row
+    // base64 avoids a Buffer<ArrayBuffer> vs ExcelJS.Buffer types-only mismatch.
+    const imgId = wb.addImage({ base64: buf.toString("base64"), extension: addExt });
+    ws.addImage(imgId, { tl: { col: 0, row: anchorRow0 }, ext: { width: dw, height: dh } });
+    // Reserve vertical space so later content clears the floating image.
+    const rowsNeeded = Math.ceil(dh / 18) + 1;
+    for (let i = 0; i < rowsNeeded; i++) ws.addRow([]);
+  } catch {
+    const err = ws.addRow(["(image could not be embedded)"]);
+    err.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+  }
+}
+
+/** One screenshot as a label (category — title) + summary + embedded image. */
+async function screenshotBlock(
+  wb: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  s: WeeklyScreenshotExport,
+  span: number,
+): Promise<void> {
+  const label = ws.addRow([`📷 ${screenshotCategoryLabel(s.category)}${s.title ? ` — ${s.title}` : ""}`]);
+  label.getCell(1).font = { name: FONT, bold: true, size: 10, color: { argb: GOLD } };
+  if (span > 1) ws.mergeCells(label.number, 1, label.number, span);
+  if (s.summary && s.summary.trim()) {
+    const sum = ws.addRow([s.summary]);
+    sum.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+    sum.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    if (span > 1) ws.mergeCells(sum.number, 1, sum.number, span);
+    sum.height = Math.min(120, 14 * Math.ceil(s.summary.length / 110) + 8);
+  }
+  await embedScreenshotImage(wb, ws, s.imageKey);
+}
+
 // ─── Sheet builders ──────────────────────────────────────────────────────────
 
 function coverSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
@@ -204,7 +263,7 @@ function coverSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   put(10, `Confidential — ${d.property.name}`, { italic: true, size: 10, color: { argb: GREY } });
 }
 
-function overviewSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
+async function overviewSheet(wb: ExcelJS.Workbook, d: WeeklyExportData, withScreenshots: boolean) {
   const ws = wb.addWorksheet("A-Overview");
   ws.getColumn(1).width = 110;
   titleRow(ws, "A · Sales & Marketing Overview", 1, 16);
@@ -215,6 +274,12 @@ function overviewSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
     const body = ws.addRow([b.body && b.body.trim() ? b.body : "— not written for this week —"]);
     body.getCell(1).font = { name: FONT, size: 11, color: { argb: b.body ? INK : GREY } };
     body.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    // Screenshots uploaded under this section — image + summary, inline.
+    if (withScreenshots) {
+      for (const s of d.screenshots.filter((s) => s.blockKey === b.key)) {
+        await screenshotBlock(wb, ws, s, 1);
+      }
+    }
     ws.addRow([]);
   }
 }
@@ -618,59 +683,19 @@ function adsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   }
 }
 
+/** Screenshots not tied to an Overview section (standalone / legacy) — the
+ *  section-attached ones are embedded inline in the Overview sheet. */
 async function screenshotsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
-  if (d.screenshots.length === 0) return;
+  const blockKeys = new Set(d.overview.map((b) => b.key));
+  const standalone = d.screenshots.filter((s) => !s.blockKey || !blockKeys.has(s.blockKey));
+  if (standalone.length === 0) return;
   const ws = wb.addWorksheet("SM-Screenshots");
   ws.getColumn(1).width = 26;
   ws.getColumn(2).width = 92;
   titleRow(ws, "SM · Screenshots & Summaries", 2, 16);
   ws.addRow([]);
-
-  for (const s of d.screenshots) {
-    // Category (gold) + Title (teal) header row.
-    const head = ws.addRow([screenshotCategoryLabel(s.category), s.title ?? ""]);
-    head.getCell(1).font = { name: FONT, bold: true, size: 12, color: { argb: GOLD } };
-    head.getCell(2).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
-
-    // Summary (wrapped, merged across both columns).
-    const sumRow = ws.addRow([s.summary && s.summary.trim() ? s.summary : "— no summary —"]);
-    sumRow.getCell(1).font = { name: FONT, size: 11, color: { argb: s.summary ? INK : GREY } };
-    sumRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
-    ws.mergeCells(sumRow.number, 1, sumRow.number, 2);
-    sumRow.height = Math.min(140, 15 * Math.ceil((s.summary?.length ?? 24) / 120) + 10);
-
-    // Embed the actual screenshot, scaled to keep its aspect ratio.
-    const ext = s.imageKey.split(".").pop()?.toLowerCase() ?? "png";
-    const addExt = embeddableExt(ext);
-    if (addExt) {
-      try {
-        const buf = await readFile(storagePath(s.imageKey));
-        const size = readImageSize(buf, ext);
-        const maxW = 620;
-        const maxH = 460;
-        let dw = maxW;
-        let dh = Math.round(maxW * 0.62);
-        if (size && size.width > 0 && size.height > 0) {
-          const scale = Math.min(maxW / size.width, maxH / size.height, 1);
-          dw = Math.round(size.width * scale);
-          dh = Math.round(size.height * scale);
-        }
-        const anchorRow0 = ws.rowCount; // 0-indexed top of the next (first blank) row
-        // Pass base64 (a plain string) to sidestep the Buffer<ArrayBuffer> vs
-        // ExcelJS.Buffer types-only mismatch; ExcelJS embeds it identically.
-        const imgId = wb.addImage({ base64: buf.toString("base64"), extension: addExt });
-        ws.addImage(imgId, { tl: { col: 0, row: anchorRow0 }, ext: { width: dw, height: dh } });
-        // Reserve vertical space so the next screenshot clears the floating image.
-        const rowsNeeded = Math.ceil(dh / 18) + 1;
-        for (let i = 0; i < rowsNeeded; i++) ws.addRow([]);
-      } catch {
-        const err = ws.addRow(["(image could not be embedded)"]);
-        err.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
-      }
-    } else {
-      const note = ws.addRow([`(image stored as .${ext} — open in the app to view)`]);
-      note.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
-    }
+  for (const s of standalone) {
+    await screenshotBlock(wb, ws, s, 2);
     ws.addRow([]); // spacer between screenshots
   }
 }
@@ -687,7 +712,7 @@ export async function buildWeeklyXlsxBuffer(
   wb.created = d.week ? new Date(`${d.week.endDate}T00:00:00.000Z`) : new Date(0);
 
   coverSheet(wb, d);
-  if (show("overview")) overviewSheet(wb, d);
+  if (show("overview")) await overviewSheet(wb, d, show("screenshots"));
   if (show("monthly")) monthlySheet(wb, d);
   if (show("segments")) productionSheet(wb, "C-Segment", "C · Weekly Production by Market Segment", "Source / Segment", d.segments);
   if (show("ratecodes")) productionSheet(wb, "D-RateCode", "D · Rate Code / Promotion", "Promotion", d.rateCodes);
