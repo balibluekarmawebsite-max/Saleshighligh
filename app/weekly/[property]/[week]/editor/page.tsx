@@ -2,8 +2,6 @@ import Link from "next/link";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { AdsEditor } from "@/components/weekly/ads-editor";
-import { ScreenshotManager } from "@/components/weekly/screenshot-manager";
 import { WeeklyEditorShell, type EditorSectionTab } from "@/components/weekly/editor-shell";
 import { ActivitiesCards } from "@/components/weekly/sections/activities-cards";
 import { ChannelsGrid } from "@/components/weekly/sections/channels-grid";
@@ -228,31 +226,10 @@ export default async function WeeklyEditorPage({
         />
       ),
     },
-    {
-      key: "SM", code: "SM", label: "Screenshots", done: screenshots.length > 0,
-      dividerAbove: true,
-      node: (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
-          <h2 className="font-serif text-xl font-semibold text-foreground">SM · Screenshots & Summaries</h2>
-          <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
-            Upload Booking.com / social screenshots and summarise each with AI.
-          </p>
-          <ScreenshotManager property={p} week={w} locked={readOnly} screenshots={screenshots.filter((s) => !s.blockKey)} />
-        </div>
-      ),
-    },
-    {
-      key: "ADS", code: "◧", label: "Digital Ads & ROAS", done: ads.hasData,
-      node: (
-        <div className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
-          <h2 className="font-serif text-xl font-semibold text-foreground">Digital Ads & ROAS</h2>
-          <p className="mb-4 mt-0.5 text-sm text-muted-foreground">
-            Sync from the ads dashboard, or enter Google / Meta figures manually.
-          </p>
-          <AdsEditor property={p} week={w} locked={readOnly} data={ads} />
-        </div>
-      ),
-    },
+    // Screenshots & Digital Ads were removed as standalone sections — screenshots
+    // and ads are already captured within section A (Overview), so these were
+    // duplicates. The underlying data (getWeeklyScreenshots / getWeeklyAds) still
+    // flows into Overview and the report export.
   ];
 
   return (
