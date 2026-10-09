@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 import ExcelJS from "exceljs";
 
 import { storagePath } from "@/lib/storage";
+import type { WeeklyAdsData } from "@/lib/weekly/ads-data";
 import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 import type {
   WeeklyExportData,
@@ -24,6 +25,7 @@ import type {
 const TEAL = "FF0F4C5C";
 const GOLD = "FFC9A227";
 const CREAM = "FFF5F1E6";
+const CARD = "FFF3F5F7";
 const WHITE = "FFFFFFFF";
 const INK = "FF1F2937";
 const GREY = "FF6B7280";
@@ -263,21 +265,136 @@ function coverSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   put(10, `Confidential — ${d.property.name}`, { italic: true, size: 10, color: { argb: GREY } });
 }
 
-async function overviewSheet(wb: ExcelJS.Workbook, d: WeeklyExportData, withScreenshots: boolean) {
+/**
+ * Dashboard-style ROAS block, rendered inline under Overview section 9: a KPI
+ * card grid (Spend / Impressions / Reach / Clicks / CTR / CPC / Revenue / ROAS),
+ * a Google-vs-Meta comparison with in-cell data bars, and recommendations —
+ * mirroring the Digital Ads panel on the system dashboard. Uses the 8-column
+ * grid of the Overview sheet.
+ */
+function adsDashboardBlock(ws: ExcelJS.Worksheet, ads: WeeklyAdsData, ncol: number) {
+  const b = ads.blended;
+  if (!b) return;
+
+  // KPI cards — 2 rows × 4, each spanning two columns.
+  const kpis: { label: string; value: Cell; fmt?: string }[] = [
+    { label: "Spend", value: b.spend ?? "—", fmt: MONEY },
+    { label: "Impressions", value: b.impressions ?? "—", fmt: NUM },
+    { label: "Reach", value: b.reach ?? "—", fmt: NUM },
+    { label: "Clicks", value: b.clicks ?? "—", fmt: NUM },
+    { label: "CTR", value: b.ctr ?? "—", fmt: '0.00"%"' },
+    { label: "CPC", value: b.cpc ?? "—", fmt: MONEY },
+    { label: "Revenue", value: b.revenue ?? "—", fmt: MONEY },
+    { label: "ROAS", value: b.roas ?? "—", fmt: '0.00"×"' },
+  ];
+  for (let r = 0; r < 2; r++) {
+    const labelRow = ws.addRow([]);
+    const valueRow = ws.addRow([]);
+    labelRow.height = 14;
+    valueRow.height = 20;
+    for (let c = 0; c < 4; c++) {
+      const k = kpis[r * 4 + c]!;
+      const sc = c * 2 + 1; // 1, 3, 5, 7
+      ws.mergeCells(labelRow.number, sc, labelRow.number, sc + 1);
+      ws.mergeCells(valueRow.number, sc, valueRow.number, sc + 1);
+      const lc = labelRow.getCell(sc);
+      lc.value = k.label.toUpperCase();
+      lc.font = { name: FONT, size: 9, bold: true, color: { argb: GREY } };
+      lc.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      fill(lc, CARD);
+      lc.border = { top: HAIR, left: HAIR, right: HAIR };
+      const vc = valueRow.getCell(sc);
+      vc.value = k.value;
+      vc.font = { name: FONT, size: 13, bold: true, color: { argb: TEAL } };
+      vc.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      if (k.fmt && typeof k.value === "number") vc.numFmt = k.fmt;
+      fill(vc, CARD);
+      vc.border = { bottom: HAIR, left: HAIR, right: HAIR };
+    }
+  }
+  ws.addRow([]);
+
+  // Google vs Meta — in-cell data bars behind Spend / Revenue / ROAS.
+  if (ads.platforms.length > 0) {
+    const gvm = ws.addRow(["Google vs Meta"]);
+    gvm.getCell(1).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
+    const vcols: Col[] = [
+      { h: "Platform", w: 20, a: "L" },
+      { h: "Spend", w: 16, a: "R", f: MONEY },
+      { h: "Revenue", w: 16, a: "R", f: MONEY },
+      { h: "Conv.", w: 10, a: "R", f: NUM },
+      { h: "ROAS", w: 10, a: "R", f: "0.00" },
+    ];
+    const vh = ws.addRow(vcols.map((c) => c.h));
+    vh.eachCell((cell, col) => headerCell(cell, vcols[col - 1]?.a ?? "L"));
+    const firstRow = ws.rowCount + 1;
+    for (const p of ads.platforms) {
+      const name = p.label.replace(/\s*\(.*\)\s*$/, ""); // "Meta (Facebook / Instagram)" → "Meta"
+      const row = ws.addRow([name, money(p.spend), money(p.revenue), p.conversions, p.roas]);
+      row.eachCell((cell, col) => dataCell(cell, vcols[col - 1]!));
+    }
+    const lastRow = ws.rowCount;
+    if (lastRow >= firstRow) {
+      for (const colLetter of ["B", "C", "E"]) {
+        ws.addConditionalFormatting({
+          ref: `${colLetter}${firstRow}:${colLetter}${lastRow}`,
+          rules: [
+            {
+              type: "dataBar",
+              cfvo: [{ type: "num", value: 0 }, { type: "max" }],
+              color: { argb: TEAL },
+            } as unknown as ExcelJS.DataBarRuleType,
+          ],
+        });
+      }
+    }
+  }
+
+  // Recommendations (the dashboard's right-hand column).
+  if (ads.summary && ads.summary.recommendations.length > 0) {
+    ws.addRow([]);
+    const rec = ws.addRow(["Recommendations"]);
+    rec.getCell(1).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
+    ws.mergeCells(rec.number, 1, rec.number, ncol);
+    for (const r of ads.summary.recommendations) {
+      const row = ws.addRow([`• ${r}`]);
+      row.getCell(1).font = { name: FONT, size: 10, color: { argb: INK } };
+      row.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      ws.mergeCells(row.number, 1, row.number, ncol);
+    }
+  }
+}
+
+async function overviewSheet(
+  wb: ExcelJS.Workbook,
+  d: WeeklyExportData,
+  withScreenshots: boolean,
+  withAds: boolean,
+) {
   const ws = wb.addWorksheet("A-Overview");
-  ws.getColumn(1).width = 110;
-  titleRow(ws, "A · Sales & Marketing Overview", 1, 16);
+  // An 8-column grid so section-9 KPI cards and the Google-vs-Meta bars lay out
+  // like the dashboard; narrative text is merged across all columns and wrapped.
+  const NCOL = 8;
+  ws.getColumn(1).width = 20;
+  for (let c = 2; c <= NCOL; c++) ws.getColumn(c).width = 15;
+  titleRow(ws, "A · Sales & Marketing Overview", NCOL, 16);
   ws.addRow([]);
   for (const b of d.overview) {
     const h = ws.addRow([b.heading]);
     h.getCell(1).font = { name: FONT, bold: true, size: 12, color: { argb: TEAL } };
+    ws.mergeCells(h.number, 1, h.number, NCOL);
     const body = ws.addRow([b.body && b.body.trim() ? b.body : "— not written for this week —"]);
     body.getCell(1).font = { name: FONT, size: 11, color: { argb: b.body ? INK : GREY } };
     body.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    ws.mergeCells(body.number, 1, body.number, NCOL);
+    // Section 9 (ROAS / Digital Ads): render the dashboard-style ads block inline.
+    if (withAds && b.key === "roas" && d.ads.hasData && d.ads.blended) {
+      adsDashboardBlock(ws, d.ads, NCOL);
+    }
     // Screenshots uploaded under this section — image + summary, inline.
     if (withScreenshots) {
       for (const s of d.screenshots.filter((s) => s.blockKey === b.key)) {
-        await screenshotBlock(wb, ws, s, 1);
+        await screenshotBlock(wb, ws, s, NCOL);
       }
     }
     ws.addRow([]);
@@ -595,94 +712,6 @@ function ownerSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   ws.getColumn(1).width = 34;
 }
 
-function adsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
-  if (!d.ads.hasData || !d.ads.blended) return;
-  const ws = wb.addWorksheet("Ads-ROAS");
-  const b = d.ads.blended;
-  const cols: Col[] = [
-    { h: "Scope", w: 16, a: "L" },
-    { h: "Spend", w: 16, a: "R", f: MONEY },
-    { h: "Revenue", w: 18, a: "R", f: MONEY },
-    { h: "Conversions", w: 13, a: "R", f: NUM },
-    { h: "Impr.", w: 12, a: "R", f: NUM },
-    { h: "Clicks", w: 11, a: "R", f: NUM },
-    { h: "ROAS", w: 9, a: "R", f: "0.0" },
-  ];
-  const rows: Cell[][] = [
-    ["Blended", money(b.spend), money(b.revenue), b.conversions, b.impressions, b.clicks, b.roas],
-    ...d.ads.platforms.map((p): Cell[] => [p.label, money(p.spend), money(p.revenue), p.conversions, p.impressions, p.clicks, p.roas]),
-  ];
-  table(ws, {
-    title: `Digital Ads & ROAS${d.ads.window.from ? ` — ${d.ads.window.from} → ${d.ads.window.to}` : ""}`,
-    subtitle: d.ads.summary?.headline,
-    cols,
-    rows,
-    freeze: true,
-  });
-
-  // Google vs Meta — in-cell data bars behind the values, mirroring the
-  // dashboard's platform comparison bars (ExcelJS can't write native charts).
-  const splits = d.ads.platforms;
-  if (splits.length > 0) {
-    ws.addRow([]);
-    titleRow(ws, "Google vs Meta", 5, 12);
-    const vcols: Col[] = [
-      { h: "Platform", w: 22, a: "L" },
-      { h: "Spend", w: 16, a: "R", f: MONEY },
-      { h: "Revenue", w: 18, a: "R", f: MONEY },
-      { h: "Conv.", w: 11, a: "R", f: NUM },
-      { h: "ROAS", w: 10, a: "R", f: "0.00" },
-    ];
-    const vh = ws.addRow(vcols.map((c) => c.h));
-    vh.eachCell((cell, col) => headerCell(cell, vcols[col - 1]?.a ?? "L"));
-    const firstRow = ws.rowCount + 1;
-    for (const p of splits) {
-      const row = ws.addRow([p.label, money(p.spend), money(p.revenue), p.conversions, p.roas]);
-      row.eachCell((cell, col) => dataCell(cell, vcols[col - 1]!));
-    }
-    const lastRow = ws.rowCount;
-    if (lastRow >= firstRow) {
-      for (const colLetter of ["B", "C", "E"]) {
-        ws.addConditionalFormatting({
-          ref: `${colLetter}${firstRow}:${colLetter}${lastRow}`,
-          // ExcelJS supports a data-bar `color` at runtime but omits it from the
-          // DataBarRuleType; cast to keep the brand-teal bars.
-          rules: [
-            {
-              type: "dataBar",
-              cfvo: [{ type: "num", value: 0 }, { type: "max" }],
-              color: { argb: TEAL },
-            } as unknown as ExcelJS.DataBarRuleType,
-          ],
-        });
-      }
-    }
-    setWidths(ws, vcols);
-  }
-
-  if (d.ads.campaigns.length > 0) {
-    ws.addRow([]);
-    const cc: Col[] = [
-      { h: "Campaign", w: 40, a: "L" },
-      { h: "Platform", w: 12, a: "L" },
-      { h: "Impr.", w: 12, a: "R", f: NUM },
-      { h: "Clicks", w: 11, a: "R", f: NUM },
-      { h: "Spend", w: 16, a: "R", f: MONEY },
-      { h: "Conv.", w: 11, a: "R", f: NUM },
-      { h: "Attr. Rev", w: 18, a: "R", f: MONEY },
-      { h: "ROAS", w: 9, a: "R", f: "0.0" },
-    ];
-    titleRow(ws, "Campaigns", cc.length, 12);
-    const h = ws.addRow(cc.map((c) => c.h));
-    h.eachCell((cell, col) => headerCell(cell, cc[col - 1]?.a ?? "L"));
-    for (const c of d.ads.campaigns) {
-      const row = ws.addRow([c.name, c.platformLabel, c.impressions, c.clicks, money(c.spend), c.conversions, money(c.revenue), c.roas]);
-      row.eachCell((cell, col) => dataCell(cell, cc[col - 1]!));
-    }
-    setWidths(ws, cc);
-  }
-}
-
 /** Screenshots not tied to an Overview section (standalone / legacy) — the
  *  section-attached ones are embedded inline in the Overview sheet. */
 async function screenshotsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
@@ -712,7 +741,7 @@ export async function buildWeeklyXlsxBuffer(
   wb.created = d.week ? new Date(`${d.week.endDate}T00:00:00.000Z`) : new Date(0);
 
   coverSheet(wb, d);
-  if (show("overview")) await overviewSheet(wb, d, show("screenshots"));
+  if (show("overview")) await overviewSheet(wb, d, show("screenshots"), show("ads"));
   if (show("monthly")) monthlySheet(wb, d);
   if (show("segments")) productionSheet(wb, "C-Segment", "C · Weekly Production by Market Segment", "Source / Segment", d.segments);
   if (show("ratecodes")) productionSheet(wb, "D-RateCode", "D · Rate Code / Promotion", "Promotion", d.rateCodes);
@@ -729,7 +758,6 @@ export async function buildWeeklyXlsxBuffer(
   }
   if (show("plans")) plansSheet(wb, d);
   if (show("owner")) ownerSheet(wb, d);
-  if (show("ads")) adsSheet(wb, d);
   if (show("screenshots")) await screenshotsSheet(wb, d);
 
   const arrayBuffer = await wb.xlsx.writeBuffer();
