@@ -410,17 +410,27 @@ async function fetchValidMetrics(
  * endpoint our follower sync already uses; comparing it to v2 proves whether the
  * API TOKEN can see this brand's network at all (v1) versus its v2 analytics.
  */
-async function v1Followers(blogId: string, prefix: string, startYmd: string, endYmd: string): Promise<string> {
+async function v1FollowersRaw(
+  blogId: string,
+  prefix: string,
+  startYmd: string,
+  endYmd: string,
+): Promise<{ status: number; last: number | null; err: string | null }> {
   const metric = `${prefix}Followers`;
   let r: GetResult;
   try {
     r = await mcGet(`/stats/timeline/${metric}`, { blogId, start: startYmd, end: endYmd });
   } catch (err) {
-    return `request failed: ${err instanceof Error ? err.message : "error"}`;
+    return { status: 0, last: null, err: err instanceof Error ? err.message : "error" };
   }
-  if (!r.ok) return reason(r);
+  if (!r.ok) return { status: r.status, last: null, err: reason(r) };
   const s = readTimeline(r.json);
-  return s.last !== null ? `last=${fmt(s.last)}` : "200 but empty";
+  return { status: 200, last: s.last, err: null };
+}
+
+function v1Label(r: { status: number; last: number | null; err: string | null }): string {
+  if (r.err) return r.err;
+  return r.last !== null ? `last=${fmt(r.last)}` : "200 but empty";
 }
 
 async function probeNetwork(blogId: string, network: string, fromIso: string, toIso: string): Promise<void> {
@@ -431,7 +441,7 @@ async function probeNetwork(blogId: string, network: string, fromIso: string, to
   const prefix = network === "facebook" ? "fb" : "ig";
   const startYmd = fromIso.slice(0, 10).replace(/-/g, "");
   const endYmd = toIso.slice(0, 10).replace(/-/g, "");
-  const v1 = await v1Followers(blogId, prefix, startYmd, endYmd);
+  const v1 = v1Label(await v1FollowersRaw(blogId, prefix, startYmd, endYmd));
   console.log(`\n  v1 /stats/timeline/${prefix}Followers → ${v1}`);
 
   // Catalog-driven: let the API tell us its valid metric names, then probe those.
@@ -557,6 +567,73 @@ async function listAllBrands(): Promise<void> {
   );
 }
 
+/**
+ * Audit every brand on the login: its IG/FB connection flag (simpleProfiles) and
+ * actual v1 follower counts + whether v2 analytics are reachable. The brand whose
+ * IG/FB follower counts match the Metricool UI is the property's real brand.
+ */
+async function auditAllBrands(extraBlogIds: string[]): Promise<void> {
+  let r: GetResult;
+  try {
+    r = await mcGet("/admin/simpleProfiles", {});
+  } catch (err) {
+    console.log(`Could not fetch brands: ${err instanceof Error ? err.message : "error"}`);
+    return;
+  }
+  if (!r.ok) {
+    console.log(`Could not fetch brands: ${reason(r)}`);
+    return;
+  }
+  const data = r.json;
+  const arr: unknown[] = Array.isArray(data)
+    ? data
+    : data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).data)
+      ? ((data as Record<string, unknown>).data as unknown[])
+      : [];
+  // Append any extra blogIds the caller passed that aren't already in the list.
+  const known = new Set(
+    arr
+      .filter((b): b is Record<string, unknown> => !!b && typeof b === "object")
+      .map((b) => String(b.blogId ?? b.id ?? "")),
+  );
+  for (const id of extraBlogIds) {
+    if (!known.has(id)) arr.push({ blogId: id, label: "(extra — not in brand list)" });
+  }
+
+  const off = tzOffset();
+  const now = new Date();
+  const end = now.toISOString().slice(0, 10);
+  const start = new Date(now.getTime() - 35 * 86_400_000).toISOString().slice(0, 10);
+  const fromIso = `${start}T00:00:00${off}`;
+  const toIso = `${end}T23:59:59${off}`;
+  const startYmd = start.replace(/-/g, "");
+  const endYmd = end.replace(/-/g, "");
+
+  console.log(`Auditing ${arr.length} brands (window ${start} → ${end}). IG/FB v1 = follower count.\n`);
+  const compact = (v: { last: number | null; err: string | null }): string =>
+    v.err ? v.err.slice(0, 14) : v.last !== null ? fmt(v.last) : "empty";
+  console.log(
+    `  ${"blogId".padEnd(9)} ${"label".padEnd(24)} ${"IGon".padEnd(5)}${"FBon".padEnd(5)} ${"IG v1".padStart(10)} ${"FB v1".padStart(10)}  v2igReach`,
+  );
+  for (const b of arr) {
+    if (!b || typeof b !== "object") continue;
+    const o = b as Record<string, unknown>;
+    const blogId = String(o.blogId ?? o.id ?? "");
+    if (!blogId) continue;
+    const label = String(o.label ?? o.brand ?? o.title ?? o.name ?? "").slice(0, 23);
+    const igOn = o.instagram || o.instagramConnectionType ? "yes" : "–";
+    const fbOn = o.facebook || o.facebookPageId ? "yes" : "–";
+    const igF = await v1FollowersRaw(blogId, "ig", startYmd, endYmd);
+    const fbF = await v1FollowersRaw(blogId, "fb", startYmd, endYmd);
+    const cat = await fetchValidMetrics(blogId, "instagram", "account", fromIso, toIso);
+    const v2 = cat.validList ? "ok" : `${cat.status || "err"}`;
+    console.log(
+      `  ${blogId.padEnd(9)} ${label.padEnd(24)} ${igOn.padEnd(5)}${fbOn.padEnd(5)} ${compact(igF).padStart(10)} ${compact(fbF).padStart(10)}  ${v2}`,
+    );
+  }
+  console.log(`\nThe brand whose IG/FB follower counts match the Metricool UI is the real one for that property.`);
+}
+
 async function main(): Promise<void> {
   loadEnv();
   const target = process.argv[2];
@@ -575,6 +652,14 @@ async function main(): Promise<void> {
   // "brands" mode: just map every brand → connected networks, then exit.
   if (target.toLowerCase() === "brands") {
     await listAllBrands();
+    return;
+  }
+
+  // "audit" mode: check every brand's IG/FB follower counts + v2 access, then exit.
+  // Extra numeric args are additional blogIds to check (e.g. one from a UI URL).
+  if (target.toLowerCase() === "audit") {
+    const extra = process.argv.slice(3).filter((a) => /^\d+$/.test(a));
+    await auditAllBrands(extra);
     return;
   }
 
