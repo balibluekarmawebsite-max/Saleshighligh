@@ -49,15 +49,31 @@ export async function GET(req: NextRequest) {
   try {
     browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   } catch (err) {
+    const firstMsg = err instanceof Error ? err.message : "unknown error";
     const execPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
     if (!execPath) {
-      const message = err instanceof Error ? err.message : "unknown error";
+      console.error("[weekly/export/pdf] chromium.launch failed:", firstMsg);
       return Response.json(
-        { error: `Could not launch Chromium for PDF export: ${message}. Install the browser (npx playwright install chromium) or set PLAYWRIGHT_CHROMIUM_PATH.` },
+        {
+          error: `Could not launch Chromium for PDF export: ${firstMsg}. Install the browser (npx playwright install chromium) or set PLAYWRIGHT_CHROMIUM_PATH.`,
+        },
         { status: 500 },
       );
     }
-    browser = await chromium.launch({ headless: true, executablePath: execPath, args: ["--no-sandbox"] });
+    // Fallback to the configured binary — wrap it too so a bad path / missing
+    // system libraries surface a clear message instead of a generic failure.
+    try {
+      browser = await chromium.launch({ headless: true, executablePath: execPath, args: ["--no-sandbox"] });
+    } catch (err2) {
+      const secondMsg = err2 instanceof Error ? err2.message : "unknown error";
+      console.error("[weekly/export/pdf] chromium.launch(executablePath) failed:", secondMsg);
+      return Response.json(
+        {
+          error: `Could not launch Chromium at PLAYWRIGHT_CHROMIUM_PATH (${execPath}): ${secondMsg}. If it mentions a missing library, install Chromium's system dependencies: npx playwright install-deps chromium`,
+        },
+        { status: 500 },
+      );
+    }
   }
 
   try {
@@ -89,6 +105,11 @@ export async function GET(req: NextRequest) {
         "cache-control": "no-store",
       },
     });
+  } catch (err) {
+    // Rendering (navigation / pdf) failed — surface the real reason, don't 500 blankly.
+    const msg = err instanceof Error ? err.message : "unknown error";
+    console.error("[weekly/export/pdf] render failed:", msg);
+    return Response.json({ error: `PDF render failed: ${msg}` }, { status: 500 });
   } finally {
     await browser.close();
   }
