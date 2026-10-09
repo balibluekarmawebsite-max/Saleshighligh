@@ -8,8 +8,11 @@
  * Overview sheet. Mirrors the clarity of the legacy weekly-report export.
  */
 
+import { readFile } from "node:fs/promises";
+
 import ExcelJS from "exceljs";
 
+import { storagePath } from "@/lib/storage";
 import { screenshotCategoryLabel } from "@/lib/weekly/screenshots";
 import type {
   WeeklyExportData,
@@ -140,6 +143,44 @@ const money = (n: number | null): Cell => (n == null ? null : n);
 /** Production table rows (Sections C / D and Owner channel mix). */
 function productionRows(rows: WeeklyProductionRow[]): Cell[][] {
   return rows.map((r) => [r.label, r.rnSold, money(r.grossRevenue), money(r.arr), pc(r.share)]);
+}
+
+/**
+ * Read an image's pixel dimensions from its bytes (PNG + JPEG — the formats
+ * ExcelJS can embed). Returns null if it can't be determined, so the caller
+ * falls back to a default box. No image library needed.
+ */
+function readImageSize(buf: Buffer, ext: string): { width: number; height: number } | null {
+  try {
+    if (ext === "png" && buf.length >= 24 && buf.toString("ascii", 1, 4) === "PNG") {
+      return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    }
+    if (ext === "jpg" || ext === "jpeg") {
+      let o = 2;
+      while (o + 9 < buf.length) {
+        if (buf[o] !== 0xff) {
+          o++;
+          continue;
+        }
+        const marker = buf[o + 1]!;
+        // Start-of-frame markers carry the dimensions (skip C4/C8/CC — not SOF).
+        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+          return { height: buf.readUInt16BE(o + 5), width: buf.readUInt16BE(o + 7) };
+        }
+        o += 2 + buf.readUInt16BE(o + 2);
+      }
+    }
+  } catch {
+    /* unparseable header — fall back to the default box */
+  }
+  return null;
+}
+
+/** ExcelJS embeds png/jpeg/gif only; map the stored extension or return null. */
+function embeddableExt(ext: string): "png" | "jpeg" | null {
+  if (ext === "png") return "png";
+  if (ext === "jpg" || ext === "jpeg") return "jpeg";
+  return null;
 }
 
 // ─── Sheet builders ──────────────────────────────────────────────────────────
@@ -513,6 +554,47 @@ function adsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
     rows,
     freeze: true,
   });
+
+  // Google vs Meta — in-cell data bars behind the values, mirroring the
+  // dashboard's platform comparison bars (ExcelJS can't write native charts).
+  const splits = d.ads.platforms;
+  if (splits.length > 0) {
+    ws.addRow([]);
+    titleRow(ws, "Google vs Meta", 5, 12);
+    const vcols: Col[] = [
+      { h: "Platform", w: 22, a: "L" },
+      { h: "Spend", w: 16, a: "R", f: MONEY },
+      { h: "Revenue", w: 18, a: "R", f: MONEY },
+      { h: "Conv.", w: 11, a: "R", f: NUM },
+      { h: "ROAS", w: 10, a: "R", f: "0.00" },
+    ];
+    const vh = ws.addRow(vcols.map((c) => c.h));
+    vh.eachCell((cell, col) => headerCell(cell, vcols[col - 1]?.a ?? "L"));
+    const firstRow = ws.rowCount + 1;
+    for (const p of splits) {
+      const row = ws.addRow([p.label, money(p.spend), money(p.revenue), p.conversions, p.roas]);
+      row.eachCell((cell, col) => dataCell(cell, vcols[col - 1]!));
+    }
+    const lastRow = ws.rowCount;
+    if (lastRow >= firstRow) {
+      for (const colLetter of ["B", "C", "E"]) {
+        ws.addConditionalFormatting({
+          ref: `${colLetter}${firstRow}:${colLetter}${lastRow}`,
+          // ExcelJS supports a data-bar `color` at runtime but omits it from the
+          // DataBarRuleType; cast to keep the brand-teal bars.
+          rules: [
+            {
+              type: "dataBar",
+              cfvo: [{ type: "num", value: 0 }, { type: "max" }],
+              color: { argb: TEAL },
+            } as unknown as ExcelJS.DataBarRuleType,
+          ],
+        });
+      }
+    }
+    setWidths(ws, vcols);
+  }
+
   if (d.ads.campaigns.length > 0) {
     ws.addRow([]);
     const cc: Col[] = [
@@ -536,20 +618,61 @@ function adsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   }
 }
 
-function screenshotsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
+async function screenshotsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   if (d.screenshots.length === 0) return;
   const ws = wb.addWorksheet("SM-Screenshots");
-  const cols: Col[] = [
-    { h: "Category", w: 20, a: "L" },
-    { h: "Title", w: 28, a: "L" },
-    { h: "Summary", w: 80, a: "L" },
-  ];
-  table(ws, {
-    title: "SM · Screenshots & Summaries",
-    cols,
-    rows: d.screenshots.map((s) => [screenshotCategoryLabel(s.category), s.title ?? "", s.summary ?? ""]),
-    freeze: true,
-  });
+  ws.getColumn(1).width = 26;
+  ws.getColumn(2).width = 92;
+  titleRow(ws, "SM · Screenshots & Summaries", 2, 16);
+  ws.addRow([]);
+
+  for (const s of d.screenshots) {
+    // Category (gold) + Title (teal) header row.
+    const head = ws.addRow([screenshotCategoryLabel(s.category), s.title ?? ""]);
+    head.getCell(1).font = { name: FONT, bold: true, size: 12, color: { argb: GOLD } };
+    head.getCell(2).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
+
+    // Summary (wrapped, merged across both columns).
+    const sumRow = ws.addRow([s.summary && s.summary.trim() ? s.summary : "— no summary —"]);
+    sumRow.getCell(1).font = { name: FONT, size: 11, color: { argb: s.summary ? INK : GREY } };
+    sumRow.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    ws.mergeCells(sumRow.number, 1, sumRow.number, 2);
+    sumRow.height = Math.min(140, 15 * Math.ceil((s.summary?.length ?? 24) / 120) + 10);
+
+    // Embed the actual screenshot, scaled to keep its aspect ratio.
+    const ext = s.imageKey.split(".").pop()?.toLowerCase() ?? "png";
+    const addExt = embeddableExt(ext);
+    if (addExt) {
+      try {
+        const buf = await readFile(storagePath(s.imageKey));
+        const size = readImageSize(buf, ext);
+        const maxW = 620;
+        const maxH = 460;
+        let dw = maxW;
+        let dh = Math.round(maxW * 0.62);
+        if (size && size.width > 0 && size.height > 0) {
+          const scale = Math.min(maxW / size.width, maxH / size.height, 1);
+          dw = Math.round(size.width * scale);
+          dh = Math.round(size.height * scale);
+        }
+        const anchorRow0 = ws.rowCount; // 0-indexed top of the next (first blank) row
+        // Pass base64 (a plain string) to sidestep the Buffer<ArrayBuffer> vs
+        // ExcelJS.Buffer types-only mismatch; ExcelJS embeds it identically.
+        const imgId = wb.addImage({ base64: buf.toString("base64"), extension: addExt });
+        ws.addImage(imgId, { tl: { col: 0, row: anchorRow0 }, ext: { width: dw, height: dh } });
+        // Reserve vertical space so the next screenshot clears the floating image.
+        const rowsNeeded = Math.ceil(dh / 18) + 1;
+        for (let i = 0; i < rowsNeeded; i++) ws.addRow([]);
+      } catch {
+        const err = ws.addRow(["(image could not be embedded)"]);
+        err.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+      }
+    } else {
+      const note = ws.addRow([`(image stored as .${ext} — open in the app to view)`]);
+      note.getCell(1).font = { name: FONT, italic: true, size: 10, color: { argb: GREY } };
+    }
+    ws.addRow([]); // spacer between screenshots
+  }
 }
 
 /** Build the styled weekly workbook as an .xlsx buffer. */
@@ -582,7 +705,7 @@ export async function buildWeeklyXlsxBuffer(
   if (show("plans")) plansSheet(wb, d);
   if (show("owner")) ownerSheet(wb, d);
   if (show("ads")) adsSheet(wb, d);
-  if (show("screenshots")) screenshotsSheet(wb, d);
+  if (show("screenshots")) await screenshotsSheet(wb, d);
 
   const arrayBuffer = await wb.xlsx.writeBuffer();
   return Buffer.from(arrayBuffer);
