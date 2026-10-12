@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { saveAnnualBudget, type AnnualBudgetInput } from "@/lib/weekly/annual-budget";
 import { isLockedStatus } from "@/lib/weekly/editor-data";
 import {
   type ParseIssue,
@@ -68,7 +69,7 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
 
   const report = await prisma.weeklyReport.findFirst({
     where: { property: { code: property }, endDate: new Date(`${week}T00:00:00.000Z`) },
-    select: { id: true, status: true, propertyId: true },
+    select: { id: true, status: true, propertyId: true, year: true },
   });
   if (!report) return { ok: false, message: "Report not found." };
   if (isLockedStatus(report.status)) {
@@ -85,11 +86,14 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
 
   const rid = report.id;
   let written = 0;
+  // Section B budget → the fixed annual budget (saved after the tx, below).
+  let annualBudgetSave: AnnualBudgetInput[] | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
       switch (sectionId) {
         case "monthly": {
+          // Actuals + Last Year → per-week stats; Budget → annual budget.
           await tx.weeklyMonthlyStat.deleteMany({ where: { reportWeekId: rid } });
           const r = await tx.weeklyMonthlyStat.createMany({
             data: parsed.rows.map((row) => ({
@@ -97,17 +101,20 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
               month: num(row.month) ?? 0,
               rnSold: num(row.rnSold),
               occActual: pct(row.occActual),
-              occBudget: pct(row.occBudget),
               occLy: pct(row.occLy),
               arrActual: num(row.arrActual),
-              arrBudget: num(row.arrBudget),
               arrLy: num(row.arrLy),
               revActual: num(row.revActual),
-              revBudget: num(row.revBudget),
               revLy: num(row.revLy),
             })),
           });
           written = r.count;
+          annualBudgetSave = parsed.rows.map((row) => ({
+            month: num(row.month) ?? 0,
+            occFraction: pct(row.occBudget),
+            arr: num(row.arrBudget),
+            revenue: num(row.revBudget),
+          }));
           break;
         }
         case "segment": {
@@ -176,6 +183,11 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
     });
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "Import failed." };
+  }
+
+  // Section B budget → the fixed annual budget (its own transaction).
+  if (annualBudgetSave) {
+    await saveAnnualBudget(report.propertyId, report.year, annualBudgetSave);
   }
 
   await logAudit("weekly_import", `${property} ${week}`, { section: sectionId, rows: written });

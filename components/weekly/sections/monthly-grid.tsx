@@ -58,7 +58,7 @@ export function MonthlyGrid({
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <SectionHeading
             title="B · YTD Actual & Forecast"
-            subtitle="Per month: RN Sold, Occupancy %, ARR and Revenue. Occupancy is entered as a percent; totals are calculated."
+            subtitle="Budget is the fixed yearly plan — set once and shared across every weekly report. Actuals sync from the PMS (and can be edited). Occupancy is entered as a percent; totals are calculated."
           />
           {!locked && <SaveButton state={state} />}
         </div>

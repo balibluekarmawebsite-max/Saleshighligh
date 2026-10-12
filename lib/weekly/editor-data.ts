@@ -1,6 +1,7 @@
 import { unstable_noStore as noStore } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import { getAnnualBudget } from "@/lib/weekly/annual-budget";
 import { type WeeklyProgressItem } from "@/lib/weekly/dashboard-data";
 import { type WeeklySectionId } from "@/lib/weekly/sections";
 import { weekLabel } from "@/lib/weekly/week";
@@ -426,23 +427,31 @@ export async function getWeeklyFullEditorData(
     if (d == null) return "";
     return String(Math.round(d.toNumber() * 100 * 100) / 100);
   };
+  // Budget (occ as a 0–1 fraction / money as a number) → the grid's string cells.
+  const numStr = (n: number | null): string => (n == null ? "" : String(n));
+  const pctFracStr = (f: number | null): string =>
+    f == null ? "" : String(Math.round(f * 100 * 100) / 100);
 
-  // Section B — 12 months (always all 12 rows, filled where present).
+  // Section B — 12 months (always all 12 rows, filled where present). Actuals &
+  // Last Year come from the per-week stats; Budget is the fixed ANNUAL budget
+  // (shared across all weeks of the year), read from WeeklyBudget.
+  const annualBudget = await getAnnualBudget(report.propertyId, report.year);
   const byMonth = new Map(report.monthlyStats.map((m) => [m.month, m]));
   const monthly: SectionRow[] = MONTHS_FULL.map((label, i) => {
     const m = byMonth.get(i + 1);
+    const b = annualBudget.get(i + 1);
     return {
       month: String(i + 1),
       monthLabel: label,
       rnSold: sstr(m?.rnSold),
       occActual: pctStr(m?.occActual),
-      occBudget: pctStr(m?.occBudget),
+      occBudget: pctFracStr(b?.occFraction ?? null),
       occLy: pctStr(m?.occLy),
       arrActual: decStr(m?.arrActual),
-      arrBudget: decStr(m?.arrBudget),
+      arrBudget: numStr(b?.arr ?? null),
       arrLy: decStr(m?.arrLy),
       revActual: decStr(m?.revActual),
-      revBudget: decStr(m?.revBudget),
+      revBudget: numStr(b?.revenue ?? null),
       revLy: decStr(m?.revLy),
     };
   });

@@ -109,23 +109,30 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
   await prisma.$transaction(async (tx) => {
     switch (section.id) {
       case "monthly": {
+        // Section B push writes ACTUALS only, merged per month (upsert). Budget
+        // is the fixed annual WeeklyBudget and Last Year is entered by hand —
+        // neither is touched here, so a PMS push never overwrites them.
         const data = rows
           .map((r) => ({
-            reportWeekId: rid,
             month: Number(r.month),
             rnSold: int(r.rnSold),
-            occActual: occFrac(r.occActual), occBudget: occFrac(r.occBudget), occLy: occFrac(r.occLy),
-            arrActual: money(r.arrActual), arrBudget: money(r.arrBudget), arrLy: money(r.arrLy),
-            revActual: money(r.revActual), revBudget: money(r.revBudget), revLy: money(r.revLy),
+            occActual: occFrac(r.occActual),
+            arrActual: money(r.arrActual),
+            revActual: money(r.revActual),
           }))
           .filter(
             (r) =>
               Number.isInteger(r.month) && r.month >= 1 && r.month <= 12 &&
-              [r.rnSold, r.occActual, r.occBudget, r.occLy, r.arrActual, r.arrBudget, r.arrLy, r.revActual, r.revBudget, r.revLy].some((v) => v != null),
+              [r.rnSold, r.occActual, r.arrActual, r.revActual].some((v) => v != null),
           );
         if (data.length === 0) { written = 0; break; }
-        await tx.weeklyMonthlyStat.deleteMany({ where: { reportWeekId: rid } });
-        await tx.weeklyMonthlyStat.createMany({ data });
+        for (const r of data) {
+          await tx.weeklyMonthlyStat.upsert({
+            where: { reportWeekId_month: { reportWeekId: rid, month: r.month } },
+            update: { rnSold: r.rnSold, occActual: r.occActual, arrActual: r.arrActual, revActual: r.revActual },
+            create: { reportWeekId: rid, month: r.month, rnSold: r.rnSold, occActual: r.occActual, arrActual: r.arrActual, revActual: r.revActual },
+          });
+        }
         written = data.length;
         break;
       }

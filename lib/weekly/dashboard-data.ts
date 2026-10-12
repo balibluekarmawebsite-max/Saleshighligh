@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { type PropertyOption } from "@/lib/dashboard-data";
+import { getAnnualBudget } from "@/lib/weekly/annual-budget";
 import {
   channelYtd,
   headlineMonth,
@@ -169,16 +170,20 @@ export async function getWeeklyDashboardData(
     ? report.monthlyStats.find((m) => m.month === chosen)
     : undefined;
 
+  // Budget is the FIXED annual budget (WeeklyBudget), shared across weeks.
+  const annualBudget = await getAnnualBudget(report.propertyId, report.year);
+
+  const headBudget = chosen ? annualBudget.get(chosen) : undefined;
   const headline = headStat
     ? {
         occActual: dec(headStat.occActual),
-        occBudget: dec(headStat.occBudget),
+        occBudget: headBudget?.occFraction ?? null,
         occLy: dec(headStat.occLy),
         arrActual: dec(headStat.arrActual),
-        arrBudget: dec(headStat.arrBudget),
+        arrBudget: headBudget?.arr ?? null,
         arrLy: dec(headStat.arrLy),
         revActual: dec(headStat.revActual),
-        revBudget: dec(headStat.revBudget),
+        revBudget: headBudget?.revenue ?? null,
         revLy: dec(headStat.revLy),
         rnSold: headStat.rnSold,
       }
@@ -188,7 +193,7 @@ export async function getWeeklyDashboardData(
     .map((m) => ({
       label: MONTHS_SHORT[m.month - 1] ?? String(m.month),
       actual: dec(m.revActual) ?? 0,
-      budget: dec(m.revBudget) ?? 0,
+      budget: annualBudget.get(m.month)?.revenue ?? 0,
     }))
     .filter((r) => r.actual > 0 || r.budget > 0);
 

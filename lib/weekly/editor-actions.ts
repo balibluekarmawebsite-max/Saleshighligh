@@ -13,6 +13,7 @@ import {
   SOCIAL_NARRATIVE_BLOCKS,
   isLockedStatus,
 } from "@/lib/weekly/editor-data";
+import { saveAnnualBudget } from "@/lib/weekly/annual-budget";
 import { weekMeta } from "@/lib/weekly/week";
 
 export interface ActionResult {
@@ -25,7 +26,7 @@ const STATUSES = Object.values(WeeklyReportStatus) as string[];
 async function findReport(propertyCode: string, week: string) {
   return prisma.weeklyReport.findFirst({
     where: { property: { code: propertyCode }, endDate: new Date(`${week}T00:00:00.000Z`) },
-    select: { id: true, status: true },
+    select: { id: true, status: true, propertyId: true, year: true },
   });
 }
 
@@ -341,7 +342,7 @@ const occFrac = (v: unknown): number | null => {
 async function authReportForWrite(
   property: string,
   week: string,
-): Promise<{ error: ActionResult } | { id: string }> {
+): Promise<{ error: ActionResult } | { id: string; propertyId: string; year: number }> {
   const user = await getCurrentUser();
   if (!canEditProperty(user, property)) {
     return { error: { ok: false, message: `You don't have edit access to ${property}.` } };
@@ -351,7 +352,7 @@ async function authReportForWrite(
   if (isLockedStatus(report.status)) {
     return { error: { ok: false, message: "This report is approved/locked — reopen it to edit." } };
   }
-  return { id: report.id };
+  return { id: report.id, propertyId: report.propertyId, year: report.year };
 }
 
 function parseRows(formData: FormData, field = "rows"): Record<string, string>[] | null {
@@ -375,38 +376,54 @@ export async function saveMonthlyStats(
   const rows = parseRows(formData);
   if (!rows) return { ok: false, message: "Could not read the rows." };
 
-  const data = rows
+  // Section B splits into two homes:
+  //   • Actuals (RN, occupancy, ARR, revenue) + Last Year → per-week stats.
+  //   • Budget (occupancy / ARR / revenue) → the FIXED annual budget
+  //     (WeeklyBudget, property+year), shared across every weekly report.
+  const parsed = rows
     .map((r) => ({
-      reportWeekId: guard.id,
       month: Number(r.month),
       rnSold: int(r.rnSold),
       occActual: occFrac(r.occActual),
-      occBudget: occFrac(r.occBudget),
       occLy: occFrac(r.occLy),
       arrActual: money(r.arrActual),
-      arrBudget: money(r.arrBudget),
       arrLy: money(r.arrLy),
       revActual: money(r.revActual),
-      revBudget: money(r.revBudget),
       revLy: money(r.revLy),
+      occBudgetFrac: occFrac(r.occBudget),
+      arrBudget: money(r.arrBudget),
+      revBudget: money(r.revBudget),
     }))
-    .filter(
-      (r) =>
-        Number.isInteger(r.month) &&
-        r.month >= 1 &&
-        r.month <= 12 &&
-        [
-          r.rnSold, r.occActual, r.occBudget, r.occLy,
-          r.arrActual, r.arrBudget, r.arrLy, r.revActual, r.revBudget, r.revLy,
-        ].some((v) => v != null),
+    .filter((r) => Number.isInteger(r.month) && r.month >= 1 && r.month <= 12);
+
+  const statData = parsed
+    .map((r) => ({
+      reportWeekId: guard.id,
+      month: r.month,
+      rnSold: r.rnSold,
+      occActual: r.occActual,
+      occLy: r.occLy,
+      arrActual: r.arrActual,
+      arrLy: r.arrLy,
+      revActual: r.revActual,
+      revLy: r.revLy,
+    }))
+    .filter((r) =>
+      [r.rnSold, r.occActual, r.occLy, r.arrActual, r.arrLy, r.revActual, r.revLy].some((v) => v != null),
     );
 
   await prisma.$transaction(async (tx) => {
     await tx.weeklyMonthlyStat.deleteMany({ where: { reportWeekId: guard.id } });
-    if (data.length) await tx.weeklyMonthlyStat.createMany({ data });
+    if (statData.length) await tx.weeklyMonthlyStat.createMany({ data: statData });
   });
 
-  await logAudit("weekly_monthly_save", `${property} ${week}`, { rows: data.length });
+  await saveAnnualBudget(
+    guard.propertyId,
+    guard.year,
+    parsed.map((r) => ({ month: r.month, occFraction: r.occBudgetFrac, arr: r.arrBudget, revenue: r.revBudget })),
+  );
+
+  await logAudit("weekly_monthly_save", `${property} ${week}`, { rows: statData.length });
   revalidatePath(`/weekly/${property}/${week}/editor`);
   return { ok: true, message: "Saved." };
 }
