@@ -546,3 +546,37 @@ npm run db:backfill-budget
 
 After it runs, every week's Section B shows the same budget, and editing the
 budget in any week's grid updates it for the whole year.
+
+---
+
+## 11. On-demand scrape queue (Request Scrape)
+
+Lets a user click **Request Scrape** on the dashboard to have the office PC pull
+a specific VHP report + period on demand, instead of waiting for the schedule.
+The dashboard writes a job; the office PC's poller claims it, scrapes, uploads
+via `/api/import`, and reports the result. (See the companion spec
+`VHP_JOBS_INTEGRATION.md` the scraper is built against.)
+
+**Apply the migration** (adds the `scrape_jobs` table) on deploy:
+
+```bash
+npx prisma migrate deploy        # applies migrations/20261012120000_add_scrape_jobs
+# or run prisma/migrations/20261012120000_add_scrape_jobs/migration.sql by hand
+```
+
+**Auth:** both job endpoints accept the existing `IMPORT_API_TOKEN`. Set
+`VHP_JOBS_TOKEN` only if you want the queue to use a separate secret (the poller
+must then send that one). `/api/jobs/*` is excluded from the login middleware,
+self-gated by the token.
+
+**Endpoints (for the poller):**
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/jobs/claim` | atomically claim the oldest queued job → `{ "job": {…} }` or `{ "job": null }`; re-queues leases stuck "running" > 30 min |
+| `POST /api/jobs/{id}/result` | idempotent status update → `{ "ok": true }` (sets done/failed + message + rows written) |
+
+**UI:** the **Request Scrape** page (weekly sidebar) lets an EDITOR/ADMIN pick
+property + report (B/C) + period; the job list shows queued → running → done /
+failed with the result. The data path is unchanged — the scraper still uploads
+through `/api/import`; the job endpoints are only status bookkeeping.

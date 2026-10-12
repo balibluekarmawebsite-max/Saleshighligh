@@ -20,11 +20,11 @@ export default auth((req) => {
 export const config = {
   // Protect everything except Next internals, the login page, the auth API, the
   // cron API (self-gated by CRON_SECRET so the scheduler's token request isn't
-  // redirected to /login), the data-push API (/api/import, self-gated by
-  // IMPORT_API_TOKEN so the VHP scraper's token request isn't redirected to
-  // /login), the /print route (self-gated by session-or-internal-token so the
+  // redirected to /login), the data-push + jobs APIs (/api/import, /api/jobs,
+  // self-gated by IMPORT_API_TOKEN / VHP_JOBS_TOKEN so the VHP scraper's token
+  // requests aren't redirected to /login), the /print route (self-gated so the
   // PDF exporter's headless-browser fetch can reach it), and /uploads (static
   // user images, served by unguessable key — the PDF exporter loads them as
   // <img> sub-resources without a session).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth|api/cron|api/import).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth|api/cron|api/import|api/jobs).*)"],
 };

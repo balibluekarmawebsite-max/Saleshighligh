@@ -1227,3 +1227,37 @@ model WeeklyAdsCampaign {
   @@index([reportWeekId])
   @@map("weekly_ads_campaigns")
 }
+
+/// On-demand scrape job queue (VHP_JOBS_INTEGRATION). A dashboard user queues a
+/// job; the office-PC poller claims it (claim endpoint), scrapes + uploads via
+/// /api/import, then reports the outcome (result endpoint).
+model ScrapeJob {
+  id            String    @id @default(cuid())
+  /// Property code: BKDS | BKDU | BKV.
+  property      String
+  /// Report section: "B" (yearly forecast) | "C" (reservation by creation date).
+  section       String
+  /// Section C — inclusive date range the scraper sets in VHP.
+  startDate     DateTime? @db.Date
+  endDate       DateTime? @db.Date
+  /// Section B — target month "YYYY-MM".
+  month         String?
+  /// The week key this fills (Thursday end), used as week_ending on upload.
+  weekEnding    DateTime? @db.Date
+  /// queued → running → done | failed.
+  status        String    @default("queued")
+  /// Which PC claimed it (set on claim).
+  worker        String?
+  /// Human-readable result/reason, shown in the UI.
+  message       String?
+  /// Rows written (echoed from /api/import, on result).
+  written       Int?
+  /// User who requested it (for the activity trail).
+  requestedById String?
+  requestedAt   DateTime  @default(now())
+  claimedAt     DateTime?
+  finishedAt    DateTime?
+
+  @@index([status, requestedAt])
+  @@map("scrape_jobs")
+}
