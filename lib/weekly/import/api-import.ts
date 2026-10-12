@@ -18,6 +18,7 @@ import { isLockedStatus } from "@/lib/weekly/editor-data";
 import { applyImportRows } from "@/lib/weekly/import/apply-core";
 import { extractSectionRows, type ExtractFile } from "@/lib/weekly/import/extract";
 import { resolveSection } from "@/lib/weekly/import/section-resolve";
+import { tryVhpParse } from "@/lib/weekly/import/vhp-parse";
 import { isWeekId, weekMeta } from "@/lib/weekly/week";
 
 export interface ApiImportInput {
@@ -90,17 +91,26 @@ async function runApiImportInner(input: ApiImportInput): Promise<ApiImportResult
     return fail(409, `report ${property} ${weekEnding} is ${existing.status.toLowerCase()} — reopen it to accept imports.`);
   }
 
-  const extracted = await extractSectionRows(section, {
-    file: input.file ?? null,
-    text: input.text,
-    year,
-    platform: input.platform,
-  });
-  if (!extracted.ok) return fail(extracted.status, extracted.error);
+  // Fast, exact path for known VHP CSV exports (no AI, no truncation) — e.g.
+  // the raw "Reservation By Creation Date" list aggregated into Section C.
+  // Falls back to the AI extractor for anything it doesn't recognise.
+  let rows = input.file ? tryVhpParse(section.id, input.file) : null;
+  let via = "vhp";
+  if (rows == null) {
+    via = "ai";
+    const extracted = await extractSectionRows(section, {
+      file: input.file ?? null,
+      text: input.text,
+      year,
+      platform: input.platform,
+    });
+    if (!extracted.ok) return fail(extracted.status, extracted.error);
+    rows = extracted.rows;
+  }
 
-  // Safety: never replace a populated section with nothing. If extraction found
-  // no rows (bad file / parse miss), leave the existing data in place.
-  if (extracted.rows.length === 0) {
+  // Safety: never replace a populated section with nothing. If nothing was
+  // parsed (bad file / parse miss), leave the existing data in place.
+  if (rows.length === 0) {
     return fail(422, "no rows could be extracted from the file — existing data left unchanged.");
   }
 
@@ -136,7 +146,7 @@ async function runApiImportInner(input: ApiImportInput): Promise<ApiImportResult
     reportId: report.id,
     propertyId: report.propertyId,
     sectionId: section.id,
-    rows: extracted.rows,
+    rows,
     year,
     platform: input.platform,
     actorUserId: null,
@@ -155,6 +165,7 @@ async function runApiImportInner(input: ApiImportInput): Promise<ApiImportResult
     section: section.id,
     rows: written,
     created,
+    via,
     source: input.source ?? null,
   }).catch(() => {});
 
