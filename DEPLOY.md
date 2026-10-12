@@ -469,8 +469,15 @@ Content-Type: multipart/form-data
 
 | VHP report | `section` | Fills |
 |---|---|---|
-| Yearly forecast (per-month occupancy / ADR / revenue) | `B` | B · YTD Actual & Forecast |
+| Yearly forecast (per-month occupancy / ADR / revenue — ACTUALS) | `B` | B · YTD Actual & Forecast (Actual columns) |
 | Reservation by Creation Date (by market segment) | `C` | C · Weekly Market Segment |
+
+> **Section B is ACTUALS only.** The push fills the per-month Actual
+> occupancy / ADR / revenue (merged month by month). The **Budget** is a
+> fixed yearly plan entered by hand in the Section B grid (stored once per
+> property + year, shared across every week) and the **Last Year** column is
+> entered by hand — the push never touches either, so send only the actual
+> figures. Section C is a full replace of the week's market-segment rows.
 
 ### 10.3 Example call
 
@@ -521,8 +528,21 @@ print((d - datetime.timedelta(days=(d.weekday() - 3) % 7)).isoformat())
 PY
 ```
 
-> **Replace-all caveat (Section B):** a push replaces the whole section. If a
-> forecast CSV carries only *actual/forecast* columns (no Budget / Last-Year),
-> those columns are set to empty for that week. If the VHP forecast omits
-> Budget/LY and you want them preserved, say so and we'll switch Section B to a
-> per-column **merge** instead of replace-all.
+> **Section B budget is safe.** A Section B push only merges the per-month
+> Actual columns — it never clears the Budget (a fixed yearly plan entered in
+> the grid) or the Last Year column. Section C replaces the week's segment rows.
+
+### 10.5 One-time budget backfill (run once, after deploying the budget change)
+
+The budget became a fixed **annual** figure (stored once per property + year,
+shared across every week) instead of a per-week copy. Run this once, right
+after `npm run build` + restart, to copy the budget already entered in past
+weeks into the annual table. It is idempotent and never overwrites a budget a
+human later edits in the grid:
+
+```bash
+npm run db:backfill-budget
+```
+
+After it runs, every week's Section B shows the same budget, and editing the
+budget in any week's grid updates it for the whole year.
