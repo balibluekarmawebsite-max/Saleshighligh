@@ -250,7 +250,7 @@ export async function getWeeklyExportData(
   );
   const headlineMonthLabel = chosen ? (MONTHS_SHORT[chosen - 1] ?? null) : null;
 
-  // ── Section C: market segment production ────────────────────────────────────
+  // ── Section C: agent / source production ────────────────────────────────────
   const segTotals = productionTotals(
     report.segmentProductions.map((s) => ({ rnSold: s.rnSold, grossRevenue: dec(s.grossRevenue) })),
   );

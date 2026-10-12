@@ -216,7 +216,7 @@ export async function getWeeklyDashboardData(
   const progress: WeeklyProgressItem[] = [
     { key: "A", title: "Sales & Marketing Overview", done: overviewHasBody },
     { key: "B", title: "YTD Actual / Budget / Last Year", done: report.monthlyStats.length > 0 },
-    { key: "C", title: "Weekly Market Segment", done: report.segmentProductions.length > 0 },
+    { key: "C", title: "Weekly Agent Production", done: report.segmentProductions.length > 0 },
     { key: "E/F", title: "Channel Inside (Room Nights)", done: report.channelRns.length > 0 },
     { key: "H", title: "Social Media Insight", done: socialHasData },
     { key: "J", title: "Next Week Action Plan", done: false },

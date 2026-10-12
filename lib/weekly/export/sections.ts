@@ -3,7 +3,7 @@
 export const WEEKLY_EXPORT_SECTIONS = [
   { id: "overview", label: "Sales & Marketing Overview" },
   { id: "monthly", label: "Monthly (Actual / Budget / LY)" },
-  { id: "segments", label: "Market Segment" },
+  { id: "segments", label: "Agent Production" },
   { id: "ratecodes", label: "Rate Codes & Promotions" },
   { id: "channels", label: "Channel Room Nights" },
   { id: "social", label: "Social Media" },

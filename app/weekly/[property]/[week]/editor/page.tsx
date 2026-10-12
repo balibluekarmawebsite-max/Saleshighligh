@@ -132,13 +132,13 @@ export default async function WeeklyEditorPage({
       node: <MonthlyGrid property={p} week={w} locked={readOnly} initial={data.monthly} />,
     },
     {
-      key: "C", code: "C", label: "Market Segment", done: data.completion.C,
+      key: "C", code: "C", label: "Agent Production", done: data.completion.C,
       node: (
         <ProductionGrid
           property={p} week={w} locked={readOnly}
-          title="C · Weekly Market Segment"
-          subtitle="Room nights and revenue by market segment. ARR and % share are calculated."
-          labelHeader="Segment" addLabel="Add segment"
+          title="C · Weekly Agent Production"
+          subtitle="Room nights and revenue by booking agent / source (Booking.com, Expedia, …). ARR and % share are calculated."
+          labelHeader="Agent / Source" addLabel="Add agent"
           initial={data.segments} action={saveSegments}
         />
       ),

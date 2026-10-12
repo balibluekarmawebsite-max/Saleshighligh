@@ -172,10 +172,10 @@ export async function buildWeeklyDocx(
 
   if (show("segments") && segments.rows.length > 0) {
     const t = segments.totals;
-    children.push(sectionHeading("C · Weekly Market Segment"));
+    children.push(sectionHeading("C · Weekly Agent Production"));
     children.push(
       table(
-        ["Segment", "Group", "Room Nights", "Revenue", "ARR", "Share"],
+        ["Agent / Source", "Group", "Room Nights", "Revenue", "ARR", "Share"],
         [
           ...segments.rows.map((s) => [s.label, s.group ?? EMPTY, num(s.rnSold), money(s.grossRevenue), money(s.arr), share(s.share)]),
           ["TOTAL", "", num(t.rn), money(t.revenue), money(t.arr), share(100)],

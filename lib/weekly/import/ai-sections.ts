@@ -65,13 +65,13 @@ export const AI_IMPORT_SECTIONS: AiImportSection[] = [
   },
   {
     id: "segment",
-    title: "C · Weekly Production by Market Segment",
-    description: 'Best from VHP "Reservation By Creation Date" — grouped by segment.',
+    title: "C · Weekly Production by Agent",
+    description: 'Best from VHP "Reservation By Creation Date" — grouped by booking agent / source.',
     completionKey: "C",
     csvTemplateId: "segment",
-    fields: [f("label", "Segment", "text"), f("segmentGroup", "Group", "text"), f("rnSold", "RN Sold", "int"), f("grossRevenue", "Revenue", "money")],
-    shape: "one object per market segment",
-    rules: "label is the segment name. segmentGroup is optional (a broader grouping) — use null if unknown. Do not compute ARR or % (the app derives them).",
+    fields: [f("label", "Agent / Source", "text"), f("segmentGroup", "Group", "text"), f("rnSold", "RN Sold", "int"), f("grossRevenue", "Revenue", "money")],
+    shape: "one object per booking agent / source",
+    rules: "label is the booking agent / source name taken from the 'Reservation Name' column (e.g. Booking.com, Expedia, Agoda, Individual Reservation). Group rows with the same agent together and sum their room nights and revenue. segmentGroup is optional (a broader grouping) — use null if unknown. Do not compute ARR or % (the app derives them).",
   },
   {
     id: "ratecode",

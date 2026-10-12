@@ -123,9 +123,9 @@ export default async function WeeklyPrintPage({
       )}
 
       {show("segments") && segments.rows.length > 0 && (
-        <Section title="C · Weekly Market Segment">
+        <Section title="C · Weekly Agent Production">
           <Table
-            head={["Segment", "Group", "Room Nights", "Revenue", "ARR", "Share"]}
+            head={["Agent / Source", "Group", "Room Nights", "Revenue", "ARR", "Share"]}
             rows={[
               ...segments.rows.map((s) => [s.label, s.group ?? EMPTY, num(s.rnSold), money(s.grossRevenue), money(s.arr), share(s.share)]),
               ["TOTAL", "", num(segments.totals.rn), money(segments.totals.revenue), money(segments.totals.arr), share(100)],

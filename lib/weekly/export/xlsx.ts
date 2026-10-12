@@ -745,7 +745,7 @@ export async function buildWeeklyXlsxBuffer(
   coverSheet(wb, d);
   if (show("overview")) await overviewSheet(wb, d, show("screenshots"), show("ads"));
   if (show("monthly")) monthlySheet(wb, d);
-  if (show("segments")) productionSheet(wb, "C-Segment", "C · Weekly Production by Market Segment", "Source / Segment", d.segments);
+  if (show("segments")) productionSheet(wb, "C-Agent", "C · Weekly Production by Agent", "Agent / Source", d.segments);
   if (show("ratecodes")) productionSheet(wb, "D-RateCode", "D · Rate Code / Promotion", "Promotion", d.rateCodes);
   if (show("channels")) channelsSheet(wb, d);
   if (show("departments")) {

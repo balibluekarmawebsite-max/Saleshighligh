@@ -3,14 +3,17 @@
  *
  * The VHP "Reservation By Creation Date" export is a RAW list — one row per
  * room booking, with report-title lines at the top and fully-quoted CSV. For
- * Section C (market-segment production) the dashboard needs it AGGREGATED by
- * segment. Doing that in code is instant and exact (it reads the whole file and
- * sums precisely), unlike the AI path which truncates large inputs and so can
- * under-count. The token push tries this first and falls back to the AI only
- * when the file isn't a recognised VHP layout.
+ * Section C (agent / source production) the dashboard needs it AGGREGATED by
+ * the booking agent — i.e. the "Reservation Name" column (Booking.com, Expedia,
+ * Agoda, individual reservations, …). Doing that in code is instant and exact
+ * (it reads the whole file and sums precisely), unlike the AI path which
+ * truncates large inputs and so can under-count. The token push tries this
+ * first and falls back to the AI only when the file isn't a recognised VHP
+ * layout.
  *
  * Business rules (Section C):
- *   • group by the "Segment" column;
+ *   • group by the "Reservation Name" column (the booking agent / source),
+ *     normalised to the part before the first comma, asterisks stripped;
  *   • room nights  = Night × Room Quantity, summed;
  *   • revenue      = sum of "Total Revenue";
  *   • exclude rows whose Status is Cancelled / No-show (not production);
@@ -66,30 +69,46 @@ function toInt(s: string | undefined): number {
 }
 
 /**
- * Aggregate a VHP "Reservation By Creation Date" CSV into Section C segment
- * rows. Returns null if the text isn't that report (so the caller falls back
- * to the AI extractor).
+ * Normalise a VHP "Reservation Name" into a booking agent / source label:
+ *   • take the part BEFORE the first comma — the agent name (anything after is a
+ *     booker/contact suffix, e.g. "Booking.com, T&T" → "Booking.com");
+ *   • strip asterisks — "***INDIVIDUAL RESERVATION***" → "INDIVIDUAL RESERVATION";
+ *   • collapse internal whitespace and trim.
  */
-export function parseVhpReservationsToSegments(text: string): ImportRow[] | null {
+function normAgent(s: string | undefined): string {
+  return (s ?? "")
+    .split(",")[0]!
+    .replace(/\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Aggregate a VHP "Reservation By Creation Date" CSV into Section C rows,
+ * grouped by the booking AGENT / SOURCE (the "Reservation Name" column) —
+ * Booking.com, Expedia, Agoda, individual reservations, etc. Returns null if
+ * the text isn't that report (so the caller falls back to the AI extractor).
+ */
+export function parseVhpReservationsByAgent(text: string): ImportRow[] | null {
   const rows = parseCsv(text);
   if (rows.length === 0) return null;
 
   // Find the column header row (the real one, below the report title lines).
   const headerIdx = rows.findIndex((r) => {
     const set = new Set(r.map(norm));
-    return set.has("segment") && set.has("total revenue") && set.has("night");
+    return set.has("reservation name") && set.has("total revenue") && set.has("night");
   });
   if (headerIdx < 0) return null;
 
   const header = rows[headerIdx]!.map(norm);
   const col = (name: string) => header.indexOf(name);
   const iNo = col("no");
-  const iSeg = col("segment");
+  const iName = col("reservation name");
   const iNight = col("night");
   const iQty = col("room quantity");
   const iRev = col("total revenue");
   const iStatus = col("status");
-  if (iSeg < 0 || iNight < 0 || iRev < 0) return null;
+  if (iName < 0 || iNight < 0 || iRev < 0) return null;
 
   const agg = new Map<string, { rn: number; rev: number }>();
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -97,17 +116,17 @@ export function parseVhpReservationsToSegments(text: string): ImportRow[] | null
     // Data rows are numbered 1,2,3…; this skips titles, repeated headers,
     // page breaks and totals rows in one go.
     if (iNo >= 0 && toInt(r[iNo]) <= 0) continue;
-    const seg = (r[iSeg] ?? "").trim();
-    if (!seg) continue;
+    const agent = normAgent(r[iName]);
+    if (!agent) continue;
     const status = norm(r[iStatus]);
     if (status.includes("cancel") || status.includes("no show") || status.includes("noshow")) continue;
 
     const nights = toInt(r[iNight]);
     const qty = iQty >= 0 ? toInt(r[iQty]) : 1;
-    const cur = agg.get(seg) ?? { rn: 0, rev: 0 };
+    const cur = agg.get(agent) ?? { rn: 0, rev: 0 };
     cur.rn += nights * qty; // room-nights = nights × rooms (0 for cancelled/companion lines)
     cur.rev += toMoney(r[iRev]);
-    agg.set(seg, cur);
+    agg.set(agent, cur);
   }
 
   if (agg.size === 0) return null;
@@ -215,7 +234,7 @@ export function tryVhpParse(sectionId: string, file: ExtractFile, reportYear: nu
     return null;
   }
 
-  if (sectionId === "segment") return parseVhpReservationsToSegments(text);
+  if (sectionId === "segment") return parseVhpReservationsByAgent(text);
   if (sectionId === "monthly") return parseVhpForecastToMonthly(text, reportYear);
   return null;
 }

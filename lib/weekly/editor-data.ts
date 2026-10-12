@@ -200,7 +200,7 @@ export async function getWeeklyEditorData(
   const progress: WeeklyProgressItem[] = [
     { key: "A", title: "Sales & Marketing Overview", done: overviewReady },
     { key: "B", title: "YTD Actual / Budget / Last Year", done: report._count.monthlyStats > 0 },
-    { key: "C", title: "Weekly Market Segment", done: report.segmentProductions.length > 0 },
+    { key: "C", title: "Weekly Agent Production", done: report.segmentProductions.length > 0 },
     { key: "E/F", title: "Channel Inside (Room Nights)", done: report._count.channelRns > 0 },
     { key: "H", title: "Social Media Insight", done: socialReady },
     { key: "J", title: "Next Week Action Plan", done: report._count.actionPlans > 0 },
@@ -292,7 +292,7 @@ export async function getWeeklyDepartmentData(
 export const EDITOR_SECTIONS = [
   { key: "A", code: "A", label: "Overview" },
   { key: "B", code: "B", label: "YTD Actual & Forecast" },
-  { key: "C", code: "C", label: "Market Segment" },
+  { key: "C", code: "C", label: "Agent Production" },
   { key: "D", code: "D", label: "Rate Code / Promotion" },
   { key: "EF", code: "E/F", label: "Channel Inside" },
   { key: "G", code: "G", label: "Sales Activity" },

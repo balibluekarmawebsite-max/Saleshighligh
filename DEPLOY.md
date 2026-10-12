@@ -470,7 +470,7 @@ Content-Type: multipart/form-data
 | VHP report | `section` | Fills |
 |---|---|---|
 | Yearly forecast (per-month occupancy / ADR / revenue — ACTUALS) | `B` | B · YTD Actual & Forecast (Actual columns) |
-| Reservation by Creation Date (by market segment) | `C` | C · Weekly Market Segment |
+| Reservation by Creation Date (by booking agent) | `C` | C · Weekly Agent Production |
 
 > **Section B is ACTUALS only.** The push fills the per-month Actual
 > occupancy / ADR / revenue (merged month by month). The **Budget** is a

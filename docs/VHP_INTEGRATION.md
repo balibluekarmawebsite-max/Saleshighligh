@@ -59,7 +59,7 @@ they are not needed for B or C.)
 | VHP report | `section` | Fills in the dashboard |
 |---|---|---|
 | **Yearly forecast** — per-month occupancy / ADR / revenue (ACTUALS) | `B` | B · YTD Actual & Forecast — the **Actual** columns |
-| **Reservation by Creation Date** — grouped by market segment | `C` | C · Weekly Market Segment |
+| **Reservation by Creation Date** — grouped by booking agent | `C` | C · Weekly Agent Production |
 
 ### Important: Section B is **actuals only**
 
@@ -106,19 +106,24 @@ Rules:
 ### Section C — Reservation By Creation Date
 
 Post the VHP **"Reservation By Creation Date"** export as-is (the raw per-booking
-list). The dashboard aggregates it **by Segment**: room nights = Night × Room
-Quantity, revenue = sum of Total Revenue, **excluding Cancelled / No-show** rows.
-It replaces that week's segment rows.
+list). The dashboard aggregates it **by booking agent / source** — the
+**`Reservation Name`** column (Booking.com, Expedia, Agoda, individual
+reservations, …): room nights = Night × Room Quantity, revenue = sum of Total
+Revenue, **excluding Cancelled / No-show** rows. The agent name is taken as the
+text before the first comma (any booker suffix after it is dropped) with
+asterisks stripped, so `Booking.com, T&T` and `***INDIVIDUAL RESERVATION***`
+become `Booking.com` and `INDIVIDUAL RESERVATION`. It replaces that week's
+Section C rows.
 
 If instead you send a pre-made CSV (not the VHP export), the AI extractor expects
-one row per market segment:
+one row per booking agent / source:
 
 | Meaning | Example header(s) | Example value |
 |---|---|---|
-| Segment name | `Market Segment`, `Segment` | `OTA`, `Corporate`, `Walk-in` |
+| Agent / source name | `Reservation Name`, `Agent`, `Source` | `Booking.com`, `Expedia`, `Individual` |
 | Room nights | `RN`, `Room Nights` | `128` |
 | Revenue (gross, IDR) | `Revenue`, `Gross Revenue` | `356000000` |
-| Segment group (optional) | `Group` | `Leisure` |
+| Group (optional) | `Group` | `OTA` |
 
 - Don't pre-compute ADR or percentages — the dashboard derives them.
 - Skip the totals row.
@@ -203,7 +208,7 @@ exactly as it was.
 - **Suggested cadence:**
   - Section **B** (yearly forecast): daily, posting the *current* week each run
     (`week_ending = current_week_ending()`), per property.
-  - Section **C** (reservation by segment): once per reporting week (e.g. Friday
+  - Section **C** (reservation by agent): once per reporting week (e.g. Friday
     after the week closes), posting that week's `week_ending`, per property.
 - **Log** each response (status + body) so a bad week is visible.
 
@@ -211,7 +216,7 @@ exactly as it was.
 
 ## 9. End-to-end examples
 
-Section C (reservation → market segment):
+Section C (reservation → agent production):
 
 ```bash
 curl -sS -X POST https://dashboard.bluekarmasecrets.com/api/import \

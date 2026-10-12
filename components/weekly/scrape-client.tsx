@@ -80,7 +80,7 @@ export function ScrapeClient({
                 disabled={!canEdit}
                 className={FIELD}
               >
-                <option value="C">C — Reservation by Creation Date (market segment)</option>
+                <option value="C">C — Reservation by Creation Date (by booking agent)</option>
                 <option value="B">B — Yearly Forecast of Room Occupancy</option>
               </select>
             </label>

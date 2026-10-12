@@ -169,7 +169,7 @@ export async function buildWeeklyContext(
         }
       : null;
 
-  // ── Weekly market segment production (top by revenue) ───────────────────────
+  // ── Weekly agent / source production (top by revenue) ───────────────────────
   const segTotals = productionTotals(
     report.segmentProductions.map((s) => ({ rnSold: s.rnSold, grossRevenue: dec(s.grossRevenue) })),
   );
@@ -178,7 +178,7 @@ export async function buildWeeklyContext(
     .sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0))
     .slice(0, 8)
     .map(({ revenue, row }) => ({
-      segment: row.label,
+      agent: row.label,
       group: row.segmentGroup,
       roomNights: num(row.rnSold),
       revenue: money(revenue),

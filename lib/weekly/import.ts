@@ -66,8 +66,8 @@ export const IMPORT_SPECS: ImportSpec[] = [
   },
   {
     id: "segment",
-    title: "Section C — Weekly Market Segment",
-    hint: "One row per segment for the week.",
+    title: "Section C — Weekly Agent Production",
+    hint: "One row per booking agent / source for the week.",
     columns: [
       { header: "label", key: "label", type: "string", required: true },
       { header: "segment_group", key: "segmentGroup", type: "string" },
