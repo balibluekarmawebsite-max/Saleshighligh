@@ -112,6 +112,9 @@ automatically; the systemd service picks it up on restart. See
 | `ANTHROPIC_MODEL` | optional | Defaults to `claude-sonnet-4-6` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | Google SSO (email/password works without it) |
 | `UPLOAD_DIR` / `UPLOAD_URL_BASE` | optional | Local image-upload dir + URL base (defaults: `public/uploads`, `/uploads`) |
+| `GROQ_API_KEY` | optional | Groq key for AI data-import extraction (required for the data-push API in §10) |
+| `CRON_SECRET` | optional | Shared secret for the weekly auto-sync endpoint (§9) |
+| `IMPORT_API_TOKEN` | optional | Shared secret for the VHP data-push API (§10). `openssl rand -base64 48` |
 
 > **Auth rollout switch:** protection and role enforcement turn on **only when
 > `AUTH_SECRET` is set**. Without it the app stays open and every action runs as a
@@ -421,3 +424,105 @@ curl -H "Authorization: Bearer YOUR_CRON_SECRET" "http://127.0.0.1:3000/api/cron
 The JSON response lists, per property, whether the report was created, how many
 Metricool/ads rows were written, and any per-property errors. Runs are recorded
 in the audit log (`/admin/activity`, action `weekly_auto_sync`).
+
+---
+
+## 10. Data push API (VHP scraper → weekly report)
+
+An external scraper can push a VHP CSV export straight into a weekly report
+section. The endpoint finds-or-creates that property + week's **DRAFT** report,
+runs the same "Process with AI" extraction the UI uses, and **replaces that one
+section's data** — exactly like a manual AI import, but in one call and with no
+browser session.
+
+**Needs `GROQ_API_KEY`** (same key as the AI Data Import) and a shared secret.
+
+### 10.1 Set the shared secret
+
+```bash
+openssl rand -base64 48        # generate once
+```
+
+Put it in `.env` as `IMPORT_API_TOKEN="…"`, restart the service, and give the
+scraper the **same** value. Without it set, the endpoint refuses every request
+(HTTP 503). A wrong/absent token → HTTP 401.
+
+### 10.2 The contract
+
+```
+POST https://dashboard.bluekarmasecrets.com/api/import
+Authorization: Bearer <IMPORT_API_TOKEN>
+Content-Type: multipart/form-data
+```
+
+| Field | Example | Meaning |
+|---|---|---|
+| `file` | the CSV/Excel file | the VHP export (≤ 20 MB) |
+| `property` | `BKDS` | `BKDS` / `BKDU` / `BKV` |
+| `section` | `C` | report section — letter (`B`, `C`, `D`, `EF`, `G`, `G2`, `H`, `I`, `J`) **or** internal id (`monthly`, `segment`, …) |
+| `week_ending` | `2026-10-08` | `YYYY-MM-DD`, the **Thursday** that ends the reporting week (matches the `/weekly/.../2026-10-08/` URL) |
+| `source` | `vhp:reservation-by-creation-date` | optional, recorded in the audit log |
+| `year` | `2026` | optional; only the Channel section (`EF`) needs it — defaults to the week's year |
+| `platform` | `Instagram` | optional; only the Social section (`H`) uses it |
+
+**Section mapping for this project**
+
+| VHP report | `section` | Fills |
+|---|---|---|
+| Yearly forecast (per-month occupancy / ADR / revenue) | `B` | B · YTD Actual & Forecast |
+| Reservation by Creation Date (by market segment) | `C` | C · Weekly Market Segment |
+
+### 10.3 Example call
+
+```bash
+curl -X POST https://dashboard.bluekarmasecrets.com/api/import \
+  -H "Authorization: Bearer $IMPORT_API_TOKEN" \
+  -F "property=BKDS" \
+  -F "section=C" \
+  -F "week_ending=2026-10-08" \
+  -F "source=vhp:reservation-by-creation-date" \
+  -F "file=@bkds-reservation-by-creation-date-2026-10-12.csv"
+```
+
+**Success → HTTP 200**
+
+```json
+{ "ok": true, "property": "BKDS", "week_ending": "2026-10-08", "section": "C", "written": 7, "created": false, "message": "Section C updated" }
+```
+
+**Errors**
+
+| Status | Meaning |
+|---|---|
+| 401 | `invalid token` |
+| 400 | missing/invalid field (property, section, week_ending, file) |
+| 409 | that week's report is **approved/locked** — reopen it to accept imports |
+| 422 | no rows could be extracted from the file — existing data left unchanged |
+| 501 | `GROQ_API_KEY` not set |
+| 503 | `IMPORT_API_TOKEN` not set |
+
+Every successful push writes a `weekly_api_import` audit row (`/admin/activity`)
+and a `WeeklyImport` record on the report.
+
+### 10.4 Which week does the daily job target?
+
+`week_ending` is always the **Thursday that ends the reporting week** (reports
+run Fri–Thu). For a daily job that refreshes the *current* week, compute the
+most recent Thursday on/before today and post to that — each run replaces the
+section, so the current week stays live; when the week rolls over, a new DRAFT
+is created automatically.
+
+```bash
+# most recent Thursday on/before today (UTC), YYYY-MM-DD — for the scraper config
+python3 - <<'PY'
+import datetime
+d = datetime.date.today()
+print((d - datetime.timedelta(days=(d.weekday() - 3) % 7)).isoformat())
+PY
+```
+
+> **Replace-all caveat (Section B):** a push replaces the whole section. If a
+> forecast CSV carries only *actual/forecast* columns (no Budget / Last-Year),
+> those columns are set to empty for that week. If the VHP forecast omits
+> Budget/LY and you want them preserved, say so and we'll switch Section B to a
+> per-column **merge** instead of replace-all.
