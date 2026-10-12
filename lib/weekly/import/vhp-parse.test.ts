@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCsv, parseVhpReservationsToSegments } from "@/lib/weekly/import/vhp-parse";
+import {
+  parseCsv,
+  parseVhpForecastToMonthly,
+  parseVhpReservationsToSegments,
+} from "@/lib/weekly/import/vhp-parse";
 
 /**
  * Real "Reservation By Creation Date" sample (the first 18 rows of a BKDS
@@ -93,5 +97,44 @@ describe("parseVhpReservationsToSegments", () => {
   it("returns null for a non-reservation CSV (falls back to AI)", () => {
     expect(parseVhpReservationsToSegments("Segment,RN,Revenue\nOTA,10,5000000\n")).toBeNull();
     expect(parseVhpReservationsToSegments("just some text")).toBeNull();
+  });
+});
+
+/** Real "Yearly Forecast Of Room Occupancy" summary + revenue rows (BKDS). */
+const FORECAST_CSV = [
+  "BALI BLUE KARMA",
+  "Yearly Forecast Of Room Occupancy",
+  "",
+  '"Date","01/10 Oct ","01/11 Nov ","01/12 Dec ","01/01 Jan ","01/02 Feb ","01/03 Mar ","01/04 Apr ","01/05 May ","01/06 Jun ","01/07 Jul ","01/08 Aug ","01/09 Sep "',
+  '" 1 ","15","11","6","8","2","5","5","9","5","1","1","1"',
+  '" 2 ","16","6","8","6","3","10","3","9","5","1","1","1"',
+  '" "," "," "," "," "," "," "," "," "," "," "," "," "',
+  '" Room Occupied","457.00","331.00","271.00","220.00","131.00","145.00","98.00","129.00","125.00","83.00","79.00","52.00"',
+  '" Saleable Rooms","558.00","540.00","558.00","558.00","504.00","558.00","540.00","558.00","540.00","558.00","558.00","540.00"',
+  '" Occupancy (%)","81.90","61.30","48.57","39.43","25.99","25.99","18.15","23.12","23.15","14.87","14.16","9.63"',
+  '"Person Occupied","855.00","655.00","608.00","449.00","256.00","250.00","174.00","274.00","220.00","175.00","175.00","81.00"',
+  '"Period","Oct ","Nov ","Dec ","Jan ","Feb ","Mar "',
+  '"Room Revenue"," 821,658,439"," 577,082,116"," 557,904,971"," 420,519,107"," 175,309,984"," 231,528,048"',
+  '"Period","Apr ","May ","Jun ","Jul ","Aug ","Sep "',
+  '"Room Revenue"," 104,008,418"," 162,365,883"," 239,163,060"," 196,611,234"," 123,793,657"," 58,530,277"',
+].join("\n") + "\n";
+
+describe("parseVhpForecastToMonthly", () => {
+  it("extracts the report-year months (Oct report → Oct/Nov/Dec only)", () => {
+    const rows = parseVhpForecastToMonthly(FORECAST_CSV, 2026);
+    expect(rows).not.toBeNull();
+    // Oct/Nov/Dec are 2026; Jan–Sep columns are 2027 and must be skipped.
+    expect(rows!.map((r) => r.month)).toEqual(["10", "11", "12"]);
+
+    const byMonth = new Map(rows!.map((r) => [r.month, r]));
+    // ADR = Room Revenue ÷ Room Occupied, rounded.
+    expect(byMonth.get("10")).toEqual({ month: "10", rnSold: "457", occActual: "81.9", revActual: "821658439", arrActual: "1797940" });
+    expect(byMonth.get("11")).toEqual({ month: "11", rnSold: "331", occActual: "61.3", revActual: "577082116", arrActual: "1743451" });
+    expect(byMonth.get("12")).toEqual({ month: "12", rnSold: "271", occActual: "48.57", revActual: "557904971", arrActual: "2058690" });
+  });
+
+  it("returns null for a non-forecast CSV (falls back to AI)", () => {
+    expect(parseVhpForecastToMonthly("Month,Occ,Rev\n1,80,100\n", 2026)).toBeNull();
+    expect(parseVhpForecastToMonthly("nope", 2026)).toBeNull();
   });
 });

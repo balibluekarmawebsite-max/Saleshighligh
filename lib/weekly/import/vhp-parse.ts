@@ -116,12 +116,92 @@ export function parseVhpReservationsToSegments(text: string): ImportRow[] | null
     .sort((a, b) => Number(b.grossRevenue) - Number(a.grossRevenue));
 }
 
+const MONTH_NUM: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+/** Pull a month number from a label like "01/10 Oct " or "Oct ". */
+function monthFromLabel(s: string | undefined): number | null {
+  const m = (s ?? "").toLowerCase().match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/);
+  return m ? MONTH_NUM[m[1]!]! : null;
+}
+
+/**
+ * Parse a VHP "Yearly Forecast Of Room Occupancy" CSV into Section B monthly
+ * rows. Uses ONLY the monthly summary rows — "Room Occupied" (= RN sold),
+ * "Occupancy (%)", and "Room Revenue" — ignoring the daily grid. ADR is
+ * derived (revenue ÷ room-nights).
+ *
+ * The 12 columns run from the report month forward (e.g. Oct → Sep), so a
+ * column can fall in the next calendar year. Only columns in `reportYear` are
+ * written (so an October report fills Oct/Nov/Dec and leaves the Jan–Sep
+ * columns, which belong to the following year, alone). Returns null if the
+ * text isn't that report.
+ */
+export function parseVhpForecastToMonthly(text: string, reportYear: number): ImportRow[] | null {
+  const rows = parseCsv(text);
+  if (rows.length === 0) return null;
+
+  // Daily-grid header: cell 0 is "Date" and the rest are month-labelled columns.
+  const header = rows.find((r) => norm(r[0]) === "date" && r.slice(1).some((c) => monthFromLabel(c) != null));
+  if (!header) return null;
+  const monthCols = header
+    .map((c, i) => ({ month: i === 0 ? null : monthFromLabel(c), col: i }))
+    .filter((x): x is { month: number; col: number } => x.month != null);
+  if (monthCols.length === 0) return null;
+  const startMonth = monthCols[0]!.month;
+
+  const findRow = (label: string) => rows.find((r) => norm(r[0]) === label);
+  const roomOcc = findRow("room occupied");
+  const occPct = findRow("occupancy (%)");
+  if (!roomOcc || !occPct) return null;
+
+  // Revenue: each "Period" header names its months; the next "Room Revenue"
+  // row carries the values, aligned by column.
+  const revenueByMonth = new Map<number, number>();
+  for (let i = 0; i < rows.length; i++) {
+    if (norm(rows[i]![0]) !== "period") continue;
+    const revRow = rows.slice(i + 1).find((r) => norm(r[0]) === "room revenue");
+    if (!revRow) continue;
+    rows[i]!.forEach((c, idx) => {
+      if (idx === 0) return;
+      const m = monthFromLabel(c);
+      if (m == null) return;
+      const v = toMoney(revRow[idx]);
+      if (v > 0) revenueByMonth.set(m, v);
+    });
+  }
+
+  const out: ImportRow[] = [];
+  for (const { month, col } of monthCols) {
+    // Consecutive months from the start → which calendar year this column is in.
+    const offset = (month - startMonth + 12) % 12;
+    const year = reportYear + Math.floor((startMonth - 1 + offset) / 12);
+    if (year !== reportYear) continue; // keep only this report year's months
+
+    const rn = Math.round(toMoney(roomOcc[col]));
+    const occ = toMoney(occPct[col]);
+    const rev = revenueByMonth.get(month) ?? 0;
+    if (rn === 0 && occ === 0 && rev === 0) continue;
+
+    const row: ImportRow = { month: String(month) };
+    if (rn > 0) row.rnSold = String(rn);
+    if (occ > 0) row.occActual = String(occ);
+    if (rev > 0) {
+      row.revActual = String(rev);
+      if (rn > 0) row.arrActual = String(Math.round(rev / rn));
+    }
+    out.push(row);
+  }
+
+  return out.length > 0 ? out : null;
+}
+
 /**
  * Try a deterministic parse for a known VHP CSV export. Returns rows on a
  * confident match, or null to fall back to the AI extractor. Only CSV/text
  * files are attempted (xlsx and unknown layouts fall through to AI).
  */
-export function tryVhpParse(sectionId: string, file: ExtractFile): ImportRow[] | null {
+export function tryVhpParse(sectionId: string, file: ExtractFile, reportYear: number): ImportRow[] | null {
   if (/\.(xlsx|xls)$/i.test(file.filename)) return null;
   const type = (file.type || "").toLowerCase();
   const looksText =
@@ -136,5 +216,6 @@ export function tryVhpParse(sectionId: string, file: ExtractFile): ImportRow[] |
   }
 
   if (sectionId === "segment") return parseVhpReservationsToSegments(text);
+  if (sectionId === "monthly") return parseVhpForecastToMonthly(text, reportYear);
   return null;
 }

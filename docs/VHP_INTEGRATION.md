@@ -79,30 +79,39 @@ segment table comes from the reservation export).
 
 ## 5. CSV format the dashboard expects
 
-The extraction is AI-based and tolerant of VHP's real column names and extra
-columns, but the cleaner the file, the more reliable the result. Give each file
-a header row and one row per record. Skip "Total" rows.
+For the two VHP exports below, the dashboard **parses the raw file directly**
+(deterministic, instant, exact — it reads the whole file, no AI, no size limit).
+Just post the VHP export **as downloaded**; no reshaping needed. Any other /
+unrecognised CSV falls back to the tolerant AI extractor.
 
-### Section B — monthly actuals (yearly forecast)
+### Section B — Yearly Forecast Of Room Occupancy
 
-One row per month, with columns the model can recognise as:
+Post the VHP **"Yearly Forecast Of Room Occupancy"** export as-is. The dashboard
+reads only its **monthly summary rows** (ignoring the daily grid):
 
-| Meaning | Example header(s) | Example value |
-|---|---|---|
-| Month | `Month` | `January` or `1` |
-| Room nights sold | `RN Sold`, `Room Nights` | `452` |
-| Occupancy **actual** (percent) | `Occupancy %`, `Occ`, `Occ Act` | `81.00` (a percent 0–100, **not** 0.81) |
-| ADR / ARR **actual** (IDR) | `ADR`, `ARR`, `Average Rate` | `1980000` |
-| Revenue **actual** (IDR) | `Revenue`, `Room Revenue` | `895000000` |
+- **Room Occupied** → RN Sold per month
+- **Occupancy (%)** → occupancy per month
+- **Room Revenue** → revenue per month (ADR is derived = revenue ÷ room-nights)
 
-- Money = plain numbers, no `Rp` and no thousand separators (`895000000`, not `Rp 895.000.000`).
-- Occupancy = a percent like `81` or `81.0`, never a fraction.
-- Do **not** include Budget or Last-Year columns — they're ignored, so leaving
-  them out keeps the file clean.
+Rules:
+- **Download it with "Show Revenue" ticked**, or the file has no revenue rows.
+- The 12 columns run from the report month forward (e.g. Oct → Sep). The push
+  fills only the months that fall in the **report's own year** — e.g. an October
+  report fills **Oct/Nov/Dec** and leaves the Jan–Sep columns (which are the
+  next year) alone. Generate the report so its window covers the months you want
+  in that year's Section B.
+- Only the **Actual** columns are written. **Budget** (a fixed yearly plan
+  entered by hand) and **Last Year** are never touched by the push.
 
-### Section C — market segment (reservation by creation date)
+### Section C — Reservation By Creation Date
 
-One row per market segment:
+Post the VHP **"Reservation By Creation Date"** export as-is (the raw per-booking
+list). The dashboard aggregates it **by Segment**: room nights = Night × Room
+Quantity, revenue = sum of Total Revenue, **excluding Cancelled / No-show** rows.
+It replaces that week's segment rows.
+
+If instead you send a pre-made CSV (not the VHP export), the AI extractor expects
+one row per market segment:
 
 | Meaning | Example header(s) | Example value |
 |---|---|---|
