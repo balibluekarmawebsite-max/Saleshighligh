@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_BODY_BYTES = 25 * 1024 * 1024; // whole multipart body (file + fields + overhead)
 
 /**
  * Token-gated data push for the weekly report (Path A).
@@ -46,6 +47,13 @@ export async function POST(req: NextRequest) {
       { ok: false, error: "AI import is not configured — set GROQ_API_KEY on the server." },
       { status: 501 },
     );
+  }
+
+  // Reject an oversized body up front — `req.formData()` buffers the whole
+  // multipart payload into memory before any per-file size check could run.
+  const contentLength = Number(req.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return Response.json({ ok: false, error: "request body is too large (max 25 MB)." }, { status: 413 });
   }
 
   // ── Parse the multipart body ─────────────────────────────────────────────

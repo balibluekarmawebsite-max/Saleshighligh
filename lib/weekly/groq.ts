@@ -70,18 +70,32 @@ function authHeaders(): Record<string, string> {
   return { "Content-Type": "application/json", Authorization: `Bearer ${key}` };
 }
 
+/** Timeout (ms) for a non-streaming Groq request. Override with GROQ_TIMEOUT_MS. */
+function groqTimeoutMs(): number {
+  const n = Number(process.env.GROQ_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 90_000;
+}
+
 /** One (non-streaming) Groq chat completion. Returns the assistant message text. */
 export async function groqChat(opts: GroqChatOpts): Promise<string> {
   const { model, body } = buildBody(opts, false);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), groqTimeoutMs());
   let res: Response;
   try {
     res = await fetch(`${groqApiBase()}/chat/completions`, {
       method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(body),
+      signal: ac.signal,
     });
   } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Groq request timed out after ${Math.round(groqTimeoutMs() / 1000)}s.`);
+    }
     throw new Error(`Could not reach Groq: ${err instanceof Error ? err.message : "network error"}`);
+  } finally {
+    clearTimeout(timer);
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");

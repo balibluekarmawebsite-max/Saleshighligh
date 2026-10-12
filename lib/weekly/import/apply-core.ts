@@ -101,6 +101,11 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
   const rid = input.reportId;
   let written = 0;
 
+  // Guard: never replace a section's existing rows with nothing. If the mapped
+  // rows come out empty (bad file / all rows filtered out), skip the delete so
+  // existing data is left intact — the caller surfaces "0 written". This sits
+  // next to the delete, inside the transaction, because the real emptiness is
+  // only known AFTER the per-section filter (not from the raw extracted rows).
   await prisma.$transaction(async (tx) => {
     switch (section.id) {
       case "monthly": {
@@ -118,8 +123,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
               Number.isInteger(r.month) && r.month >= 1 && r.month <= 12 &&
               [r.rnSold, r.occActual, r.occBudget, r.occLy, r.arrActual, r.arrBudget, r.arrLy, r.revActual, r.revBudget, r.revLy].some((v) => v != null),
           );
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyMonthlyStat.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklyMonthlyStat.createMany({ data });
+        await tx.weeklyMonthlyStat.createMany({ data });
         written = data.length;
         break;
       }
@@ -128,8 +134,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
           reportWeekId: rid, label: str(r.label) as string, segmentGroup: str(r.segmentGroup),
           rnSold: int(r.rnSold), grossRevenue: money(r.grossRevenue), sortOrder: i,
         }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklySegmentProduction.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklySegmentProduction.createMany({ data });
+        await tx.weeklySegmentProduction.createMany({ data });
         written = data.length;
         break;
       }
@@ -138,8 +145,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
           reportWeekId: rid, label: str(r.label) as string,
           rnSold: int(r.rnSold), grossRevenue: money(r.grossRevenue), sortOrder: i,
         }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyRateCodeProduction.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklyRateCodeProduction.createMany({ data });
+        await tx.weeklyRateCodeProduction.createMany({ data });
         written = data.length;
         break;
       }
@@ -161,8 +169,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
             sep: m0(r.sep), oct: m0(r.oct), nov: m0(r.nov), dec: m0(r.dec),
             sortOrder: i,
           }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyChannelRn.deleteMany({ where: { reportWeekId: rid, year } });
-        if (data.length) await tx.weeklyChannelRn.createMany({ data });
+        await tx.weeklyChannelRn.createMany({ data });
         written = data.length;
         break;
       }
@@ -175,8 +184,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
             reportWeekId: rid, department: dept,
             dateLabel: str(r.dateLabel), title: str(r.title), notes: str(r.notes), sortOrder: i,
           }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyActivity.deleteMany({ where: { reportWeekId: rid, department: dept } });
-        if (data.length) await tx.weeklyActivity.createMany({ data });
+        await tx.weeklyActivity.createMany({ data });
         written = data.length;
         break;
       }
@@ -187,8 +197,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
           .filter((r): r is { metricKey: string; lastWeek: number | null; thisWeek: number | null } =>
             r.metricKey != null && (r.lastWeek != null || r.thisWeek != null))
           .map((r, i) => ({ reportWeekId: rid, platform, metricKey: r.metricKey, lastWeek: r.lastWeek, thisWeek: r.thisWeek, sortOrder: i }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklySocialMetric.deleteMany({ where: { reportWeekId: rid, platform } });
-        if (data.length) await tx.weeklySocialMetric.createMany({ data });
+        await tx.weeklySocialMetric.createMany({ data });
         written = data.length;
         break;
       }
@@ -197,8 +208,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
           reportWeekId: rid, dateLabel: str(r.dateLabel), topic: str(r.topic) as string,
           duration: str(r.duration), trainer: str(r.trainer), participants: str(r.participants), sortOrder: i,
         }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyTraining.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklyTraining.createMany({ data });
+        await tx.weeklyTraining.createMany({ data });
         written = data.length;
         break;
       }
@@ -207,8 +219,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
           reportWeekId: rid, category: str(r.category), plan: str(r.plan) as string,
           startLabel: str(r.startLabel), deadlineLabel: str(r.deadlineLabel), remark: str(r.remark), sortOrder: i,
         }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklyActionPlan.createMany({ data });
+        await tx.weeklyActionPlan.createMany({ data });
         written = data.length;
         break;
       }
@@ -216,8 +229,9 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
         const data = rows.filter((r) => str(r.label)).map((r, i) => ({
           reportWeekId: rid, label: str(r.label) as string, roomNights: int(r.roomNights), revenue: money(r.revenue), sortOrder: i,
         }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyOwnerRepeater.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklyOwnerRepeater.createMany({ data });
+        await tx.weeklyOwnerRepeater.createMany({ data });
         written = data.length;
         break;
       }
@@ -225,14 +239,18 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
         const data = rows.filter((r) => str(r.label)).map((r, i) => ({
           reportWeekId: rid, label: str(r.label) as string, rnSold: int(r.rnSold), grossRevenue: money(r.grossRevenue), sortOrder: i,
         }));
+        if (data.length === 0) { written = 0; break; }
         await tx.weeklyOwnerChannelMix.deleteMany({ where: { reportWeekId: rid } });
-        if (data.length) await tx.weeklyOwnerChannelMix.createMany({ data });
+        await tx.weeklyOwnerChannelMix.createMany({ data });
         written = data.length;
         break;
       }
       default:
         throw new Error(`Unknown section: ${section.id}`);
     }
+
+    // Nothing valid to write → don't create a misleading audit row either.
+    if (written === 0) return;
 
     const summary: Prisma.InputJsonValue = { section: section.id, rows: written, via: input.source };
     await tx.weeklyImport.create({
