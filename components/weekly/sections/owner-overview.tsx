@@ -1,10 +1,12 @@
 "use client";
 
 import { useFormState } from "react-dom";
-import { Plus, X } from "lucide-react";
+import { Plus, RefreshCw, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { AdsOverviewBody } from "@/components/weekly/ads-overview";
 import { rate, sharePercent } from "@/lib/weekly/calculations";
+import type { WeeklyAdsData } from "@/lib/weekly/ads-data";
 import { saveOwnerOverview } from "@/lib/weekly/editor-actions";
 import {
   CELL,
@@ -19,19 +21,60 @@ import {
   type Row,
 } from "@/components/weekly/sections/shared";
 
-/** Owner Overview — repeater-guest monthly performance + channel-mix grids. */
+/** Fixed owner-facing channels, in report order. */
+const CHANNELS = ["OTA", "Direct Booking (Website/Walk In/Group Retreat)", "Offline Travel Agents"] as const;
+type Channel = (typeof CHANNELS)[number];
+
+/**
+ * Bucket a Section C booking agent / source into one of the three owner
+ * channels. Keyword-based (OTA checked first), with Offline Travel Agents as the
+ * catch-all — the owner can still rename/adjust after syncing.
+ */
+function classifyChannel(agent: string): Channel {
+  const a = agent.toLowerCase();
+  const OTA = ["booking", "expedia", "agoda", "traveloka", "tiket", "trip.com", "trip ", "airbnb", "hotels.com", "ctrip", "klook", "mg holiday", "hostelworld", "pegipegi", "aladin", "ota"];
+  const DIRECT = ["website", "webs", "walk", "direct", "individual", "group retreat", "retreat", "fit"];
+  if (OTA.some((k) => a.includes(k))) return "OTA";
+  if (DIRECT.some((k) => a.includes(k))) return "Direct Booking (Website/Walk In/Group Retreat)";
+  return "Offline Travel Agents";
+}
+
+/** Aggregate Section C agent rows into the fixed channels (channels with data, in order). */
+function channelsFromSegments(segments: Row[]): Row[] {
+  const agg = new Map<Channel, { rn: number; rev: number }>();
+  for (const s of segments) {
+    const label = (s.label ?? "").trim();
+    if (!label) continue;
+    const ch = classifyChannel(label);
+    const cur = agg.get(ch) ?? { rn: 0, rev: 0 };
+    cur.rn += toNum(s.rnSold) ?? 0;
+    cur.rev += toNum(s.grossRevenue) ?? 0;
+    agg.set(ch, cur);
+  }
+  return CHANNELS.filter((ch) => agg.has(ch)).map((ch) => ({
+    label: ch,
+    rnSold: String(agg.get(ch)!.rn),
+    grossRevenue: String(agg.get(ch)!.rev),
+  }));
+}
+
+/** Owner Overview — repeater-guest monthly performance + channel-mix grids + live ads. */
 export function OwnerOverview({
   property,
   week,
   locked,
   repeaters,
   mix,
+  segments,
+  ads,
 }: {
   property: string;
   week: string;
   locked: boolean;
   repeaters: Row[];
   mix: Row[];
+  segments: Row[];
+  ads: WeeklyAdsData;
 }) {
   const rep = useRows(repeaters);
   const cm = useRows(mix);
@@ -140,10 +183,27 @@ export function OwnerOverview({
 
         {/* 2 · Channel Mix (Market Segmentation) */}
         <div>
-          <h3 className="font-serif text-base font-semibold text-foreground">
-            2 · Channel Mix (Market Segmentation)
-          </h3>
-          <p className="mb-3 text-sm text-muted-foreground">ARR and % share are calculated.</p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h3 className="font-serif text-base font-semibold text-foreground">
+              2 · Channel Mix (Market Segmentation)
+            </h3>
+            {!locked && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={segments.length === 0}
+                onClick={() => cm.setRows(channelsFromSegments(segments))}
+              >
+                <RefreshCw /> Sync from Agent Production
+              </Button>
+            )}
+          </div>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Grouped from section C · Weekly Agent Production by source (OTA, Direct Booking, Offline
+            Travel Agents). Sync overwrites the rows below; you can still adjust any classification.
+            ARR and % share are calculated.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
@@ -223,6 +283,28 @@ export function OwnerOverview({
               onClick={() => cm.add({ label: "", rnSold: "", grossRevenue: "" })}>
               <Plus /> Add source
             </Button>
+          )}
+        </div>
+
+        {/* 3 · Digital Ads & ROAS — live, same as section A */}
+        <div>
+          <h3 className="font-serif text-base font-semibold text-foreground">
+            3 · Digital Ads &amp; ROAS
+          </h3>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Estimated acquisition cost, pulled live from section A · Sales &amp; Marketing Overview.
+          </p>
+          {ads.hasData && ads.blended ? (
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <AdsOverviewBody ads={ads} />
+              <p className="mt-3 text-[11px] text-muted-foreground">
+                Pulled live from the ads data entered in section A — read-only here.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              No ads data for this week yet. Add it in section A · Sales &amp; Marketing Overview.
+            </div>
           )}
         </div>
       </form>

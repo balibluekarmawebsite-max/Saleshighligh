@@ -223,6 +223,7 @@ export default async function WeeklyEditorPage({
         <OwnerOverview
           property={p} week={w} locked={readOnly}
           repeaters={data.ownerRepeaters} mix={data.ownerChannelMix}
+          segments={data.segments} ads={ads}
         />
       ),
     },
