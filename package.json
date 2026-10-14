@@ -19,6 +19,7 @@
     "db:seed:weekly": "tsx prisma/weekly-seed.ts",
     "db:verify": "tsx prisma/verify.ts",
     "db:create-admin": "tsx prisma/create-admin.ts",
+    "db:reset-password": "tsx prisma/reset-password.ts",
     "db:backfill-budget": "tsx prisma/backfill-annual-budget.ts",
     "test": "vitest run",
     "test:watch": "vitest"
