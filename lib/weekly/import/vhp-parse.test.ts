@@ -144,20 +144,42 @@ describe("parseVhpForecastToMonthly", () => {
     expect(byMonth.get("12")).toEqual({ month: "12", rnSold: "271", occActual: "48.57", revActual: "557904971", arrActual: "2058690" });
   });
 
-  it("keeps all 12 months for a January-start run (full-year backfill)", () => {
-    // VHP "Month" selector set to January → the export window is Jan–Dec, all
-    // in the report year, so a single pull backfills the whole year.
+  it("fills all 12 months from a January-start run (full-year actuals + forecast)", () => {
+    // VHP "Month" selector = January → the export covers Jan–Dec, so one pull
+    // fills the whole Section B grid: actuals for the closed months, forecast
+    // for the rest. Mirrors a real export — summary rows + the two
+    // Period/Room-Revenue blocks (Jan–Jun, Jul–Dec).
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const roomOcc = [186, 103, 114, 55, 74, 98, 49, 40, 22, 449, 300, 420];
+    const occPct = [33.33, 20.44, 20.43, 10.19, 13.26, 18.15, 8.78, 7.17, 4.07, 80.47, 55, 75];
+    // Chosen so January ADR = 558,000,000 ÷ 186 = 3,000,000 exactly.
+    const revenue = [558, 206, 228, 110, 148, 196, 98, 80, 44, 898, 600, 840].map((m) => m * 1_000_000);
+
+    const row = (label: string, vals: (string | number)[]) =>
+      `"${label}",` + vals.map((v) => `"${v}"`).join(",");
     const dateHdr = '"Date",' + months.map((m, i) => `"01/${String(i + 1).padStart(2, "0")} ${m} "`).join(",");
-    const occRow = '" Room Occupied",' + months.map(() => '"100.00"').join(",");
-    const pctRow = '" Occupancy (%)",' + months.map(() => '"40.00"').join(",");
     const janCsv =
-      ["BALI BLUE KARMA", "Yearly Forecast Of Room Occupancy", "", dateHdr, occRow, pctRow].join("\n") + "\n";
+      [
+        "BALI BLUE KARMA",
+        "Yearly Forecast Of Room Occupancy",
+        "",
+        dateHdr,
+        row(" Room Occupied", roomOcc.map((n) => n.toFixed(2))),
+        row(" Occupancy (%)", occPct.map((n) => String(n))),
+        row("Period", months.slice(0, 6).map((m) => `${m} `)),
+        row("Room Revenue", revenue.slice(0, 6)),
+        row("Period", months.slice(6).map((m) => `${m} `)),
+        row("Room Revenue", revenue.slice(6)),
+      ].join("\n") + "\n";
 
     const rows = parseVhpForecastToMonthly(janCsv, 2026);
     expect(rows).not.toBeNull();
     expect(rows!.map((r) => r.month)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
-    expect(rows!.every((r) => r.rnSold === "100" && r.occActual === "40")).toBe(true);
+    // Every month carries occupancy, revenue and a derived ADR — nothing dropped.
+    expect(rows!.every((r) => r.rnSold && r.occActual && r.revActual && r.arrActual)).toBe(true);
+    expect(rows!.find((r) => r.month === "1")).toEqual({
+      month: "1", rnSold: "186", occActual: "33.33", revActual: "558000000", arrActual: "3000000",
+    });
   });
 
   it("returns null for a non-forecast CSV (falls back to AI)", () => {
