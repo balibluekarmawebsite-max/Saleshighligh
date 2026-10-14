@@ -98,6 +98,12 @@ export function GridCell({
   placeholder?: string;
 }) {
   const a = align ?? (fmt === "text" ? "text-left" : "text-right");
+  // Count / money cells show thousand separators (IDR) when not being edited,
+  // and raw digits while focused so typing never fights comma re-formatting.
+  // The stored value stays raw — commas are display-only (and stripped on edit).
+  const grouped = fmt === "num";
+  const [focused, setFocused] = useState(false);
+
   if (locked) {
     return (
       <span className={cn("block", a, a === "text-right" && "tabular-nums", "text-foreground", minW)}>
@@ -105,12 +111,18 @@ export function GridCell({
       </span>
     );
   }
+
+  const raw = value ?? "";
+  const n = grouped ? toNum(raw) : null;
+  const display = grouped && !focused && n != null ? formatNumber(n) : raw;
   return (
     <input
       inputMode={fmt === "text" ? "text" : "numeric"}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(CELL, a, minW)}
+      value={display}
+      onFocus={grouped ? () => setFocused(true) : undefined}
+      onBlur={grouped ? () => setFocused(false) : undefined}
+      onChange={(e) => onChange(grouped ? e.target.value.replace(/,/g, "") : e.target.value)}
+      className={cn(CELL, a, minW, grouped && "tabular-nums")}
       placeholder={placeholder}
     />
   );
