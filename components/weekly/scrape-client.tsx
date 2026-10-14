@@ -7,6 +7,7 @@ import { Check, Loader2, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { ScrapeJobView } from "@/lib/weekly/jobs";
+import type { PollerHeartbeat } from "@/lib/weekly/poller-heartbeat";
 import { requestScrape, type ScrapeActionResult } from "@/app/weekly/[property]/[week]/scrape/actions";
 
 const PROPERTY_CODES = ["BKDS", "BKDU", "BKV"] as const;
@@ -31,31 +32,93 @@ function SubmitButton() {
   );
 }
 
+/** "45s ago" / "3m ago" / "2h ago". */
+function ago(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
+
+function StatusPill({ tone, label }: { tone: "green" | "amber" | "red" | "neutral"; label: string }) {
+  const dot = { green: "bg-emerald-500", amber: "bg-amber-500", red: "bg-red-500", neutral: "bg-slate-300" }[tone];
+  const text = { green: "text-emerald-700", amber: "text-amber-700", red: "text-red-700", neutral: "text-muted-foreground" }[tone];
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-sm">
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot} ${tone === "green" ? "animate-pulse" : ""}`} />
+      <span className={text}>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * Live "is the office-PC poller alive?" badge. The poller polls ~every 2 min, so
+ * a heartbeat older than a few minutes means it isn't running (or is sending the
+ * wrong token, so claim 401s and it never gets a job — leaving requests stuck in
+ * "queued"). `now` is null until mounted to avoid a hydration mismatch on the
+ * client clock.
+ */
+function PollerStatus({ heartbeat, now }: { heartbeat: PollerHeartbeat | null; now: number | null }) {
+  if (now === null) return <StatusPill tone="neutral" label="Checking poller status…" />;
+  if (!heartbeat) {
+    return (
+      <StatusPill
+        tone="red"
+        label="Poller offline — no poll since the server last started. Is the office-PC poller running, with the right token?"
+      />
+    );
+  }
+  const age = Math.max(0, now - heartbeat.at);
+  const who = heartbeat.worker ? ` (${heartbeat.worker})` : "";
+  if (age <= 3 * 60_000) return <StatusPill tone="green" label={`Poller online${who} · last seen ${ago(age)}`} />;
+  if (age <= 10 * 60_000)
+    return <StatusPill tone="amber" label={`Poller last seen ${ago(age)}${who} — expected a poll every ~2 min`} />;
+  return (
+    <StatusPill
+      tone="red"
+      label={`Poller offline — last seen ${ago(age)}${who}. Is it running, with the right token?`}
+    />
+  );
+}
+
 export function ScrapeClient({
   property,
   week,
   canEdit,
   defaults,
   jobs,
+  heartbeat,
 }: {
   property: string;
   week: string;
   canEdit: boolean;
   defaults: { start: string; end: string; month: string; weekEnding: string };
   jobs: ScrapeJobView[];
+  heartbeat: PollerHeartbeat | null;
 }) {
   const [state, formAction] = useFormState<ScrapeActionResult | null, FormData>(requestScrape, null);
   const [section, setSection] = useState<"C" | "B">("C");
+  const [now, setNow] = useState<number | null>(null);
   const router = useRouter();
 
-  // Keep the job list fresh so queued → running → done/failed shows live.
+  // Keep the job list fresh so queued → running → done/failed shows live, and
+  // tick a local clock so the poller "last seen" age stays current.
   useEffect(() => {
-    const t = setInterval(() => router.refresh(), 8000);
-    return () => clearInterval(t);
+    setNow(Date.now());
+    const refresh = setInterval(() => router.refresh(), 8000);
+    const clock = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(refresh);
+      clearInterval(clock);
+    };
   }, [router]);
 
   return (
     <div className="space-y-6">
+      {/* ── Poller status ────────────────────────────────────────────── */}
+      <PollerStatus heartbeat={heartbeat} now={now} />
+
       {/* ── Request form ─────────────────────────────────────────────── */}
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
         <form action={formAction} className="space-y-4">

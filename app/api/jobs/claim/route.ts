@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { checkJobsToken, claimNextJob } from "@/lib/weekly/jobs";
+import { recordPollerSeen } from "@/lib/weekly/poller-heartbeat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,10 @@ export async function POST(req: NextRequest) {
   } catch {
     // empty / invalid body → default worker name
   }
+
+  // Heartbeat: an authenticated poller just checked in (even on an empty queue),
+  // so the Request Scrape page can show it's alive.
+  recordPollerSeen(worker);
 
   const job = await claimNextJob(worker);
   return Response.json({ job });

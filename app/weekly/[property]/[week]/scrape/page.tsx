@@ -1,6 +1,7 @@
 import { ScrapeClient } from "@/components/weekly/scrape-client";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { getRecentScrapeJobs } from "@/lib/weekly/jobs";
+import { getPollerHeartbeat } from "@/lib/weekly/poller-heartbeat";
 import { weekMeta } from "@/lib/weekly/week";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default async function WeeklyScrapePage({
   const user = await getCurrentUser();
   const canEdit = canEditProperty(user, params.property);
   const jobs = await getRecentScrapeJobs(30);
+  const heartbeat = getPollerHeartbeat();
 
   const meta = weekMeta(params.week);
   const defaults = {
@@ -37,6 +39,7 @@ export default async function WeeklyScrapePage({
         canEdit={canEdit}
         defaults={defaults}
         jobs={jobs}
+        heartbeat={heartbeat}
       />
     </div>
   );
