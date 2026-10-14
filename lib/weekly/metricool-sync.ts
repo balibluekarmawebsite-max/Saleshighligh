@@ -19,8 +19,9 @@ import {
   fetchMetricForRange,
   getPropertyBlogId,
   listMetricoolBrands,
-  resolveMetricSource,
+  resolveMetricSources,
   sourceLabel,
+  type MetricSource,
 } from "@/lib/weekly/metricool";
 
 export interface MetricoolMetricResult {
@@ -109,21 +110,32 @@ export async function syncMetricoolIntoReport(
     METRICOOL_NETWORKS.map(async (net) => {
       const metrics: MetricoolMetricResult[] = await Promise.all(
         SYNC_ROWS.map(async (row): Promise<MetricoolMetricResult> => {
-          const source = resolveMetricSource(net.apiName, net.prefix, row.key);
-          const label = sourceLabel(source);
+          // Try each candidate name in order; keep the first that returns data
+          // (so a renamed metric self-heals instead of showing a stale zero).
+          const sources = resolveMetricSources(net.apiName, net.prefix, row.key);
           let thisWeek: number | null = null;
           let lastWeek: number | null = null;
-          if (source) {
-            thisWeek = round(await fetchMetricForRange(blogId, net.apiName, source, thisFrom, thisTo));
-            lastWeek = round(await fetchMetricForRange(blogId, net.apiName, source, lastFrom, lastTo));
+          let used: MetricSource | null = null;
+          const tried: string[] = [];
+          for (const source of sources) {
+            const lbl = sourceLabel(source);
+            if (lbl) tried.push(lbl);
+            const tw = round(await fetchMetricForRange(blogId, net.apiName, source, thisFrom, thisTo));
+            const lw = round(await fetchMetricForRange(blogId, net.apiName, source, lastFrom, lastTo));
+            if (tw !== null || lw !== null) {
+              thisWeek = tw;
+              lastWeek = lw;
+              used = source;
+              break;
+            }
           }
           return {
             key: row.key,
             label: row.label,
-            metric: label,
+            metric: used ? sourceLabel(used) : null,
             thisWeek,
             lastWeek,
-            tried: label ? [label] : [],
+            tried,
           };
         }),
       );

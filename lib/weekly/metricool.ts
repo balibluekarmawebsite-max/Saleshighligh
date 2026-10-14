@@ -383,6 +383,25 @@ const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiNam
   },
 };
 
+/**
+ * Fallback metric names for the two volatile per-account metrics. Meta renames
+ * these per account / API version, so when the default name returns nothing the
+ * sync tries these in order and uses the FIRST that returns real data — turning
+ * "always zero" into "whatever the account actually exposes" with no manual
+ * probing. The default name (from SECTION_H above) is tried first; these are the
+ * alternates. Only applied when the metric isn't pinned via METRICOOL_METRIC_MAP.
+ */
+const CANDIDATE_METRICS: Record<string, Record<string, string[]>> = {
+  profile_visit: {
+    instagram: ["profile_views", "profileViews", "profile_visits", "profileVisits", "profile_links_taps", "profileLinksTaps"],
+    facebook: ["pageViews", "page_views", "page_views_total"],
+  },
+  website_visit: {
+    instagram: ["website_clicks", "websiteClicks", "website_taps", "websiteTaps", "profile_links_taps", "profileLinksTaps"],
+    facebook: ["page_website_clicks_logged_in_unique", "website_clicks", "websiteClicks"],
+  },
+};
+
 /** The Section H metric keys Metricool can fill, in report order. */
 export const METRICOOL_METRIC_KEYS = Object.keys(SECTION_H);
 
@@ -450,6 +469,35 @@ export function resolveMetricSource(apiName: string, prefix: string, metricKey: 
     return merged;
   }
   return base;
+}
+
+/**
+ * Resolve the ORDERED list of candidate sources for one (network, metric): the
+ * configured/default source first, then — for the two volatile metrics
+ * (profile / website visit) — the fallback metric names, so the sync can try
+ * each and keep the first that returns real data. A metric pinned via
+ * METRICOOL_METRIC_MAP is honoured exactly (no fallbacks). An empty-named source
+ * (e.g. Facebook account reach) yields an empty list, so the metric stays blank.
+ */
+export function resolveMetricSources(apiName: string, prefix: string, metricKey: string): MetricSource[] {
+  const primary = resolveMetricSource(apiName, prefix, metricKey);
+  if (!primary) return [];
+  // Only the v2 per-account timeline metrics get the name-sweep; v1 timeline /
+  // v2 aggregation sources are single.
+  if (primary.source !== "v2timeline") return primary.metric || primary.name ? [primary] : [];
+
+  const api = apiName.toLowerCase();
+  const pinned = metricMapOverride()[api]?.[metricKey] != null;
+  const names = [primary.metric, ...(pinned ? [] : CANDIDATE_METRICS[metricKey]?.[api] ?? [])];
+
+  const seen = new Set<string>();
+  const out: MetricSource[] = [];
+  for (const metric of names) {
+    if (!metric || seen.has(metric)) continue; // "" → metric stays blank
+    seen.add(metric);
+    out.push({ ...primary, metric });
+  }
+  return out;
 }
 
 /** A short human label for a source (shown in the sync diagnostic). */

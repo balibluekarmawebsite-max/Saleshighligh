@@ -6,6 +6,7 @@ import {
   readLast,
   readV2Timeline,
   resolveMetricSource,
+  resolveMetricSources,
   sourceLabel,
   toTzIso,
   toYmd,
@@ -189,6 +190,39 @@ describe("resolveMetricSource", () => {
 
   it("returns null for an unknown metric key", () => {
     expect(resolveMetricSource("instagram", "ig", "nope")).toBeNull();
+  });
+});
+
+describe("resolveMetricSources (candidate sweep)", () => {
+  afterEach(() => {
+    delete process.env.METRICOOL_METRIC_MAP;
+  });
+
+  it("offers fallback names for the volatile profile/website metrics, default first", () => {
+    const profile = resolveMetricSources("instagram", "ig", "profile_visit").map((s) => s.metric);
+    expect(profile[0]).toBe("profile_views"); // the default is tried first
+    expect(profile).toEqual(
+      expect.arrayContaining(["profile_views", "profileViews", "profile_visits", "profileVisits"]),
+    );
+    expect(new Set(profile).size).toBe(profile.length); // de-duplicated
+
+    const website = resolveMetricSources("instagram", "ig", "website_visit").map((s) => s.metric);
+    expect(website[0]).toBe("website_clicks");
+    expect(website).toEqual(expect.arrayContaining(["website_clicks", "websiteClicks", "websiteTaps"]));
+  });
+
+  it("returns a single source for metrics that already work (no sweep)", () => {
+    expect(resolveMetricSources("instagram", "ig", "account_reached").map((s) => s.metric)).toEqual(["reach"]);
+    expect(resolveMetricSources("instagram", "ig", "followers").map((s) => s.metric)).toEqual(["followers"]);
+  });
+
+  it("yields nothing when the metric is blank (e.g. Facebook account reach)", () => {
+    expect(resolveMetricSources("facebook", "fb", "account_reached")).toEqual([]);
+  });
+
+  it("honours a pinned METRICOOL_METRIC_MAP exactly — no fallbacks", () => {
+    process.env.METRICOOL_METRIC_MAP = JSON.stringify({ instagram: { profile_visit: { metric: "profileVisits" } } });
+    expect(resolveMetricSources("instagram", "ig", "profile_visit").map((s) => s.metric)).toEqual(["profileVisits"]);
   });
 });
 
