@@ -15,7 +15,7 @@ import {
   type ProductionTotals,
 } from "@/lib/weekly/calculations";
 import { getWeeklyAds, type WeeklyAdsData } from "@/lib/weekly/ads-data";
-import { OVERVIEW_BLOCKS } from "@/lib/weekly/editor-data";
+import { ACTION_PLAN_CATEGORIES, OVERVIEW_BLOCKS } from "@/lib/weekly/editor-data";
 import { weekLabel } from "@/lib/weekly/week";
 
 /**
@@ -30,6 +30,12 @@ const MONTHS_SHORT = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+/** Position of an Action Plan category in the fixed order (unknown/blank last). */
+const actionPlanCategoryRank = (c: string | null): number => {
+  const i = c ? (ACTION_PLAN_CATEGORIES as readonly string[]).indexOf(c) : -1;
+  return i === -1 ? ACTION_PLAN_CATEGORIES.length : i;
+};
 
 const dec = (v: { toNumber(): number } | null): number | null =>
   v === null ? null : v.toNumber();
@@ -449,13 +455,17 @@ export async function getWeeklyExportData(
         trainer: t.trainer,
         participants: t.participants,
       })),
-      actionPlans: report.actionPlans.map((a) => ({
-        category: a.category,
-        plan: a.plan,
-        startLabel: a.startLabel,
-        deadlineLabel: a.deadlineLabel,
-        remark: a.remark,
-      })),
+      // Group by the fixed department order (unknown/blank categories last);
+      // Array.sort is stable, so entry order (sortOrder) is kept within a group.
+      actionPlans: [...report.actionPlans]
+        .sort((a, b) => actionPlanCategoryRank(a.category) - actionPlanCategoryRank(b.category))
+        .map((a) => ({
+          category: a.category,
+          plan: a.plan,
+          startLabel: a.startLabel,
+          deadlineLabel: a.deadlineLabel,
+          remark: a.remark,
+        })),
     },
   };
 }

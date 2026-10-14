@@ -31,6 +31,16 @@ export const SOCIAL_METRIC_ROWS: { key: string; label: string }[] = [
 /** Platforms offered in the Section H selector. */
 export const SOCIAL_PLATFORMS = ["Instagram", "Facebook", "TikTok", "YouTube"] as const;
 
+/** Section J — fixed Action Plan department sub-categories, in report order. */
+export const ACTION_PLAN_CATEGORIES = [
+  "Offline Agent",
+  "Room Promotion",
+  "Marketing",
+  "Social Media",
+  "Marketing Outsider",
+  "Digital Marketing Outsider",
+] as const;
+
 /** Section H — the three social-insight narrative blocks (stored as overview blocks). */
 export const SOCIAL_NARRATIVE_BLOCKS: { key: string; heading: string }[] = [
   { key: "sm_highlights", heading: "Overall Highlights" },

@@ -6,6 +6,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AiTextActions } from "@/components/weekly/ai-text-actions";
 import { saveSection } from "@/lib/weekly/editor-actions";
+import { ACTION_PLAN_CATEGORIES } from "@/lib/weekly/editor-data";
 import {
   CELL,
   SaveButton,
@@ -49,7 +50,7 @@ export function PlansCards({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <SectionHeading
             title="J · Next Week Action Plan"
-            subtitle="Group by category, e.g. Offline Agent, Room Promotion, Marketing."
+            subtitle="Pick a department sub-category for each plan (Offline Agent, Room Promotion, …)."
           />
           {!locked && <SaveButton state={state} />}
         </div>
@@ -71,13 +72,23 @@ export function PlansCards({
             <div className="pr-6">
               {field(
                 "Category",
-                <input
+                <select
                   value={row.category ?? ""}
                   onChange={(e) => update(i, "category", e.target.value)}
                   disabled={locked}
                   className={`${CELL} sm:max-w-xs`}
-                  placeholder="e.g. Marketing"
-                />,
+                >
+                  <option value="">Select category…</option>
+                  {ACTION_PLAN_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  {/* Keep an unknown legacy value visible so it isn't silently lost. */}
+                  {row.category && !ACTION_PLAN_CATEGORIES.includes(row.category as (typeof ACTION_PLAN_CATEGORIES)[number]) && (
+                    <option value={row.category}>{row.category}</option>
+                  )}
+                </select>,
               )}
             </div>
             {field(
