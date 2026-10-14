@@ -165,7 +165,7 @@ export async function getWeeklyTrendsData(
     };
     const fmtIdr = (n: number | null) => (n === null ? "—" : formatIDR(n));
     kpis = {
-      occupancy: { label: "Occupancy", value: cur.occPct === null ? "—" : `${cur.occPct.toFixed(1)}%`, delta: ptsDelta((p) => p.occPct), deltaUnit: "pts", spark: sparkOf((p) => p.occPct) },
+      occupancy: { label: "Occupancy", value: cur.occPct === null ? "—" : `${cur.occPct.toFixed(2)}%`, delta: ptsDelta((p) => p.occPct), deltaUnit: "pts", spark: sparkOf((p) => p.occPct) },
       adr: { label: "ADR", value: fmtIdr(cur.adr), delta: pctDelta((p) => p.adr), deltaUnit: "%", spark: sparkOf((p) => p.adr) },
       revenue: { label: "Room Revenue", value: fmtIdr(cur.revenue), delta: pctDelta((p) => p.revenue), deltaUnit: "%", spark: sparkOf((p) => p.revenue) },
       roomNights: { label: "Room Nights", value: cur.roomNights === null ? "—" : formatNumber(cur.roomNights), delta: pctDelta((p) => p.roomNights), deltaUnit: "%", spark: sparkOf((p) => p.roomNights) },
