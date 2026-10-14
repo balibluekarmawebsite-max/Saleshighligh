@@ -73,7 +73,14 @@ export function UsersManager({ users, properties }: { users: Row[]; properties: 
           </thead>
           <tbody>
             {users.map((u) => (
-              <UserRow key={u.id} user={u} properties={properties} onSave={(patch) => api("PATCH", { id: u.id, ...patch })} busy={busy} />
+              <UserRow
+                key={u.id}
+                user={u}
+                properties={properties}
+                onSave={(patch) => api("PATCH", { id: u.id, ...patch })}
+                onResetPassword={(password) => api("PATCH", { id: u.id, password })}
+                busy={busy}
+              />
             ))}
           </tbody>
         </table>
@@ -107,10 +114,33 @@ export function UsersManager({ users, properties }: { users: Row[]; properties: 
   );
 }
 
-function UserRow({ user, properties, onSave, busy }: { user: Row; properties: string[]; onSave: (patch: { role: Role; assignedProperties: string[] }) => void; busy: boolean }) {
+function UserRow({
+  user,
+  properties,
+  onSave,
+  onResetPassword,
+  busy,
+}: {
+  user: Row;
+  properties: string[];
+  onSave: (patch: { role: Role; assignedProperties: string[] }) => void;
+  onResetPassword: (password: string) => Promise<boolean>;
+  busy: boolean;
+}) {
   const [role, setRole] = useState<Role>(user.role);
   const [assigned, setAssigned] = useState<Set<string>>(new Set(user.assignedProperties));
   const dirty = role !== user.role || [...assigned].sort().join() !== [...user.assignedProperties].sort().join();
+
+  const [pw, setPw] = useState("");
+  const [pwDone, setPwDone] = useState(false);
+  async function resetPw() {
+    if (pw.length < 8) return;
+    const ok = await onResetPassword(pw);
+    if (ok) {
+      setPw("");
+      setPwDone(true);
+    }
+  }
 
   return (
     <tr className="border-b border-border/60 align-top">
@@ -137,10 +167,24 @@ function UserRow({ user, properties, onSave, busy }: { user: Row; properties: st
           <span className="text-xs text-muted-foreground">{role === "ADMIN" ? "all properties" : "—"}</span>
         )}
       </td>
-      <td className="px-3 py-2 text-right">
-        <Button size="sm" variant="outline" className={cn(!dirty && "opacity-50")} disabled={!dirty || busy} onClick={() => onSave({ role, assignedProperties: [...assigned] })}>
-          Save
-        </Button>
+      <td className="px-3 py-2">
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <Button size="sm" variant="outline" className={cn(!dirty && "opacity-50")} disabled={!dirty || busy} onClick={() => onSave({ role, assignedProperties: [...assigned] })}>
+            Save
+          </Button>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={pw}
+              onChange={(e) => { setPw(e.target.value); setPwDone(false); }}
+              placeholder="New password (≥ 8)"
+              className="w-40 rounded-md border border-border bg-background px-2 py-1 text-xs"
+            />
+            <Button size="sm" variant="ghost" disabled={pw.length < 8 || busy} onClick={resetPw}>
+              {pwDone ? "✓ Set" : "Set password"}
+            </Button>
+          </div>
+        </div>
       </td>
     </tr>
   );
