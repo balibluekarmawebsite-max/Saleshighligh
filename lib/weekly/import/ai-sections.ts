@@ -120,7 +120,7 @@ export const AI_IMPORT_SECTIONS: AiImportSection[] = [
     needsPlatform: true,
     fields: [f("metricKey", "Metric", "text"), f("lastWeek", "Last Week", "int"), f("thisWeek", "This Week", "int")],
     shape: "one object per metric",
-    rules: "metricKey MUST be exactly one of: website_visit, profile_visit, account_reached, impression, followers. Map labels like 'Accounts reached'→account_reached, 'Impressions'→impression, 'Profile visits'→profile_visit, 'Website visits'→website_visit, 'Followers'→followers. lastWeek/thisWeek are integer counts.",
+    rules: "metricKey MUST be exactly one of: profile_visit, account_reached, impression, followers. Map labels like 'Accounts reached'→account_reached, 'Impressions'/'Views'→impression, 'Profile clicks'/'Profile visits'→profile_visit, 'Followers'→followers. lastWeek/thisWeek are integer counts.",
   },
   {
     id: "training",

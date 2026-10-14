@@ -53,7 +53,7 @@ export interface MetricoolSyncResult {
 
 /** The Section H rows Metricool can fill, in the editor's display order. */
 const SYNC_ROWS = SOCIAL_METRIC_ROWS.filter((r) =>
-  ["account_reached", "impression", "profile_visit", "website_visit", "followers"].includes(r.key),
+  ["account_reached", "impression", "profile_visit", "followers"].includes(r.key),
 );
 
 const round = (v: number | null): number | null => (v === null ? null : Math.round(v));

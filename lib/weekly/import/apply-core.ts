@@ -53,12 +53,11 @@ const occFrac = (v: unknown): number | null => {
 const m0 = (v: unknown): number => int(v) ?? 0;
 
 const SOCIAL_KEYS = new Set([
-  "website_visit", "profile_visit", "account_reached", "impression", "followers",
+  "profile_visit", "account_reached", "impression", "followers",
 ]);
 function normalizeMetricKey(v: string): string | null {
   const k = v.toLowerCase().replace(/[\s-]+/g, "_");
   if (SOCIAL_KEYS.has(k)) return k;
-  if (k.includes("website")) return "website_visit";
   if (k.includes("profile")) return "profile_visit";
   if (k.includes("reach")) return "account_reached";
   if (k.includes("impression")) return "impression";

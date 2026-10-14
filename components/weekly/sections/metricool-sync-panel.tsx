@@ -136,7 +136,15 @@ export function MetricoolSyncPanel({
             This week {fmtRange(meta.window.thisWeek.from, meta.window.thisWeek.to)} · last week{" "}
             {fmtRange(meta.window.lastWeek.from, meta.window.lastWeek.to)}
           </p>
-          {meta.networks.map((net) => (
+          {meta.networks.map((net) => {
+            // Show only metrics that resolved data. Metrics that were tried but
+            // came back empty get a muted footnote; ones not applicable to this
+            // platform (never tried, e.g. Facebook account reach) are omitted.
+            const shown = net.metrics.filter((m) => m.thisWeek !== null || m.lastWeek !== null);
+            const missing = net.metrics.filter(
+              (m) => m.thisWeek === null && m.lastWeek === null && m.tried.length > 0,
+            );
+            return (
             <div key={net.platform}>
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{net.platform}</p>
               {net.wrote ? (
@@ -153,7 +161,7 @@ export function MetricoolSyncPanel({
                       </tr>
                     </thead>
                     <tbody>
-                      {net.metrics.map((m) => {
+                      {shown.map((m) => {
                         const g = growth(m.lastWeek, m.thisWeek);
                         const gp = growthPercent(m.lastWeek, m.thisWeek);
                         return (
@@ -173,6 +181,11 @@ export function MetricoolSyncPanel({
                       })}
                     </tbody>
                   </table>
+                  {missing.length > 0 && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      No data from Metricool for: {missing.map((m) => m.label).join(", ")}.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-start gap-2 rounded-md border border-amber-300/50 bg-amber-50/50 p-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
@@ -188,7 +201,8 @@ export function MetricoolSyncPanel({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
           <p className="text-xs text-muted-foreground">
             Synced values are written into the editable grid below — adjust and Save as usual.
           </p>

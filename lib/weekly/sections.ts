@@ -39,8 +39,7 @@ const SOCIAL_METRICS: SelectOption[] = [
   { value: "followers", label: "Followers" },
   { value: "account_reached", label: "Accounts reached" },
   { value: "impression", label: "Impressions" },
-  { value: "profile_visit", label: "Profile visits" },
-  { value: "website_visit", label: "Website visits" },
+  { value: "profile_visit", label: "Profile clicks" },
 ];
 
 export const SECTION_SPECS: SectionSpec[] = [

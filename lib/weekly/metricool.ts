@@ -366,19 +366,14 @@ const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiNam
       subject: "account",
     }),
   },
+  // Instagram exposes "Profile clicks" (profile link/CTA taps), not profile
+  // views; Facebook exposes page visits (pageViews). Both surface under the
+  // "Profile Clicks" row.
   profile_visit: {
     kind: "flow",
     def: (_p, api) => ({
       source: "v2timeline",
-      metric: api === "facebook" ? "pageViews" : "profile_views",
-      subject: "account",
-    }),
-  },
-  website_visit: {
-    kind: "flow",
-    def: (_p, api) => ({
-      source: "v2timeline",
-      metric: api === "facebook" ? "page_website_clicks_logged_in_unique" : "website_clicks",
+      metric: api === "facebook" ? "pageViews" : "profile_links_taps",
       subject: "account",
     }),
   },
@@ -403,12 +398,10 @@ const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiNam
  */
 const CANDIDATE_METRICS: Record<string, Record<string, string[]>> = {
   profile_visit: {
-    instagram: ["profile_views", "profileViews", "profile_visits", "profileVisits", "profile_links_taps", "profileLinksTaps"],
+    // Instagram "Profile clicks" (link/CTA taps) — try the click/tap names Meta
+    // uses across API versions before any older profile-view fallback.
+    instagram: ["profile_links_taps", "profileLinksTaps", "profile_clicks", "profileClicks", "profile_activity", "profileActivity"],
     facebook: ["pageViews", "page_views", "page_views_total"],
-  },
-  website_visit: {
-    instagram: ["website_clicks", "websiteClicks", "website_taps", "websiteTaps", "profile_links_taps", "profileLinksTaps"],
-    facebook: ["page_website_clicks_logged_in_unique", "website_clicks", "websiteClicks"],
   },
 };
 

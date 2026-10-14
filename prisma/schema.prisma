@@ -1029,7 +1029,7 @@ model WeeklyActivity {
 }
 
 /// Section H — Social Media Insight. Growth/growth% derived from last vs this week.
-/// metricKey: website_visit|profile_visit|account_reached|impression|followers.
+/// metricKey: profile_visit (= profile clicks)|account_reached|impression|followers.
 model WeeklySocialMetric {
   id           String   @id @default(cuid())
   reportWeekId String

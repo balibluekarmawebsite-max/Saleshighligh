@@ -63,7 +63,6 @@ const SOCIAL = [
   { metricKey: "account_reached", lastWeek: 42100, thisWeek: 47850 },
   { metricKey: "impression", lastWeek: 96800, thisWeek: 103400 },
   { metricKey: "profile_visit", lastWeek: 2140, thisWeek: 1980 },
-  { metricKey: "website_visit", lastWeek: 1320, thisWeek: 1410 },
 ];
 
 async function main() {

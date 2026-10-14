@@ -142,8 +142,8 @@ describe("resolveMetricSource", () => {
       reduce: "sum",
     });
     expect(resolveMetricSource("instagram", "ig", "impression")?.metric).toBe("views");
-    expect(resolveMetricSource("instagram", "ig", "profile_visit")?.metric).toBe("profile_views");
-    expect(resolveMetricSource("instagram", "ig", "website_visit")?.metric).toBe("website_clicks");
+    // Instagram "Profile clicks" (profile link/CTA taps), not profile views.
+    expect(resolveMetricSource("instagram", "ig", "profile_visit")?.metric).toBe("profile_links_taps");
     // Facebook flow metrics; FB has no account-level reach, so it's left blank.
     expect(resolveMetricSource("facebook", "fb", "impression")).toEqual({
       source: "v2timeline",
@@ -198,17 +198,13 @@ describe("resolveMetricSources (candidate sweep)", () => {
     delete process.env.METRICOOL_METRIC_MAP;
   });
 
-  it("offers fallback names for the volatile profile/website metrics, default first", () => {
+  it("offers click-oriented fallback names for the Instagram profile metric, default first", () => {
     const profile = resolveMetricSources("instagram", "ig", "profile_visit").map((s) => s.metric);
-    expect(profile[0]).toBe("profile_views"); // the default is tried first
+    expect(profile[0]).toBe("profile_links_taps"); // the default is tried first
     expect(profile).toEqual(
-      expect.arrayContaining(["profile_views", "profileViews", "profile_visits", "profileVisits"]),
+      expect.arrayContaining(["profile_links_taps", "profileLinksTaps", "profile_clicks", "profileClicks"]),
     );
     expect(new Set(profile).size).toBe(profile.length); // de-duplicated
-
-    const website = resolveMetricSources("instagram", "ig", "website_visit").map((s) => s.metric);
-    expect(website[0]).toBe("website_clicks");
-    expect(website).toEqual(expect.arrayContaining(["website_clicks", "websiteClicks", "websiteTaps"]));
   });
 
   it("returns a single source for metrics that already work (no sweep)", () => {

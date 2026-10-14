@@ -20,10 +20,9 @@ export const OVERVIEW_BLOCKS: { key: string; heading: string }[] = [
   { key: "learning", heading: "10. Learning & Growth" },
 ];
 
-/** The 5 Section H social metrics, in report order (label ↔ stored metricKey). */
+/** The Section H social metrics, in report order (label ↔ stored metricKey). */
 export const SOCIAL_METRIC_ROWS: { key: string; label: string }[] = [
-  { key: "website_visit", label: "Website Visit" },
-  { key: "profile_visit", label: "Profile Visit" },
+  { key: "profile_visit", label: "Profile Clicks" },
   { key: "account_reached", label: "Account Reached" },
   { key: "impression", label: "Impression" },
   { key: "followers", label: "Followers" },
