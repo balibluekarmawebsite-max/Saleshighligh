@@ -366,16 +366,13 @@ const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiNam
       subject: "account",
     }),
   },
-  // Instagram exposes "Profile clicks" (profile link/CTA taps), not profile
-  // views; Facebook exposes page visits (pageViews). Both surface under the
-  // "Profile Clicks" row.
+  // "Accounts Engaged" (accounts_engaged) — the live engagement metric.
+  // Instagram's profile-clicks/visits metrics are empty via the API, so this row
+  // uses accounts_engaged (confirmed data); Facebook falls back to page visits
+  // (pageViews) when it has no accounts_engaged.
   profile_visit: {
     kind: "flow",
-    def: (_p, api) => ({
-      source: "v2timeline",
-      metric: api === "facebook" ? "pageViews" : "profile_links_taps",
-      subject: "account",
-    }),
+    def: () => ({ source: "v2timeline", metric: "accounts_engaged", subject: "account" }),
   },
   followers: {
     kind: "stock",
@@ -397,10 +394,9 @@ const SECTION_H: Record<string, { kind: MetricKind; def: (prefix: string, apiNam
  * alternates. Only applied when the metric isn't pinned via METRICOOL_METRIC_MAP.
  */
 const CANDIDATE_METRICS: Record<string, Record<string, string[]>> = {
+  // profile_visit resolves to accounts_engaged (confirmed on Instagram). Facebook
+  // falls back to its page-visits metric when accounts_engaged isn't served.
   profile_visit: {
-    // Instagram "Profile clicks" (link/CTA taps) — try the click/tap names Meta
-    // uses across API versions before any older profile-view fallback.
-    instagram: ["profile_links_taps", "profileLinksTaps", "profile_clicks", "profileClicks", "profile_activity", "profileActivity"],
     facebook: ["pageViews", "page_views", "page_views_total"],
   },
 };

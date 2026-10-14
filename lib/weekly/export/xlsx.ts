@@ -557,7 +557,7 @@ function socialSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
     empty.getCell(1).font = { name: FONT, italic: true, color: { argb: GREY } };
   }
   const metricLabel: Record<string, string> = {
-    profile_visit: "Profile Clicks",
+    profile_visit: "Accounts Engaged",
     account_reached: "Account Reached", impression: "Impression", followers: "Followers",
   };
   for (const [platform, rows] of byPlatform) {

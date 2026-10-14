@@ -22,7 +22,7 @@ export const OVERVIEW_BLOCKS: { key: string; heading: string }[] = [
 
 /** The Section H social metrics, in report order (label ↔ stored metricKey). */
 export const SOCIAL_METRIC_ROWS: { key: string; label: string }[] = [
-  { key: "profile_visit", label: "Profile Clicks" },
+  { key: "profile_visit", label: "Accounts Engaged" },
   { key: "account_reached", label: "Account Reached" },
   { key: "impression", label: "Impression" },
   { key: "followers", label: "Followers" },

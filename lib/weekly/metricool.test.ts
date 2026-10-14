@@ -142,8 +142,8 @@ describe("resolveMetricSource", () => {
       reduce: "sum",
     });
     expect(resolveMetricSource("instagram", "ig", "impression")?.metric).toBe("views");
-    // Instagram "Profile clicks" (profile link/CTA taps), not profile views.
-    expect(resolveMetricSource("instagram", "ig", "profile_visit")?.metric).toBe("profile_links_taps");
+    // "Accounts Engaged" — Instagram's profile-clicks/visits metrics are empty.
+    expect(resolveMetricSource("instagram", "ig", "profile_visit")?.metric).toBe("accounts_engaged");
     // Facebook flow metrics; FB has no account-level reach, so it's left blank.
     expect(resolveMetricSource("facebook", "fb", "impression")).toEqual({
       source: "v2timeline",
@@ -151,7 +151,7 @@ describe("resolveMetricSource", () => {
       subject: "account",
       reduce: "sum",
     });
-    expect(resolveMetricSource("facebook", "fb", "profile_visit")?.metric).toBe("pageViews");
+    expect(resolveMetricSource("facebook", "fb", "profile_visit")?.metric).toBe("accounts_engaged");
     expect(resolveMetricSource("facebook", "fb", "account_reached")?.metric).toBe("");
   });
 
@@ -198,13 +198,14 @@ describe("resolveMetricSources (candidate sweep)", () => {
     delete process.env.METRICOOL_METRIC_MAP;
   });
 
-  it("offers click-oriented fallback names for the Instagram profile metric, default first", () => {
-    const profile = resolveMetricSources("instagram", "ig", "profile_visit").map((s) => s.metric);
-    expect(profile[0]).toBe("profile_links_taps"); // the default is tried first
-    expect(profile).toEqual(
-      expect.arrayContaining(["profile_links_taps", "profileLinksTaps", "profile_clicks", "profileClicks"]),
-    );
-    expect(new Set(profile).size).toBe(profile.length); // de-duplicated
+  it("uses accounts_engaged for the profile row, with a Facebook page-visits fallback", () => {
+    // Instagram: accounts_engaged only (confirmed live, no fallback needed).
+    expect(resolveMetricSources("instagram", "ig", "profile_visit").map((s) => s.metric)).toEqual(["accounts_engaged"]);
+    // Facebook: accounts_engaged first, then page-visits names.
+    const fb = resolveMetricSources("facebook", "fb", "profile_visit").map((s) => s.metric);
+    expect(fb[0]).toBe("accounts_engaged");
+    expect(fb).toEqual(expect.arrayContaining(["accounts_engaged", "pageViews"]));
+    expect(new Set(fb).size).toBe(fb.length); // de-duplicated
   });
 
   it("returns a single source for metrics that already work (no sweep)", () => {

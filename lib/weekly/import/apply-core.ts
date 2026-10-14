@@ -58,7 +58,7 @@ const SOCIAL_KEYS = new Set([
 function normalizeMetricKey(v: string): string | null {
   const k = v.toLowerCase().replace(/[\s-]+/g, "_");
   if (SOCIAL_KEYS.has(k)) return k;
-  if (k.includes("profile")) return "profile_visit";
+  if (k.includes("engage") || k.includes("profile")) return "profile_visit";
   if (k.includes("reach")) return "account_reached";
   if (k.includes("impression")) return "impression";
   if (k.includes("follow")) return "followers";
