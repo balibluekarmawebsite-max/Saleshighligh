@@ -22,6 +22,12 @@ export function metricoolUserId(): string {
   return process.env.METRICOOL_USER_ID || "";
 }
 
+/** Per-request timeout (ms) so one stalled Metricool call can't hang the sync. */
+function metricoolTimeoutMs(): number {
+  const n = Number(process.env.METRICOOL_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 20_000;
+}
+
 /** True when the shared Metricool credential (token + user id) is set. */
 export function isMetricoolConfigured(): boolean {
   return !!process.env.METRICOOL_USER_TOKEN && !!metricoolUserId();
@@ -52,8 +58,12 @@ export async function metricoolGet<T = unknown>(
   try {
     res = await fetch(url.toString(), {
       headers: { "X-Mc-Auth": token, Accept: "application/json" },
+      signal: AbortSignal.timeout(metricoolTimeoutMs()),
     });
   } catch (err) {
+    // A timeout (AbortSignal) lands here too — it becomes a reach error, which
+    // fetchMetricForRange turns into a blank metric, so one slow call can't stall
+    // the whole weekly sync (and blow past the cron's maxDuration).
     throw new Error(`Could not reach Metricool: ${err instanceof Error ? err.message : "network error"}`);
   }
   if (!res.ok) {
