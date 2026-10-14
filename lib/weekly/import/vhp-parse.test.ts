@@ -144,6 +144,22 @@ describe("parseVhpForecastToMonthly", () => {
     expect(byMonth.get("12")).toEqual({ month: "12", rnSold: "271", occActual: "48.57", revActual: "557904971", arrActual: "2058690" });
   });
 
+  it("keeps all 12 months for a January-start run (full-year backfill)", () => {
+    // VHP "Month" selector set to January → the export window is Jan–Dec, all
+    // in the report year, so a single pull backfills the whole year.
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const dateHdr = '"Date",' + months.map((m, i) => `"01/${String(i + 1).padStart(2, "0")} ${m} "`).join(",");
+    const occRow = '" Room Occupied",' + months.map(() => '"100.00"').join(",");
+    const pctRow = '" Occupancy (%)",' + months.map(() => '"40.00"').join(",");
+    const janCsv =
+      ["BALI BLUE KARMA", "Yearly Forecast Of Room Occupancy", "", dateHdr, occRow, pctRow].join("\n") + "\n";
+
+    const rows = parseVhpForecastToMonthly(janCsv, 2026);
+    expect(rows).not.toBeNull();
+    expect(rows!.map((r) => r.month)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]);
+    expect(rows!.every((r) => r.rnSold === "100" && r.occActual === "40")).toBe(true);
+  });
+
   it("returns null for a non-forecast CSV (falls back to AI)", () => {
     expect(parseVhpForecastToMonthly("Month,Occ,Rev\n1,80,100\n", 2026)).toBeNull();
     expect(parseVhpForecastToMonthly("nope", 2026)).toBeNull();

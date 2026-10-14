@@ -93,7 +93,10 @@ async function runApiImportInner(input: ApiImportInput): Promise<ApiImportResult
 
   // Fast, exact path for known VHP CSV exports (no AI, no truncation) — e.g.
   // the raw "Reservation By Creation Date" list aggregated into Section C.
-  // Falls back to the AI extractor for anything it doesn't recognise.
+  // Falls back to the AI extractor for anything it doesn't recognise. For the
+  // Yearly Forecast (Section B) the window start comes from the file itself
+  // (VHP's Month selector), so a past-month backfill just works — the scraped
+  // month through year-end — no extra year input needed here.
   let rows = input.file ? tryVhpParse(section.id, input.file, meta.year) : null;
   let via = "vhp";
   if (rows == null) {

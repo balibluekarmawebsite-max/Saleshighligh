@@ -477,7 +477,10 @@ Content-Type: multipart/form-data
 > fixed yearly plan entered by hand in the Section B grid (stored once per
 > property + year, shared across every week) and the **Last Year** column is
 > entered by hand — the push never touches either, so send only the actual
-> figures. Section C is a full replace of the week's market-segment rows.
+> figures. The VHP **Month** selector picks the window start (read from the file
+> itself): current month to refresh, or any **past month to backfill** — Month =
+> January fills the whole year. Section C is a full replace of the week's
+> agent-production rows.
 
 ### 10.3 Example call
 

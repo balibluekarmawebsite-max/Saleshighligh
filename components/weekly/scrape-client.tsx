@@ -117,7 +117,7 @@ export function ScrapeClient({
           <p className="text-xs text-muted-foreground">
             {section === "C"
               ? "The scraper sets VHP's reservation date filter to exactly this range, exports, and uploads Section C."
-              : "The scraper opens the Yearly Forecast for this month (Show Revenue on) and uploads Section B. Pick the current or a future month — past-month backfill isn't supported by the scraper yet."}
+              : "The scraper sets VHP's Month selector to this month, opens the Yearly Forecast (Show Revenue on) and uploads Section B. Pick the current month to refresh, or a past month to backfill — VHP fills that month through to year-end."}
           </p>
 
           <div className="flex items-center gap-3">

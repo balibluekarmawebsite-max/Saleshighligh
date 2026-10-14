@@ -95,11 +95,19 @@ reads only its **monthly summary rows** (ignoring the daily grid):
 
 Rules:
 - **Download it with "Show Revenue" ticked**, or the file has no revenue rows.
-- The 12 columns run from the report month forward (e.g. Oct → Sep). The push
-  fills only the months that fall in the **report's own year** — e.g. an October
-  report fills **Oct/Nov/Dec** and leaves the Jan–Sep columns (which are the
-  next year) alone. Generate the report so its window covers the months you want
-  in that year's Section B.
+- **The VHP "Month" selector is the start of the window** — this is what makes
+  past months work. The 12 columns run from the selected month forward (e.g.
+  Month = Oct → Oct…Sep), and the push fills the months from that start through
+  **December**, ignoring the columns that wrap into the next year:
+  - **Current month** (the normal daily run): set Month to the current month —
+    it fills the current month through year-end.
+  - **Past-month backfill is fully supported** — just set the Month selector to
+    the month you want. Month = **March** fills Mar…Dec; Month = **January**
+    backfills the whole year in one pull. VHP shows actuals for months that have
+    already closed and forecast for the rest.
+  - The window is read entirely from the file, so **no extra date field is
+    needed** — the dashboard takes the start month from the export itself. Keep
+    `week_ending` pointed at the report week you want the grid to land in.
 - Only the **Actual** columns are written. **Budget** (a fixed yearly plan
   entered by hand) and **Last Year** are never touched by the push.
 
@@ -207,7 +215,9 @@ exactly as it was.
   re-applies that section, so a retry after a timeout is safe.
 - **Suggested cadence:**
   - Section **B** (yearly forecast): daily, posting the *current* week each run
-    (`week_ending = current_week_ending()`), per property.
+    (`week_ending = current_week_ending()`), with VHP's Month set to the current
+    month, per property. On demand, set VHP's Month selector to a past month to
+    backfill it (January = the whole year).
   - Section **C** (reservation by agent): once per reporting week (e.g. Friday
     after the week closes), posting that week's `week_ending`, per property.
 - **Log** each response (status + body) so a bad week is visible.
@@ -228,7 +238,10 @@ curl -sS -X POST https://dashboard.bluekarmasecrets.com/api/import \
   -F "file=@bkds-reservation-by-creation-date-2026-10-12.csv"
 ```
 
-Section B (yearly forecast → monthly actuals):
+Section B (yearly forecast → monthly actuals). The POST is identical whether you
+pull the current month or backfill a past one — what changes is **VHP's Month
+selector** when you generate the export (current month to refresh, an earlier
+month to backfill from there, January for the whole year):
 
 ```bash
 curl -sS -X POST https://dashboard.bluekarmasecrets.com/api/import \
@@ -269,6 +282,8 @@ def push(path, property_code, section, week_ending, source):
   - [ ] Download the VHP CSV.
   - [ ] Compute `week_ending` (the Thursday, §6).
   - [ ] POST with the right `property` + `section` + `source`.
+  - [ ] Section B: set VHP's **Month** selector to the target month — current
+        month to refresh, any past month to backfill (January = whole year).
   - [ ] Section B files contain **actuals only** (no budget / last year).
 - [ ] Log every response; retry only on 429/5xx with backoff.
 - [ ] Alert on 401 (token), 409 (locked week), 422 (unreadable file), 501 (AI off).
