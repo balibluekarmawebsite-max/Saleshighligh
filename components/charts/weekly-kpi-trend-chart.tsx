@@ -73,7 +73,7 @@ export function WeeklyKpiTrendChart({ data }: { data: WeeklyTrendDatum[] }) {
           <YAxis
             yAxisId="occ"
             orientation="right"
-            domain={[0, (max: number) => Math.max(100, Math.ceil(max))]}
+            domain={[0, (max: number) => Math.max(100, Math.ceil(Number.isFinite(max) ? max : 100))]}
             tickFormatter={(v: number) => `${v}%`}
             tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             tickLine={false}
