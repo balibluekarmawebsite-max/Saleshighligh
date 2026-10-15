@@ -12,7 +12,9 @@ import {
   SectionCardShell,
   SectionHeading,
   dispNum,
+  dispPct,
   sumCol,
+  toNum,
   type CellFmt,
   type Row,
   useRows,
@@ -42,6 +44,14 @@ export function MonthlyGrid({
   const rnTotal = sumCol(rows, "rnSold");
   const revAct = sumCol(rows, "revActual");
   const revBud = sumCol(rows, "revBudget");
+  const revLy = sumCol(rows, "revLy");
+
+  // Occupancy total = simple average across the months that actually carry a
+  // value (a 1-year average, per request); blank months don't drag it down.
+  const avgCol = (key: string) => {
+    const vals = rows.map((r) => toNum(r[key])).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
 
   // Actuals are editable while the report is open; Budget & Last Year are fixed
   // annual references (managed on the Budget & Last Year page), shown read-only.
@@ -121,12 +131,12 @@ export function MonthlyGrid({
               <tr className="border-t-2 border-border font-semibold text-foreground">
                 <td className="py-2 pr-3">Total / YTD</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(rnTotal)}</td>
-                <td className="py-2 px-2 text-right text-muted-foreground">—</td>
-                <td className="py-2 px-2 text-right text-muted-foreground">—</td>
-                <td className="py-2 px-2 text-right text-muted-foreground">—</td>
+                <td className="py-2 px-2 text-right tabular-nums">{dispPct(avgCol("occActual"))}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{dispPct(avgCol("occBudget"))}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{dispPct(avgCol("occLy"))}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revAct, rnTotal))}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revBud, rnTotal))}</td>
-                <td className="py-2 px-2 text-right text-muted-foreground">—</td>
+                <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revLy, rnTotal))}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(revAct)}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(revBud)}</td>
               </tr>
