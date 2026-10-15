@@ -164,6 +164,32 @@ export function getAiImportSection(id: string): AiImportSection | undefined {
   return AI_IMPORT_SECTIONS.find((s) => s.id === id);
 }
 
+/**
+ * Standalone AI-extraction spec for the year-scoped Budget & Last Year upload.
+ * Deliberately NOT part of AI_IMPORT_SECTIONS (those are the week-scoped Data
+ * Import sections), so it never appears in the Data Import picker. It maps any
+ * monthly budget layout — a planning spreadsheet, a screenshot — into our fixed
+ * 12-month Budget + Last Year template.
+ */
+export const BASELINE_AI_SECTION: AiImportSection = {
+  id: "baseline",
+  title: "Budget & Last Year (per month)",
+  description: "Per-month Budget and Last Year occupancy %, ARR and revenue for a year.",
+  completionKey: "B",
+  fields: [
+    f("month", "Month", "int"),
+    f("budgetOcc", "Budget Occ %", "percent"),
+    f("budgetArr", "Budget ARR", "money"),
+    f("budgetRevenue", "Budget Revenue", "money"),
+    f("lastyearOcc", "Last Year Occ %", "percent"),
+    f("lastyearArr", "Last Year ARR", "money"),
+    f("lastyearRevenue", "Last Year Revenue", "money"),
+  ],
+  shape: "one object per month that appears in the data (1–12)",
+  rules:
+    "month is the month NUMBER 1–12 (January=1 … December=12). Map the source's Budget / Plan / Target columns to the budget* fields, and its Last Year / LY / Prior Year columns to the lastyear* fields. IGNORE any Actual / current-year columns — only Budget and Last Year are wanted here. Occupancy values are percentages like 84.0 (0–100), never fractions. ARR and revenue are plain IDR numbers. If a month has only Budget or only Last Year, fill what is present and use null for the rest.",
+};
+
 /** Build the extraction system prompt for a section. */
 export function buildImportSystemPrompt(section: AiImportSection, year?: number, platform?: string): string {
   const cols = section.fields.map((fl) => `"${fl.key}" (${fl.kind})`).join(", ");

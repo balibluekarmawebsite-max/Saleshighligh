@@ -15,6 +15,9 @@ import {
   parseBaselineRows,
   parseWeeklyRows,
 } from "@/lib/weekly/import";
+import { isGroqConfigured } from "@/lib/weekly/import/ai";
+import { BASELINE_AI_SECTION } from "@/lib/weekly/import/ai-sections";
+import { extractSectionRows } from "@/lib/weekly/import/extract";
 
 export interface ApplyResult {
   ok: boolean;
@@ -69,6 +72,45 @@ const hasAnyBaselineValue = (
   items: { occFraction: number | null; arr: number | null; revenue: number | null }[],
 ): boolean => items.some((i) => i.occFraction != null || i.arr != null || i.revenue != null);
 
+/** Parse a possibly-string value (AI output) into a number, stripping separators. */
+const numStr = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (v == null) return null;
+  const n = Number(String(v).replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : null;
+};
+/** Percent string/number (0–100) → stored fraction (0–1). */
+const pctStr = (v: unknown): number | null => {
+  const n = numStr(v);
+  return n == null ? null : n / 100;
+};
+
+type BaselineItem = { month: number; occFraction: number | null; arr: number | null; revenue: number | null };
+
+/**
+ * Write the fixed Budget + Last Year for a property + year, each side (replace-
+ * all) only when it carries values — so a budget-only source never wipes Last
+ * Year and vice versa — and both in one transaction so a failure can't leave
+ * one updated and the other stale.
+ */
+async function writeAnnualBaseline(
+  propertyId: string,
+  year: number,
+  budgetItems: BaselineItem[],
+  lyItems: BaselineItem[],
+): Promise<{ ok: boolean; message?: string }> {
+  const hasBudget = hasAnyBaselineValue(budgetItems);
+  const hasLy = hasAnyBaselineValue(lyItems);
+  if (!hasBudget && !hasLy) {
+    return { ok: false, message: "No Budget or Last Year values found." };
+  }
+  await prisma.$transaction(async (tx) => {
+    if (hasBudget) await saveAnnualBudget(propertyId, year, budgetItems, tx);
+    if (hasLy) await saveAnnualLastYear(propertyId, year, lyItems, tx);
+  });
+  return { ok: true };
+}
+
 /**
  * Upload the fixed Budget & Last Year for a property + year from a CSV/Excel
  * file (year-scoped — no week, no weekly actuals). Replace-all for the year:
@@ -117,22 +159,95 @@ export async function importAnnualBaseline(
     revenue: num(row.lastyearRevenue),
   }));
 
-  // Save each side (replace-all for the year) only when the file carries it, so
-  // a budget-only upload never wipes Last Year and vice versa.
-  const hasBudget = hasAnyBaselineValue(budgetItems);
-  const hasLy = hasAnyBaselineValue(lyItems);
-  if (!hasBudget && !hasLy) {
-    return { ok: false, message: "No Budget or Last Year values found in the file." };
-  }
-  await prisma.$transaction(async (tx) => {
-    if (hasBudget) await saveAnnualBudget(prop.id, year, budgetItems, tx);
-    if (hasLy) await saveAnnualLastYear(prop.id, year, lyItems, tx);
-  });
+  const w = await writeAnnualBaseline(prop.id, year, budgetItems, lyItems);
+  if (!w.ok) return { ok: false, message: w.message };
 
   await logAudit("weekly_baseline_import", `${property} ${year}`, { rows: parsed.rows.length });
   // Baseline feeds every week of the year — refresh the whole property subtree.
   revalidatePath(`/weekly/${property}`, "layout");
   return { ok: true, written: parsed.rows.length };
+}
+
+/**
+ * AI step 1 — read a budget sheet in ANY layout (CSV / Excel / screenshot) and
+ * map it to our Budget & Last Year rows for preview. Writes nothing. The month
+ * values come back as the AI's strings; the UI previews them and then calls
+ * applyBaselineRows to commit. Groq-backed, EDITOR/ADMIN + property access.
+ */
+export async function aiExtractBaseline(
+  formData: FormData,
+): Promise<{ ok: boolean; rows?: Record<string, string>[]; message?: string }> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const file = formData.get("file");
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { ok: false, message: `You don't have import access to ${property}.` };
+  }
+  if (!isGroqConfigured()) {
+    return { ok: false, message: "AI import is not configured — set GROQ_API_KEY on the server." };
+  }
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "Attach a .csv, .xlsx or screenshot file." };
+  }
+
+  const res = await extractSectionRows(BASELINE_AI_SECTION, {
+    file: { buffer: Buffer.from(await file.arrayBuffer()), filename: file.name, type: file.type || "" },
+  });
+  if (!res.ok) return { ok: false, message: res.error };
+  if (res.rows.length === 0) {
+    return { ok: false, message: "The AI didn't find any Budget or Last Year rows in that file." };
+  }
+  return { ok: true, rows: res.rows };
+}
+
+/**
+ * AI step 2 — commit the previewed, AI-mapped rows to the fixed Budget & Last
+ * Year for a property + year (replace-all per side, same guards as the template
+ * upload). Separate from extraction so the user reviews before anything writes.
+ */
+export async function applyBaselineRows(input: {
+  property: string;
+  year: number;
+  rows: Record<string, string>[];
+}): Promise<ApplyResult> {
+  const property = String(input.property ?? "").toUpperCase();
+  const year = Number(input.year);
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { ok: false, message: `You don't have import access to ${property}.` };
+  }
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    return { ok: false, message: "Invalid year." };
+  }
+  const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
+  if (!prop) return { ok: false, message: "Property not found." };
+
+  const rows = (Array.isArray(input.rows) ? input.rows : [])
+    .map((r) => ({
+      month: numStr(r.month),
+      budgetOcc: pctStr(r.budgetOcc),
+      budgetArr: numStr(r.budgetArr),
+      budgetRevenue: numStr(r.budgetRevenue),
+      lastyearOcc: pctStr(r.lastyearOcc),
+      lastyearArr: numStr(r.lastyearArr),
+      lastyearRevenue: numStr(r.lastyearRevenue),
+    }))
+    .filter((r): r is typeof r & { month: number } =>
+      r.month != null && Number.isInteger(r.month) && r.month >= 1 && r.month <= 12,
+    );
+  if (rows.length === 0) {
+    return { ok: false, message: "The AI did not return any month rows (1–12) to apply." };
+  }
+
+  const budgetItems = rows.map((r) => ({ month: r.month, occFraction: r.budgetOcc, arr: r.budgetArr, revenue: r.budgetRevenue }));
+  const lyItems = rows.map((r) => ({ month: r.month, occFraction: r.lastyearOcc, arr: r.lastyearArr, revenue: r.lastyearRevenue }));
+
+  const w = await writeAnnualBaseline(prop.id, year, budgetItems, lyItems);
+  if (!w.ok) return { ok: false, message: w.message };
+
+  await logAudit("weekly_baseline_ai_import", `${property} ${year}`, { rows: rows.length });
+  revalidatePath(`/weekly/${property}`, "layout");
+  return { ok: true, written: rows.length };
 }
 
 /** Re-parse and, if clean, write the rows (replace-all for the section). */

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getAnnualBudget, type AnnualBudgetMonth } from "@/lib/weekly/annual-budget";
 import { getAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import { MONTHS_FULL } from "@/lib/weekly/editor-data";
+import { isGroqConfigured } from "@/lib/weekly/import/ai";
 import { weekMeta } from "@/lib/weekly/week";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +109,7 @@ export default async function WeeklyBaselinePage({
         ))}
       </div>
 
-      <BaselineUpload property={property} year={year} locked={!canEdit} />
+      <BaselineUpload property={property} year={year} locked={!canEdit} aiConfigured={isGroqConfigured()} />
 
       <AnnualBaseline
         property={property}
