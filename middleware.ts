@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { NextResponse } from "next/server";
 
 import { authConfig } from "@/auth.config";
 
@@ -26,7 +27,14 @@ export default auth((req) => {
     );
   }
   const callbackUrl = encodeURIComponent(pathname + search);
-  return Response.redirect(new URL(`/login?callbackUrl=${callbackUrl}`, req.nextUrl));
+  const res = NextResponse.redirect(new URL(`/login?callbackUrl=${callbackUrl}`, req.nextUrl));
+  // The login bounce must NEVER be cached. Otherwise a CDN/proxy (Cloudflare)
+  // can store the logged-out redirect and keep replaying it for `/` even after
+  // a valid session cookie is set — the app's middleware then never runs again
+  // and the user is stuck on /login despite a correct login.
+  res.headers.set("Cache-Control", "no-store, must-revalidate");
+  res.headers.set("CDN-Cache-Control", "no-store");
+  return res;
 });
 
 export const config = {
