@@ -20,7 +20,9 @@ const providers: NonNullable<NextAuthConfig["providers"]> = [
       const email = typeof credentials?.email === "string" ? credentials.email.toLowerCase().trim() : "";
       const password = typeof credentials?.password === "string" ? credentials.password : "";
       if (!email || !password) return null;
-      const user = await prisma.user.findUnique({ where: { email } });
+      // Case-insensitive match, so a user stored with any different casing (e.g.
+      // created before emails were normalised) still signs in.
+      const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
       if (!user || !user.passwordHash) return null;
       const ok = await bcrypt.compare(password, user.passwordHash);
       if (!ok) return null;
