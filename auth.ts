@@ -41,4 +41,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(prisma),
   providers,
+  events: {
+    // Diagnostic: a successful sign-in means authorize() passed and the session
+    // cookie was issued — so if the next request still bounces, the problem is
+    // reading the cookie, not the password. Silence with AUTH_DEBUG=0.
+    signIn({ user }) {
+      if (process.env.AUTH_DEBUG !== "0") {
+        console.log(`[auth] signIn OK: ${user?.email ?? "?"} (secureCookies=${authConfig.useSecureCookies})`);
+      }
+    },
+  },
 });

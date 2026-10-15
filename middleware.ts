@@ -13,6 +13,18 @@ export default auth((req) => {
   if (!process.env.AUTH_SECRET) return; // auth disabled → open
   if (req.auth) return; // signed in
   const { pathname, search } = req.nextUrl;
+  // Diagnostic (names only, no values): on a bounce, show which cookies the
+  // request carried and the forwarded protocol — so a "correct password but
+  // still bounced" case tells us whether the session cookie is MISSING (not
+  // set / wrong name / not sent) or PRESENT-but-unreadable (secret/salt), and
+  // whether Apache is forwarding https. Safe to leave on; silence with
+  // AUTH_DEBUG=0.
+  if (process.env.AUTH_DEBUG !== "0") {
+    const names = req.cookies.getAll().map((c) => c.name).join(", ") || "(none)";
+    console.log(
+      `[auth][mw] no session → /login (from ${pathname}); x-forwarded-proto=${req.headers.get("x-forwarded-proto") ?? "?"}; cookies=[${names}]`,
+    );
+  }
   const callbackUrl = encodeURIComponent(pathname + search);
   return Response.redirect(new URL(`/login?callbackUrl=${callbackUrl}`, req.nextUrl));
 });
