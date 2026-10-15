@@ -12,6 +12,7 @@ import { isLockedStatus } from "@/lib/weekly/editor-data";
 import {
   type ParseIssue,
   type ParseResult,
+  parseBaselineRows,
   parseWeeklyRows,
 } from "@/lib/weekly/import";
 
@@ -56,6 +57,83 @@ const num = (v: number | string | null | undefined): number | null =>
   typeof v === "number" ? v : null;
 const pct = (v: number | string | null | undefined): number | null =>
   typeof v === "number" ? v / 100 : null;
+
+/**
+ * True when at least one month carries a real value. Used to decide whether an
+ * import touches the FIXED annual Budget / Last Year tables at all: those saves
+ * are replace-all for the year, so an actuals-only file (every budget/LY cell
+ * blank) must NOT reach them — otherwise it would wipe the whole year's fixed
+ * reference that the Budget & Last Year page owns.
+ */
+const hasAnyBaselineValue = (
+  items: { occFraction: number | null; arr: number | null; revenue: number | null }[],
+): boolean => items.some((i) => i.occFraction != null || i.arr != null || i.revenue != null);
+
+/**
+ * Upload the fixed Budget & Last Year for a property + year from a CSV/Excel
+ * file (year-scoped — no week, no weekly actuals). Replace-all for the year:
+ * the uploaded 12 months become the year's Budget and Last Year, so blank
+ * months are cleared. Writes to the same fixed tables the Budget & Last Year
+ * page edits.
+ */
+export async function importAnnualBaseline(
+  _prev: ApplyResult | null,
+  formData: FormData,
+): Promise<ApplyResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const year = Number(formData.get("year"));
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "Attach a .csv or .xlsx file." };
+  }
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { ok: false, message: `You don't have import access to ${property}.` };
+  }
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    return { ok: false, message: "Invalid year." };
+  }
+  const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
+  if (!prop) return { ok: false, message: "Property not found." };
+
+  const parsed = parseBaselineRows(await readRecords(file));
+  if (!parsed.ok) {
+    return { ok: false, message: "Fix the highlighted rows and try again.", issues: parsed.issues };
+  }
+  if (parsed.rows.length === 0) {
+    return { ok: false, message: "No valid rows found in the file." };
+  }
+
+  const budgetItems = parsed.rows.map((row) => ({
+    month: num(row.month) ?? 0,
+    occFraction: pct(row.budgetOcc),
+    arr: num(row.budgetArr),
+    revenue: num(row.budgetRevenue),
+  }));
+  const lyItems = parsed.rows.map((row) => ({
+    month: num(row.month) ?? 0,
+    occFraction: pct(row.lastyearOcc),
+    arr: num(row.lastyearArr),
+    revenue: num(row.lastyearRevenue),
+  }));
+
+  // Save each side (replace-all for the year) only when the file carries it, so
+  // a budget-only upload never wipes Last Year and vice versa.
+  const hasBudget = hasAnyBaselineValue(budgetItems);
+  const hasLy = hasAnyBaselineValue(lyItems);
+  if (!hasBudget && !hasLy) {
+    return { ok: false, message: "No Budget or Last Year values found in the file." };
+  }
+  await prisma.$transaction(async (tx) => {
+    if (hasBudget) await saveAnnualBudget(prop.id, year, budgetItems, tx);
+    if (hasLy) await saveAnnualLastYear(prop.id, year, lyItems, tx);
+  });
+
+  await logAudit("weekly_baseline_import", `${property} ${year}`, { rows: parsed.rows.length });
+  // Baseline feeds every week of the year — refresh the whole property subtree.
+  revalidatePath(`/weekly/${property}`, "layout");
+  return { ok: true, written: parsed.rows.length };
+}
 
 /** Re-parse and, if clean, write the rows (replace-all for the section). */
 export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult> {
@@ -110,18 +188,24 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
             })),
           });
           written = r.count;
-          annualBudgetSave = parsed.rows.map((row) => ({
+          // Only touch the FIXED Budget / Last Year tables when the file
+          // actually carries those columns — an actuals-only import (the common
+          // PMS case) must leave the year's fixed reference untouched, never
+          // clear it (the saves are replace-all for the year).
+          const budgetItems = parsed.rows.map((row) => ({
             month: num(row.month) ?? 0,
             occFraction: pct(row.occBudget),
             arr: num(row.arrBudget),
             revenue: num(row.revBudget),
           }));
-          annualLastYearSave = parsed.rows.map((row) => ({
+          annualBudgetSave = hasAnyBaselineValue(budgetItems) ? budgetItems : null;
+          const lyItems = parsed.rows.map((row) => ({
             month: num(row.month) ?? 0,
             occFraction: pct(row.occLy),
             arr: num(row.arrLy),
             revenue: num(row.revLy),
           }));
+          annualLastYearSave = hasAnyBaselineValue(lyItems) ? lyItems : null;
           break;
         }
         case "segment": {
@@ -192,12 +276,13 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
     return { ok: false, message: error instanceof Error ? error.message : "Import failed." };
   }
 
-  // Section B budget & last year → the fixed annual references (own transactions).
-  if (annualBudgetSave) {
-    await saveAnnualBudget(report.propertyId, report.year, annualBudgetSave);
-  }
-  if (annualLastYearSave) {
-    await saveAnnualLastYear(report.propertyId, report.year, annualLastYearSave);
+  // Section B budget & last year → the fixed annual references, together in one
+  // transaction so a failure can't leave only one of them written.
+  if (annualBudgetSave || annualLastYearSave) {
+    await prisma.$transaction(async (tx) => {
+      if (annualBudgetSave) await saveAnnualBudget(report.propertyId, report.year, annualBudgetSave, tx);
+      if (annualLastYearSave) await saveAnnualLastYear(report.propertyId, report.year, annualLastYearSave, tx);
+    });
   }
 
   await logAudit("weekly_import", `${property} ${week}`, { section: sectionId, rows: written });

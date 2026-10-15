@@ -442,8 +442,12 @@ export async function saveAnnualBaseline(
       }))
       .filter((r) => Number.isInteger(r.month) && r.month >= 1 && r.month <= 12);
 
-  await saveAnnualBudget(prop.id, year, toInputs(budget));
-  await saveAnnualLastYear(prop.id, year, toInputs(lastyear));
+  // Budget + Last Year in one transaction so a failure can't leave one updated
+  // and the other stale.
+  await prisma.$transaction(async (tx) => {
+    await saveAnnualBudget(prop.id, year, toInputs(budget), tx);
+    await saveAnnualLastYear(prop.id, year, toInputs(lastyear), tx);
+  });
 
   await logAudit("weekly_baseline_save", `${property} ${year}`, {
     budget: budget.length,

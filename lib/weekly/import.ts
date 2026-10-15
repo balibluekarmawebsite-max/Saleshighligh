@@ -106,23 +106,18 @@ export function csvTemplate(spec: ImportSpec): string {
   return spec.columns.map((c) => c.header).join(",") + "\n";
 }
 
-/** Validate + coerce already-read records against a section's spec. */
-export function parseWeeklyRows(
-  sectionId: string,
+/** Validate + coerce already-read records against an explicit column spec. */
+export function parseColumns(
+  columns: ImportColumn[],
   records: Record<string, unknown>[],
-): ParseResult {
-  const spec = getImportSpec(sectionId);
-  if (!spec) {
-    return { sectionId, title: sectionId, rowCount: 0, rows: [], issues: [{ row: 0, message: "Unknown section." }], ok: false };
-  }
-
+): { rows: Record<string, number | string | null>[]; issues: ParseIssue[] } {
   const rows: Record<string, number | string | null>[] = [];
   const issues: ParseIssue[] = [];
 
   records.forEach((rec, idx) => {
     const rowNum = idx + 2; // +1 for the header line, +1 to 1-index
 
-    const nonEmpty = spec.columns.some((c) => {
+    const nonEmpty = columns.some((c) => {
       const v = rec[c.header];
       return v !== null && v !== undefined && String(v).trim() !== "";
     });
@@ -131,7 +126,7 @@ export function parseWeeklyRows(
     const out: Record<string, number | string | null> = {};
     const rowIssues: string[] = [];
 
-    for (const col of spec.columns) {
+    for (const col of columns) {
       const raw = rec[col.header];
       const empty = raw === null || raw === undefined || String(raw).trim() === "";
 
@@ -166,5 +161,51 @@ export function parseWeeklyRows(
     else rows.push(out);
   });
 
+  return { rows, issues };
+}
+
+/** Validate + coerce already-read records against a section's spec. */
+export function parseWeeklyRows(
+  sectionId: string,
+  records: Record<string, unknown>[],
+): ParseResult {
+  const spec = getImportSpec(sectionId);
+  if (!spec) {
+    return { sectionId, title: sectionId, rowCount: 0, rows: [], issues: [{ row: 0, message: "Unknown section." }], ok: false };
+  }
+  const { rows, issues } = parseColumns(spec.columns, records);
   return { sectionId, title: spec.title, rowCount: rows.length, rows, issues, ok: issues.length === 0 };
+}
+
+// ─── Budget & Last Year upload (year-scoped; no week / no actuals) ───────────
+
+/**
+ * Columns for the Budget & Last Year upload — one row per month (1–12), each
+ * with the month's Budget and Last Year occupancy %, ARR and revenue. This is
+ * keyed by (property, year), so it carries no weekly actuals.
+ */
+export const BASELINE_IMPORT_COLUMNS: ImportColumn[] = [
+  { header: "month", key: "month", type: "int", required: true, min: 1, max: 12 },
+  { header: "budget_occ_pct", key: "budgetOcc", type: "number", percent: true, min: 0, max: 100 },
+  { header: "budget_arr", key: "budgetArr", type: "number" },
+  { header: "budget_revenue", key: "budgetRevenue", type: "number" },
+  { header: "lastyear_occ_pct", key: "lastyearOcc", type: "number", percent: true, min: 0, max: 100 },
+  { header: "lastyear_arr", key: "lastyearArr", type: "number" },
+  { header: "lastyear_revenue", key: "lastyearRevenue", type: "number" },
+];
+
+/** Validate + coerce an uploaded Budget & Last Year file. */
+export function parseBaselineRows(records: Record<string, unknown>[]): ParseResult {
+  const { rows, issues } = parseColumns(BASELINE_IMPORT_COLUMNS, records);
+  return { sectionId: "baseline", title: "Budget & Last Year", rowCount: rows.length, rows, issues, ok: issues.length === 0 };
+}
+
+/** A Budget & Last Year template: the headers + a pre-filled row per month (1–12). */
+export function baselineCsvTemplate(): string {
+  const headers = BASELINE_IMPORT_COLUMNS.map((c) => c.header);
+  const lines = [headers.join(",")];
+  for (let m = 1; m <= 12; m++) {
+    lines.push([String(m), "", "", "", "", "", ""].join(","));
+  }
+  return lines.join("\n") + "\n";
 }

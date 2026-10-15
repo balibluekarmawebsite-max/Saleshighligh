@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AnnualBaseline } from "@/components/weekly/sections/annual-baseline";
+import { BaselineUpload } from "@/components/weekly/sections/baseline-upload";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { weeklyHref } from "@/lib/nav";
 import { prisma } from "@/lib/prisma";
@@ -106,6 +107,8 @@ export default async function WeeklyBaselinePage({
           </Link>
         ))}
       </div>
+
+      <BaselineUpload property={property} year={year} locked={!canEdit} />
 
       <AnnualBaseline
         property={property}

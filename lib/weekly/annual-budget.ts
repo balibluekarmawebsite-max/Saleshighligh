@@ -17,6 +17,8 @@
  * zeros read back as null and show blank rather than a misleading 0.
  */
 
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 export interface AnnualBudgetMonth {
@@ -82,6 +84,8 @@ export async function saveAnnualBudget(
   propertyId: string,
   year: number,
   items: AnnualBudgetInput[],
+  /** Run inside an existing transaction (e.g. to write Budget + Last Year atomically). */
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
   const byMonth = new Map<number, AnnualBudgetInput>();
   for (const it of items) {
@@ -89,7 +93,7 @@ export async function saveAnnualBudget(
     byMonth.set(it.month, it);
   }
 
-  await prisma.$transaction(async (tx) => {
+  const run = async (client: Prisma.TransactionClient) => {
     for (let month = 1; month <= 12; month++) {
       const it = byMonth.get(month);
       const occPct = it?.occFraction == null ? null : occFractionToPct(it.occFraction);
@@ -99,14 +103,17 @@ export async function saveAnnualBudget(
       const hasAny = occPct != null || arr != null || revenue != null || rnSold != null;
 
       if (!hasAny) {
-        await tx.weeklyBudget.deleteMany({ where: { propertyId, year, month } });
+        await client.weeklyBudget.deleteMany({ where: { propertyId, year, month } });
         continue;
       }
-      await tx.weeklyBudget.upsert({
+      await client.weeklyBudget.upsert({
         where: { propertyId_year_month: { propertyId, year, month } },
         update: { occupancy: occPct ?? 0, arr: arr ?? 0, revenue: revenue ?? 0, rnSold: rnSold ?? 0 },
         create: { propertyId, year, month, occupancy: occPct ?? 0, arr: arr ?? 0, revenue: revenue ?? 0, rnSold: rnSold ?? 0 },
       });
     }
-  });
+  };
+
+  if (tx) await run(tx);
+  else await prisma.$transaction(run);
 }

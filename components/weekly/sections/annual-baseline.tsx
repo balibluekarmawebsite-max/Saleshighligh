@@ -2,7 +2,6 @@
 
 import { useFormState } from "react-dom";
 
-import { rate } from "@/lib/weekly/calculations";
 import { saveAnnualBaseline } from "@/lib/weekly/editor-actions";
 import {
   GridCell,
@@ -11,7 +10,6 @@ import {
   SectionHeading,
   dispNum,
   sumCol,
-  toNum,
   type Row,
   useRows,
 } from "@/components/weekly/sections/shared";
@@ -31,7 +29,6 @@ function BaselineGrid({
   locked: boolean;
 }) {
   const revTotal = sumCol(rows, "revenue");
-  const rnTotal = sumCol(rows, "rnSold");
 
   return (
     <div>
@@ -67,7 +64,7 @@ function BaselineGrid({
             <tr className="border-t-2 border-border font-semibold text-foreground">
               <td className="py-2 pr-3">Total / YTD</td>
               <td className="py-2 px-2 text-right text-muted-foreground">—</td>
-              <td className="py-2 px-2 text-right tabular-nums">{dispNum(rnTotal > 0 ? rate(revTotal, rnTotal) : null)}</td>
+              <td className="py-2 px-2 text-right text-muted-foreground">—</td>
               <td className="py-2 px-2 text-right tabular-nums">{dispNum(revTotal)}</td>
             </tr>
           </tfoot>
@@ -100,17 +97,13 @@ export function AnnualBaseline({
   const ly = useRows(lastyear);
   const [state, formAction] = useFormState(saveAnnualBaseline, null);
 
-  // Keep room-night values (if any) alongside the editable columns so the
-  // blended-ARR total stays meaningful without exposing an RN column.
-  const stripRn = (rows: Row[]) => rows.map((r) => ({ ...r, rnSold: toNum(r.rnSold) == null ? "" : r.rnSold }));
-
   return (
     <SectionCardShell>
       <form action={formAction} className="space-y-8">
         <input type="hidden" name="property" value={property} />
         <input type="hidden" name="year" value={year} />
-        <input type="hidden" name="budget" value={JSON.stringify(stripRn(b.rows))} />
-        <input type="hidden" name="lastyear" value={JSON.stringify(stripRn(ly.rows))} />
+        <input type="hidden" name="budget" value={JSON.stringify(b.rows)} />
+        <input type="hidden" name="lastyear" value={JSON.stringify(ly.rows)} />
 
         <div className="flex flex-wrap items-start justify-between gap-3">
           <SectionHeading

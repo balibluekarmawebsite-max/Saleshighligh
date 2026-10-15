@@ -550,26 +550,33 @@ npm run db:backfill-budget
 After it runs, every week's Section B shows the same budget, and editing the
 budget in any week's grid updates it for the whole year.
 
-### 10.6 Fixed Last Year — migration + one-time backfill (run once)
+### 10.6 Fixed Last Year — migrations (backfill is automatic)
 
 Last Year became a fixed **annual** reference too (stored once per property +
 year in the new `weekly_last_years` table), edited on the new **Budget & Last
-Year** page in the sidebar and shown read-only in Section B of every weekly
-report. Deploy in this exact order:
+Year** page in the sidebar and uploaded or shown read-only in Section B of every
+weekly report. Just run migrations as usual:
 
 ```bash
-npx prisma migrate deploy            # applies migrations/20261015120000_add_weekly_last_year
+npx prisma migrate deploy   # 20261015120000_add_weekly_last_year (table)
+                            # 20261015130000_backfill_weekly_last_year (data)
 npm run build && sudo systemctl restart bk-dashboard
-npm run db:backfill-lastyear         # copies past weeks' Last Year into the annual table
 ```
 
-Run the backfill **before** re-saving any Section B grid: a Section B save now
-writes actuals only and clears the legacy per-week Last Year columns the
-backfill reads from. It is idempotent and never overwrites a value a human later
-edits on the Budget & Last Year page.
+The second migration **backfills automatically** — it copies each month's most
+recent week's Last Year figures from the legacy per-week columns into the new
+table, as part of `migrate deploy`, so it always runs before any Section B save
+can clear those legacy columns (no manual ordering to get wrong). It is
+idempotent (`ON CONFLICT DO NOTHING`) and never overwrites a value edited on the
+Budget & Last Year page.
 
-After it runs, Budget and Last Year are both managed in one place (the Budget &
-Last Year page, per year) and flow automatically into every weekly report.
+A manual fallback exists if you ever need to re-run it (e.g. after importing old
+weeks): `npm run db:backfill-lastyear` — same latest-week-wins, never-clobber
+behaviour.
+
+After deploy, Budget and Last Year are both managed in one place — the **Budget
+& Last Year** page (type the grids or upload a CSV/Excel), per year — and flow
+automatically into every weekly report.
 
 ---
 
