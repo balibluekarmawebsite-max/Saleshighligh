@@ -20,6 +20,7 @@
     "db:verify": "tsx prisma/verify.ts",
     "db:create-admin": "tsx prisma/create-admin.ts",
     "db:reset-password": "tsx prisma/reset-password.ts",
+    "db:diagnose-login": "tsx prisma/diagnose-login.ts",
     "db:backfill-budget": "tsx prisma/backfill-annual-budget.ts",
     "db:backfill-lastyear": "tsx prisma/backfill-annual-lastyear.ts",
     "test": "vitest run",
