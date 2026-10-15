@@ -57,6 +57,24 @@ describe("detectBaselineFromGrid", () => {
     expect(detectBaselineFromGrid([["Month", "RN", "Revenue"], ["January", "100", "5000"]])).toEqual([]);
   });
 
+  it("reads ALL 12 months (no truncation), stopping at the total row", () => {
+    const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const full: Cell[][] = [
+      ["B. YEAR TO DATE ACTUAL & ON HAND FORECAST 2026"],
+      [null, null, null, null, "OCCUPANCY", null, null, "ARR", null, null, "REVENUE", null],
+      [null, "Month", null, null, "Budget", "Last Year", null, "Budget", "Last Year", null, "Budget", "Last Year"],
+      ...names.map(
+        (m, i): Cell[] => [null, m, null, null, `${80 + i},00%`, `${70 + i},00%`, null, `2.000.00${i}`, `1.900.00${i}`, null, `1.000.000.00${i}`, `900.000.00${i}`],
+      ),
+      [null, "Average/Total", null, null, "85,00%", "75,00%", null, "2.100.000", "2.000.000", null, "12.000.000.000", "11.000.000.000"],
+    ];
+    const all = detectBaselineFromGrid(full);
+    expect(all).toHaveLength(12);
+    expect(all.map((r) => r.month)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(all[11]!.budgetOcc).toBeCloseTo(91, 2); // December "91,00%"
+    expect(all[11]!.lastyearOcc).toBeCloseTo(81, 2);
+  });
+
   it("previews as string rows with the apply keys", () => {
     const preview = detectedRowsToPreview(rows);
     expect(preview[0]).toMatchObject({ month: "1", budgetOcc: "83.33", budgetArr: "2261496" });

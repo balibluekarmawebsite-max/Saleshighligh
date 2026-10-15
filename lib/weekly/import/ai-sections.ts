@@ -185,9 +185,9 @@ export const BASELINE_AI_SECTION: AiImportSection = {
     f("lastyearArr", "Last Year ARR", "money"),
     f("lastyearRevenue", "Last Year Revenue", "money"),
   ],
-  shape: "one object per month that appears in the data (1–12)",
+  shape: "one object for EVERY month present, January (1) through December (12)",
   rules:
-    "month is the month NUMBER 1–12 (January=1 … December=12). Map the source's Budget / Plan / Target columns to the budget* fields, and its Last Year / LY / Prior Year columns to the lastyear* fields. IGNORE any Actual / current-year columns — only Budget and Last Year are wanted here. Occupancy values are percentages like 84.0 (0–100), never fractions. ARR and revenue are plain IDR numbers. If a month has only Budget or only Last Year, fill what is present and use null for the rest.",
+    "Return EVERY month row that appears — all 12 (January=1 … December=12) when the table has 12 rows. Do NOT stop early, summarise, or skip later months; each month has BOTH a Budget and a Last Year value, so output all of them. month is the month NUMBER 1–12. Map the source's Budget / Plan / Target columns to the budget* fields, and its Last Year / LY / Prior Year columns to the lastyear* fields. IGNORE any Actual / current-year columns and the Average/Total row. Occupancy values are percentages like 84.0 (0–100), never fractions. ARR and revenue are plain IDR numbers. If a month genuinely has only Budget or only Last Year, fill what is present and use null for the rest.",
 };
 
 /** Build the extraction system prompt for a section. */

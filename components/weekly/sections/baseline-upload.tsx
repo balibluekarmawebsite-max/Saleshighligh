@@ -211,6 +211,10 @@ function ReadApply({
 
 function PreviewTable({ rows }: { rows: Row[] }) {
   const cell = (v: string | undefined) => (v && String(v).trim() !== "" ? v : "—");
+  const occ = (v: string | undefined) => {
+    const n = Number(String(v ?? "").replace(/,/g, "").trim());
+    return v && String(v).trim() !== "" && Number.isFinite(n) ? n.toFixed(2) : "—";
+  };
   const monthLabel = (m: string | undefined) => {
     const n = Number(m);
     return Number.isInteger(n) && n >= 1 && n <= 12 ? MONTHS[n] : m && m.trim() !== "" ? m : "—";
@@ -233,10 +237,10 @@ function PreviewTable({ rows }: { rows: Row[] }) {
           {rows.map((r, i) => (
             <tr key={i} className="border-b border-border/60 tabular-nums">
               <td className="px-2 py-1 text-left font-medium text-foreground">{monthLabel(r.month)}</td>
-              <td className="px-2 py-1 text-right">{cell(r.budgetOcc)}</td>
+              <td className="px-2 py-1 text-right">{occ(r.budgetOcc)}</td>
               <td className="px-2 py-1 text-right">{cell(r.budgetArr)}</td>
               <td className="px-2 py-1 text-right">{cell(r.budgetRevenue)}</td>
-              <td className="px-2 py-1 text-right">{cell(r.lastyearOcc)}</td>
+              <td className="px-2 py-1 text-right">{occ(r.lastyearOcc)}</td>
               <td className="px-2 py-1 text-right">{cell(r.lastyearArr)}</td>
               <td className="px-2 py-1 text-right">{cell(r.lastyearRevenue)}</td>
             </tr>

@@ -134,12 +134,57 @@ function baselineItemsFromRows(rows: PreviewRow[]): { budget: BaselineItem[]; la
   return { budget, lastyear };
 }
 
+/** Is this file an image (screenshot) rather than a spreadsheet? */
+function isImageFile(file: File): boolean {
+  return (file.type || "").startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+}
+
+/**
+ * Detect the Budget & Last Year rows in a spreadsheet buffer, DETERMINISTICALLY
+ * (no AI): our strict template columns first, then the standard "Budget / Last
+ * Year" monthly table anywhere in the workbook (any sheet) — the report's own
+ * export format. Reads every month row (no AI truncation). Returns [] if none.
+ */
+function detectBaselineInWorkbook(buf: Buffer): PreviewRow[] {
+  let wb: XLSX.WorkBook;
+  try {
+    wb = XLSX.read(buf, { type: "buffer" });
+  } catch {
+    return [];
+  }
+
+  // 1. Strict template (our exact headers) on the first sheet.
+  const firstName = wb.SheetNames[0];
+  const firstSheet = firstName ? wb.Sheets[firstName] : undefined;
+  if (firstSheet) {
+    const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: null });
+    const parsed = parseBaselineRows(records);
+    if (parsed.rows.length > 0) {
+      const cleaned = cleanBaselineRows(
+        parsed.rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v == null ? "" : String(v)]))),
+      );
+      if (cleaned.length > 0) return cleaned;
+    }
+  }
+
+  // 2. Detect the standard Budget / Last Year table in any sheet.
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    if (!sheet) continue;
+    const grid = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: null, blankrows: false });
+    const detected = detectBaselineFromGrid(grid);
+    if (detected.length > 0) {
+      const cleaned = cleanBaselineRows(detectedRowsToPreview(detected));
+      if (cleaned.length > 0) return cleaned;
+    }
+  }
+  return [];
+}
+
 /**
  * Read a Budget & Last Year file (CSV / Excel) for PREVIEW — no AI, no writes.
- * Tries our strict template columns first, then falls back to detecting the
- * standard "Budget / Last Year" monthly table anywhere in the workbook (any
- * sheet), so the report's own export format is read as-is. Numbers are parsed
- * locale-aware (Indonesian "2.261.496" / "83,33%").
+ * Reads our template or the report's own Budget/Last Year table deterministically
+ * (every month, locale-aware numbers: Indonesian "2.261.496" / "83,33%").
  */
 export async function readBaselineFile(
   formData: FormData,
@@ -154,39 +199,8 @@ export async function readBaselineFile(
     return { ok: false, message: "Attach a .csv or .xlsx file." };
   }
 
-  let wb: XLSX.WorkBook;
-  try {
-    wb = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
-  } catch {
-    return { ok: false, message: "Could not read that file." };
-  }
-
-  // 1. Strict template (our exact headers) on the first sheet.
-  const firstName = wb.SheetNames[0];
-  const firstSheet = firstName ? wb.Sheets[firstName] : undefined;
-  if (firstSheet) {
-    const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: null });
-    const parsed = parseBaselineRows(records);
-    if (parsed.rows.length > 0) {
-      const cleaned = cleanBaselineRows(
-        parsed.rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v == null ? "" : String(v)]))),
-      );
-      if (cleaned.length > 0) return { ok: true, rows: cleaned };
-    }
-  }
-
-  // 2. Detect the standard Budget / Last Year table in any sheet.
-  for (const name of wb.SheetNames) {
-    const sheet = wb.Sheets[name];
-    if (!sheet) continue;
-    const grid = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: null, blankrows: false });
-    const detected = detectBaselineFromGrid(grid);
-    if (detected.length > 0) {
-      const cleaned = cleanBaselineRows(detectedRowsToPreview(detected));
-      if (cleaned.length > 0) return { ok: true, rows: cleaned };
-    }
-  }
-
+  const rows = detectBaselineInWorkbook(Buffer.from(await file.arrayBuffer()));
+  if (rows.length > 0) return { ok: true, rows };
   return {
     ok: false,
     message: "Couldn't find a Budget & Last Year table in that file. Use the template, or try AI mode.",
@@ -194,10 +208,11 @@ export async function readBaselineFile(
 }
 
 /**
- * AI step 1 — read a budget sheet in ANY layout (CSV / Excel / screenshot) and
- * map it to our Budget & Last Year rows for preview. Writes nothing. Returns
- * clean rows (one per valid month, deduped, ≤12) so the preview equals what
- * will apply. Groq-backed, EDITOR/ADMIN + property access.
+ * AI step 1 — read a budget sheet in ANY layout for preview. Writes nothing.
+ * For a spreadsheet it ALWAYS reads deterministically first (every month, no AI
+ * row-truncation); the Groq model is used only for images/screenshots, or for a
+ * spreadsheet whose table couldn't be detected. Returns clean rows (one per
+ * valid month, ≤12). EDITOR/ADMIN + property access.
  */
 export async function aiExtractBaseline(
   formData: FormData,
@@ -208,15 +223,29 @@ export async function aiExtractBaseline(
   if (!canEditProperty(user, property)) {
     return { ok: false, message: `You don't have import access to ${property}.` };
   }
-  if (!isGroqConfigured()) {
-    return { ok: false, message: "AI import is not configured — set GROQ_API_KEY on the server." };
-  }
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "Attach a .csv, .xlsx or screenshot file." };
   }
 
+  const buf = Buffer.from(await file.arrayBuffer());
+
+  // Spreadsheet → deterministic read (reads all 12 months; no AI truncation).
+  if (!isImageFile(file)) {
+    const detected = detectBaselineInWorkbook(buf);
+    if (detected.length > 0) return { ok: true, rows: detected };
+  }
+
+  // Image, or a spreadsheet with an undetectable layout → Groq.
+  if (!isGroqConfigured()) {
+    return {
+      ok: false,
+      message: isImageFile(file)
+        ? "Reading a screenshot needs AI — set GROQ_API_KEY on the server, or upload the Excel/CSV file instead."
+        : "Couldn't read a Budget & Last Year table from that file. Use the Excel/CSV template, or set GROQ_API_KEY to let AI read it.",
+    };
+  }
   const res = await extractSectionRows(BASELINE_AI_SECTION, {
-    file: { buffer: Buffer.from(await file.arrayBuffer()), filename: file.name, type: file.type || "" },
+    file: { buffer: buf, filename: file.name, type: file.type || "" },
   });
   if (!res.ok) return { ok: false, message: res.error };
   const rows = cleanBaselineRows(res.rows);

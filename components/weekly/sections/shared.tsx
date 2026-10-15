@@ -98,10 +98,13 @@ export function GridCell({
   placeholder?: string;
 }) {
   const a = align ?? (fmt === "text" ? "text-left" : "text-right");
-  // Count / money cells show thousand separators (IDR) when not being edited,
-  // and raw digits while focused so typing never fights comma re-formatting.
-  // The stored value stays raw — commas are display-only (and stripped on edit).
+  // Number cells reformat when they aren't being edited and show raw digits
+  // while focused (so typing never fights re-formatting): money/count cells get
+  // thousand separators; percent cells always show their decimals (pct2 → 2 dp,
+  // e.g. "75.00"). The stored value stays raw.
   const grouped = fmt === "num";
+  const pctFmt = fmt === "pct" || fmt === "pct2";
+  const fancy = grouped || pctFmt;
   const [focused, setFocused] = useState(false);
 
   if (locked) {
@@ -113,16 +116,19 @@ export function GridCell({
   }
 
   const raw = value ?? "";
-  const n = grouped ? toNum(raw) : null;
-  const display = grouped && !focused && n != null ? formatNumber(n) : raw;
+  const n = fancy ? toNum(raw) : null;
+  let display = raw;
+  if (fancy && !focused && n != null) {
+    display = grouped ? formatNumber(n) : fmt === "pct2" ? n.toFixed(2) : n.toFixed(1);
+  }
   return (
     <input
       inputMode={fmt === "text" ? "text" : "numeric"}
       value={display}
-      onFocus={grouped ? () => setFocused(true) : undefined}
-      onBlur={grouped ? () => setFocused(false) : undefined}
+      onFocus={fancy ? () => setFocused(true) : undefined}
+      onBlur={fancy ? () => setFocused(false) : undefined}
       onChange={(e) => onChange(grouped ? e.target.value.replace(/,/g, "") : e.target.value)}
-      className={cn(CELL, a, minW, grouped && "tabular-nums")}
+      className={cn(CELL, a, minW, fancy && "tabular-nums")}
       placeholder={placeholder}
     />
   );
