@@ -25,6 +25,22 @@ export function groqVisionModel(): string {
   return process.env.GROQ_VISION_MODEL || "qwen/qwen3.8-27b";
 }
 
+/**
+ * The model chain to try, primary first. On a rate-limit (429) or an
+ * unavailable/invalid model, groqChat falls through to the next one — so a busy
+ * or capped primary auto-switches to a higher-throughput fallback instead of
+ * failing. Configure per account with GROQ_MODEL_FALLBACKS /
+ * GROQ_VISION_MODEL_FALLBACKS (comma-separated model ids).
+ */
+function modelChain(useVision: boolean): string[] {
+  const primary = useVision ? groqVisionModel() : groqModel();
+  const raw = useVision
+    ? process.env.GROQ_VISION_MODEL_FALLBACKS
+    : process.env.GROQ_MODEL_FALLBACKS ?? "llama-3.3-70b-versatile,llama-3.1-8b-instant";
+  const extra = (raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return [primary, ...extra.filter((m) => m && m !== primary)];
+}
+
 export interface GroqImage {
   /** base64 (no data: prefix) */
   data: string;
@@ -41,9 +57,13 @@ export interface GroqChatOpts {
   temperature?: number;
 }
 
-function buildBody(opts: GroqChatOpts, stream: boolean): { model: string; body: Record<string, unknown> } {
+function buildBody(
+  opts: GroqChatOpts,
+  stream: boolean,
+  modelOverride?: string,
+): { model: string; body: Record<string, unknown> } {
   const useVision = !!opts.image;
-  const model = useVision ? groqVisionModel() : groqModel();
+  const model = modelOverride ?? (useVision ? groqVisionModel() : groqModel());
   const userContent: unknown = opts.image
     ? [
         { type: "text", text: opts.user },
@@ -76,9 +96,11 @@ function groqTimeoutMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 90_000;
 }
 
-/** One (non-streaming) Groq chat completion. Returns the assistant message text. */
-export async function groqChat(opts: GroqChatOpts): Promise<string> {
-  const { model, body } = buildBody(opts, false);
+type GroqError = Error & { status?: number };
+
+/** One (non-streaming) Groq chat completion with a specific model. */
+async function groqChatOnce(opts: GroqChatOpts, model: string): Promise<string> {
+  const { body } = buildBody(opts, false, model);
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), groqTimeoutMs());
   let res: Response;
@@ -99,7 +121,9 @@ export async function groqChat(opts: GroqChatOpts): Promise<string> {
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Groq API ${res.status} (model ${model}): ${text.slice(0, 300)}`);
+    const e: GroqError = new Error(`Groq API ${res.status} (model ${model}): ${text.slice(0, 300)}`);
+    e.status = res.status;
+    throw e;
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const content = data.choices?.[0]?.message?.content;
@@ -107,6 +131,30 @@ export async function groqChat(opts: GroqChatOpts): Promise<string> {
     throw new Error("Groq returned an empty response.");
   }
   return content;
+}
+
+/**
+ * One (non-streaming) Groq chat completion, with automatic model fallback: it
+ * tries each model in the chain and, on a rate-limit (429) or an
+ * unavailable/invalid model (400/404/503), moves to the next one — so a capped
+ * or busy primary model self-heals to a higher-throughput fallback instead of
+ * failing the upload.
+ */
+export async function groqChat(opts: GroqChatOpts): Promise<string> {
+  const models = modelChain(!!opts.image);
+  let lastErr: GroqError | null = null;
+  for (const model of models) {
+    try {
+      return await groqChatOnce(opts, model);
+    } catch (err) {
+      lastErr = (err instanceof Error ? err : new Error(String(err))) as GroqError;
+      const status = lastErr.status;
+      // Retryable with a different model: rate-limited, unavailable, or bad model.
+      if (status === 429 || status === 400 || status === 404 || status === 503) continue;
+      throw lastErr;
+    }
+  }
+  throw lastErr ?? new Error("Groq request failed.");
 }
 
 /**
