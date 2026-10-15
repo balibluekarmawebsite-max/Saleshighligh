@@ -14,6 +14,7 @@ import {
   isLockedStatus,
 } from "@/lib/weekly/editor-data";
 import { saveAnnualBudget } from "@/lib/weekly/annual-budget";
+import { saveAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import { weekMeta } from "@/lib/weekly/week";
 
 export interface ActionResult {
@@ -376,40 +377,23 @@ export async function saveMonthlyStats(
   const rows = parseRows(formData);
   if (!rows) return { ok: false, message: "Could not read the rows." };
 
-  // Section B splits into two homes:
-  //   • Actuals (RN, occupancy, ARR, revenue) + Last Year → per-week stats.
-  //   • Budget (occupancy / ARR / revenue) → the FIXED annual budget
-  //     (WeeklyBudget, property+year), shared across every weekly report.
-  const parsed = rows
+  // Section B now edits ACTUALS only (RN, occupancy, ARR, revenue) → the
+  // per-week stats. Budget and Last Year are FIXED annual references managed on
+  // the "Budget & Last Year" page (WeeklyBudget / WeeklyLastYear), so a weekly
+  // save never touches them and never resets them.
+  const statData = rows
     .map((r) => ({
+      reportWeekId: guard.id,
       month: Number(r.month),
       rnSold: int(r.rnSold),
       occActual: occFrac(r.occActual),
-      occLy: occFrac(r.occLy),
       arrActual: money(r.arrActual),
-      arrLy: money(r.arrLy),
       revActual: money(r.revActual),
-      revLy: money(r.revLy),
-      occBudgetFrac: occFrac(r.occBudget),
-      arrBudget: money(r.arrBudget),
-      revBudget: money(r.revBudget),
     }))
-    .filter((r) => Number.isInteger(r.month) && r.month >= 1 && r.month <= 12);
-
-  const statData = parsed
-    .map((r) => ({
-      reportWeekId: guard.id,
-      month: r.month,
-      rnSold: r.rnSold,
-      occActual: r.occActual,
-      occLy: r.occLy,
-      arrActual: r.arrActual,
-      arrLy: r.arrLy,
-      revActual: r.revActual,
-      revLy: r.revLy,
-    }))
-    .filter((r) =>
-      [r.rnSold, r.occActual, r.occLy, r.arrActual, r.arrLy, r.revActual, r.revLy].some((v) => v != null),
+    .filter(
+      (r) =>
+        Number.isInteger(r.month) && r.month >= 1 && r.month <= 12 &&
+        [r.rnSold, r.occActual, r.arrActual, r.revActual].some((v) => v != null),
     );
 
   await prisma.$transaction(async (tx) => {
@@ -417,14 +401,56 @@ export async function saveMonthlyStats(
     if (statData.length) await tx.weeklyMonthlyStat.createMany({ data: statData });
   });
 
-  await saveAnnualBudget(
-    guard.propertyId,
-    guard.year,
-    parsed.map((r) => ({ month: r.month, occFraction: r.occBudgetFrac, arr: r.arrBudget, revenue: r.revBudget })),
-  );
-
   await logAudit("weekly_monthly_save", `${property} ${week}`, { rows: statData.length });
   revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
+/**
+ * Budget & Last Year — replace the FIXED annual references for a property +
+ * year. Both are set once and shared across every weekly report of that year,
+ * so this is keyed by (property, year), NOT by a specific week. Occupancy is
+ * entered as a percent in both grids.
+ */
+export async function saveAnnualBaseline(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const year = Number(formData.get("year"));
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, property)) {
+    return { ok: false, message: `You don't have edit access to ${property}.` };
+  }
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    return { ok: false, message: "Invalid year." };
+  }
+  const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
+  if (!prop) return { ok: false, message: "Property not found." };
+
+  const budget = parseRows(formData, "budget");
+  const lastyear = parseRows(formData, "lastyear");
+  if (!budget || !lastyear) return { ok: false, message: "Could not read the rows." };
+
+  const toInputs = (src: Record<string, string>[]) =>
+    src
+      .map((r) => ({
+        month: Number(r.month),
+        occFraction: occFrac(r.occ),
+        arr: money(r.arr),
+        revenue: money(r.revenue),
+      }))
+      .filter((r) => Number.isInteger(r.month) && r.month >= 1 && r.month <= 12);
+
+  await saveAnnualBudget(prop.id, year, toInputs(budget));
+  await saveAnnualLastYear(prop.id, year, toInputs(lastyear));
+
+  await logAudit("weekly_baseline_save", `${property} ${year}`, {
+    budget: budget.length,
+    lastyear: lastyear.length,
+  });
+  // Baseline feeds every week of the year — refresh the whole property subtree.
+  revalidatePath(`/weekly/${property}`, "layout");
   return { ok: true, message: "Saved." };
 }
 

@@ -21,6 +21,7 @@
     "db:create-admin": "tsx prisma/create-admin.ts",
     "db:reset-password": "tsx prisma/reset-password.ts",
     "db:backfill-budget": "tsx prisma/backfill-annual-budget.ts",
+    "db:backfill-lastyear": "tsx prisma/backfill-annual-lastyear.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

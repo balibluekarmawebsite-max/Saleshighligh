@@ -7,6 +7,7 @@ import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { saveAnnualBudget, type AnnualBudgetInput } from "@/lib/weekly/annual-budget";
+import { saveAnnualLastYear, type AnnualLastYearInput } from "@/lib/weekly/annual-lastyear";
 import { isLockedStatus } from "@/lib/weekly/editor-data";
 import {
   type ParseIssue,
@@ -86,14 +87,17 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
 
   const rid = report.id;
   let written = 0;
-  // Section B budget → the fixed annual budget (saved after the tx, below).
+  // Section B budget & last year → the fixed annual references (saved after the
+  // tx, below) — never the per-week stat.
   let annualBudgetSave: AnnualBudgetInput[] | null = null;
+  let annualLastYearSave: AnnualLastYearInput[] | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
       switch (sectionId) {
         case "monthly": {
-          // Actuals + Last Year → per-week stats; Budget → annual budget.
+          // Actuals → per-week stats; Budget & Last Year → the fixed annual
+          // references (shared across every week of the year).
           await tx.weeklyMonthlyStat.deleteMany({ where: { reportWeekId: rid } });
           const r = await tx.weeklyMonthlyStat.createMany({
             data: parsed.rows.map((row) => ({
@@ -101,11 +105,8 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
               month: num(row.month) ?? 0,
               rnSold: num(row.rnSold),
               occActual: pct(row.occActual),
-              occLy: pct(row.occLy),
               arrActual: num(row.arrActual),
-              arrLy: num(row.arrLy),
               revActual: num(row.revActual),
-              revLy: num(row.revLy),
             })),
           });
           written = r.count;
@@ -114,6 +115,12 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
             occFraction: pct(row.occBudget),
             arr: num(row.arrBudget),
             revenue: num(row.revBudget),
+          }));
+          annualLastYearSave = parsed.rows.map((row) => ({
+            month: num(row.month) ?? 0,
+            occFraction: pct(row.occLy),
+            arr: num(row.arrLy),
+            revenue: num(row.revLy),
           }));
           break;
         }
@@ -185,9 +192,12 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
     return { ok: false, message: error instanceof Error ? error.message : "Import failed." };
   }
 
-  // Section B budget → the fixed annual budget (its own transaction).
+  // Section B budget & last year → the fixed annual references (own transactions).
   if (annualBudgetSave) {
     await saveAnnualBudget(report.propertyId, report.year, annualBudgetSave);
+  }
+  if (annualLastYearSave) {
+    await saveAnnualLastYear(report.propertyId, report.year, annualLastYearSave);
   }
 
   await logAudit("weekly_import", `${property} ${week}`, { section: sectionId, rows: written });

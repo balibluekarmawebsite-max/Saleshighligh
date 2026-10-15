@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { getAnnualBudget } from "@/lib/weekly/annual-budget";
+import { getAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import {
   channelYtd,
   growth,
@@ -217,24 +218,29 @@ export async function getWeeklyExportData(
   });
 
   // ── Section B: monthly Actual / Budget / Last Year ──────────────────────────
-  // Budget is the FIXED annual budget (shared across every week of the year),
-  // read from WeeklyBudget; Actuals & Last Year come from the per-week stats.
-  const annualBudget = await getAnnualBudget(report.propertyId, report.year);
+  // Budget and Last Year are both FIXED annual references (shared across every
+  // week of the year), read from WeeklyBudget / WeeklyLastYear; only the Actuals
+  // come from the per-week stats.
+  const [annualBudget, annualLastYear] = await Promise.all([
+    getAnnualBudget(report.propertyId, report.year),
+    getAnnualLastYear(report.propertyId, report.year),
+  ]);
   const monthlyRows: WeeklyMonthlyRow[] = report.monthlyStats.map((m) => {
     const b = annualBudget.get(m.month);
+    const ly = annualLastYear.get(m.month);
     return {
       month: m.month,
       monthLabel: MONTHS_SHORT[m.month - 1] ?? String(m.month),
       rnSold: m.rnSold,
       occActual: dec(m.occActual),
       occBudget: b?.occFraction ?? null,
-      occLy: dec(m.occLy),
+      occLy: ly?.occFraction ?? null,
       arrActual: dec(m.arrActual),
       arrBudget: b?.arr ?? null,
-      arrLy: dec(m.arrLy),
+      arrLy: ly?.arr ?? null,
       revActual: dec(m.revActual),
       revBudget: b?.revenue ?? null,
-      revLy: dec(m.revLy),
+      revLy: ly?.revenue ?? null,
     };
   });
   const monthlyTotalsRow = monthlyTotals(

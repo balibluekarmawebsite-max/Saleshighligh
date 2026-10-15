@@ -550,6 +550,27 @@ npm run db:backfill-budget
 After it runs, every week's Section B shows the same budget, and editing the
 budget in any week's grid updates it for the whole year.
 
+### 10.6 Fixed Last Year — migration + one-time backfill (run once)
+
+Last Year became a fixed **annual** reference too (stored once per property +
+year in the new `weekly_last_years` table), edited on the new **Budget & Last
+Year** page in the sidebar and shown read-only in Section B of every weekly
+report. Deploy in this exact order:
+
+```bash
+npx prisma migrate deploy            # applies migrations/20261015120000_add_weekly_last_year
+npm run build && sudo systemctl restart bk-dashboard
+npm run db:backfill-lastyear         # copies past weeks' Last Year into the annual table
+```
+
+Run the backfill **before** re-saving any Section B grid: a Section B save now
+writes actuals only and clears the legacy per-week Last Year columns the
+backfill reads from. It is idempotent and never overwrites a value a human later
+edits on the Budget & Last Year page.
+
+After it runs, Budget and Last Year are both managed in one place (the Budget &
+Last Year page, per year) and flow automatically into every weekly report.
+
 ---
 
 ## 11. On-demand scrape queue (Request Scrape)

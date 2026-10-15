@@ -146,6 +146,7 @@ model Property {
   // Weekly Reports module (shares the same properties)
   weeklyReports        WeeklyReport[]
   weeklyBudgets        WeeklyBudget[]
+  weeklyLastYears      WeeklyLastYear[]
   weeklyMarketSegments WeeklyMarketSegment[]
   weeklyRateCodes      WeeklyRateCode[]
   weeklyChannels       WeeklyChannel[]
@@ -798,6 +799,28 @@ model WeeklyBudget {
 
   @@unique([propertyId, year, month])
   @@map("weekly_budgets")
+}
+
+/// Yearly last-year baseline — one row per month per property. Holds the prior
+/// year's actuals used as Section B's "Last Year" comparison. Fixed for the
+/// year (like WeeklyBudget), so creating a new weekly report never resets it.
+model WeeklyLastYear {
+  id         String   @id @default(cuid())
+  propertyId String
+  year       Int
+  month      Int
+  rnSold     Int      @default(0)
+  /// Occupancy stored as a PERCENT (0–100), e.g. 72.500.
+  occupancy  Decimal  @default(0) @db.Decimal(6, 3)
+  arr        Decimal  @default(0) @db.Decimal(14, 2)
+  revenue    Decimal  @default(0) @db.Decimal(16, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year, month])
+  @@map("weekly_last_years")
 }
 
 /// Reference list of market segments (Section C). propertyId null = global.

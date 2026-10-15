@@ -3,6 +3,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { type PropertyOption } from "@/lib/dashboard-data";
 import { getAnnualBudget } from "@/lib/weekly/annual-budget";
+import { getAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import {
   channelYtd,
   headlineMonth,
@@ -170,21 +171,26 @@ export async function getWeeklyDashboardData(
     ? report.monthlyStats.find((m) => m.month === chosen)
     : undefined;
 
-  // Budget is the FIXED annual budget (WeeklyBudget), shared across weeks.
-  const annualBudget = await getAnnualBudget(report.propertyId, report.year);
+  // Budget and Last Year are FIXED annual references (WeeklyBudget /
+  // WeeklyLastYear), shared across every week of the year.
+  const [annualBudget, annualLastYear] = await Promise.all([
+    getAnnualBudget(report.propertyId, report.year),
+    getAnnualLastYear(report.propertyId, report.year),
+  ]);
 
   const headBudget = chosen ? annualBudget.get(chosen) : undefined;
+  const headLy = chosen ? annualLastYear.get(chosen) : undefined;
   const headline = headStat
     ? {
         occActual: dec(headStat.occActual),
         occBudget: headBudget?.occFraction ?? null,
-        occLy: dec(headStat.occLy),
+        occLy: headLy?.occFraction ?? null,
         arrActual: dec(headStat.arrActual),
         arrBudget: headBudget?.arr ?? null,
-        arrLy: dec(headStat.arrLy),
+        arrLy: headLy?.arr ?? null,
         revActual: dec(headStat.revActual),
         revBudget: headBudget?.revenue ?? null,
-        revLy: dec(headStat.revLy),
+        revLy: headLy?.revenue ?? null,
         rnSold: headStat.rnSold,
       }
     : null;

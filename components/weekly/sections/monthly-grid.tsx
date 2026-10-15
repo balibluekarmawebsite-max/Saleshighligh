@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useFormState } from "react-dom";
 
 import { rate } from "@/lib/weekly/calculations";
 import { saveMonthlyStats } from "@/lib/weekly/editor-actions";
+import { weeklyHref } from "@/lib/nav";
 import {
   GridCell,
   SaveButton,
@@ -18,6 +20,9 @@ import {
 
 const OCC = ["occActual", "occBudget", "occLy"] as const;
 const ARR = ["arrActual", "arrBudget", "arrLy"] as const;
+
+/** Actual columns the week owns (editable); everything else is a fixed reference. */
+const EDITABLE = new Set(["rnSold", "occActual", "arrActual", "revActual"]);
 
 /** Section B — the 12-month Actual / Budget / Last-Year grid. */
 export function MonthlyGrid({
@@ -38,11 +43,13 @@ export function MonthlyGrid({
   const revAct = sumCol(rows, "revActual");
   const revBud = sumCol(rows, "revBudget");
 
+  // Actuals are editable while the report is open; Budget & Last Year are fixed
+  // annual references (managed on the Budget & Last Year page), shown read-only.
   const cell = (i: number, key: string, fmt: CellFmt = "num") => (
     <GridCell
       value={rows[i]?.[key]}
       onChange={(v) => update(i, key, v)}
-      locked={locked}
+      locked={locked || !EDITABLE.has(key)}
       fmt={fmt}
       minW="min-w-[5.5rem]"
     />
@@ -56,10 +63,20 @@ export function MonthlyGrid({
         <input type="hidden" name="rows" value={JSON.stringify(rows)} />
 
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <SectionHeading
-            title="B · YTD Actual & Forecast"
-            subtitle="Budget is the fixed yearly plan — set once and shared across every weekly report. Actuals sync from the PMS (and can be edited). Occupancy is entered as a percent; totals are calculated."
-          />
+          <div className="min-w-0">
+            <SectionHeading
+              title="B · YTD Actual & Forecast"
+              subtitle="Actuals sync from the PMS (and can be edited). Occupancy is entered as a percent; totals are calculated."
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Budget and Last Year are fixed yearly references shown read-only here —
+              set them once on the{" "}
+              <Link href={weeklyHref(property, week, "baseline")} className="font-medium text-primary hover:underline">
+                Budget &amp; Last Year
+              </Link>{" "}
+              page and they apply to every weekly report.
+            </p>
+          </div>
           {!locked && <SaveButton state={state} />}
         </div>
 

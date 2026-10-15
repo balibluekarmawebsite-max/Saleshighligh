@@ -11,6 +11,8 @@
  */
 
 import { formatIDRCompact, formatNumber } from "@/lib/format";
+import { getAnnualBudget } from "@/lib/weekly/annual-budget";
+import { getAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import {
   channelYtd,
   headlineMonth,
@@ -111,6 +113,15 @@ export async function buildWeeklyContext(
   const head = chosen ? report.monthlyStats.find((m) => m.month === chosen) : undefined;
   const headlineMonthLabel = chosen ? (MONTHS_SHORT[chosen - 1] ?? null) : null;
 
+  // Budget and Last Year are FIXED annual references (shared across every week),
+  // read from WeeklyBudget / WeeklyLastYear — never from the per-week stat.
+  const [annualBudget, annualLastYear] = await Promise.all([
+    getAnnualBudget(report.propertyId, report.year),
+    getAnnualLastYear(report.propertyId, report.year),
+  ]);
+  const headBudget = chosen ? annualBudget.get(chosen) : undefined;
+  const headLy = chosen ? annualLastYear.get(chosen) : undefined;
+
   // ── Financial: headline-month occupancy / ADR / revenue vs budget & LY ──────
   const financial = head
     ? {
@@ -118,25 +129,25 @@ export async function buildWeeklyContext(
         roomNightsSold: num(head.rnSold),
         occupancy: {
           actual: pct(occPercent(dec(head.occActual))),
-          budget: pct(occPercent(dec(head.occBudget))),
-          lastYear: pct(occPercent(dec(head.occLy))),
-          vsBudget: occPoints(dec(head.occActual), dec(head.occBudget)),
-          vsLastYear: occPoints(dec(head.occActual), dec(head.occLy)),
+          budget: pct(occPercent(headBudget?.occFraction ?? null)),
+          lastYear: pct(occPercent(headLy?.occFraction ?? null)),
+          vsBudget: occPoints(dec(head.occActual), headBudget?.occFraction ?? null),
+          vsLastYear: occPoints(dec(head.occActual), headLy?.occFraction ?? null),
         },
         averageRoomRate: {
           actual: money(dec(head.arrActual)),
-          budget: money(dec(head.arrBudget)),
-          lastYear: money(dec(head.arrLy)),
-          vsBudget: varPct(dec(head.arrActual), dec(head.arrBudget)),
-          vsLastYear: varPct(dec(head.arrActual), dec(head.arrLy)),
+          budget: money(headBudget?.arr ?? null),
+          lastYear: money(headLy?.arr ?? null),
+          vsBudget: varPct(dec(head.arrActual), headBudget?.arr ?? null),
+          vsLastYear: varPct(dec(head.arrActual), headLy?.arr ?? null),
         },
         roomRevenue: {
           actual: money(dec(head.revActual)),
-          budget: money(dec(head.revBudget)),
-          lastYear: money(dec(head.revLy)),
-          achievement: pct(sharePercent(dec(head.revActual), dec(head.revBudget))),
-          vsBudget: varPct(dec(head.revActual), dec(head.revBudget)),
-          vsLastYear: varPct(dec(head.revActual), dec(head.revLy)),
+          budget: money(headBudget?.revenue ?? null),
+          lastYear: money(headLy?.revenue ?? null),
+          achievement: pct(sharePercent(dec(head.revActual), headBudget?.revenue ?? null)),
+          vsBudget: varPct(dec(head.revActual), headBudget?.revenue ?? null),
+          vsLastYear: varPct(dec(head.revActual), headLy?.revenue ?? null),
         },
       }
     : null;
@@ -145,8 +156,8 @@ export async function buildWeeklyContext(
   const ytdSource = report.monthlyStats.map((m) => ({
     rnSold: m.rnSold,
     revActual: dec(m.revActual),
-    revBudget: dec(m.revBudget),
-    revLy: dec(m.revLy),
+    revBudget: annualBudget.get(m.month)?.revenue ?? null,
+    revLy: annualLastYear.get(m.month)?.revenue ?? null,
   }));
   const t = monthlyTotals(ytdSource);
   const ytd =

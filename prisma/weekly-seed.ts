@@ -100,6 +100,24 @@ async function main() {
     data: MONTHLY.map((m) => ({ ...m, reportWeekId: WEEK_ID })),
   });
 
+  // Budget & Last Year are FIXED annual references (property + year), read by
+  // Section B / dashboard / export from their own tables. Occupancy is stored
+  // here as a PERCENT (0–100), so the 0–1 demo fractions are ×100.
+  await prisma.weeklyBudget.deleteMany({ where: { propertyId: property.id, year: 2026 } });
+  await prisma.weeklyBudget.createMany({
+    data: MONTHLY.map((m) => ({
+      propertyId: property.id, year: 2026, month: m.month,
+      occupancy: m.occBudget * 100, arr: m.arrBudget, revenue: m.revBudget, rnSold: 0,
+    })),
+  });
+  await prisma.weeklyLastYear.deleteMany({ where: { propertyId: property.id, year: 2026 } });
+  await prisma.weeklyLastYear.createMany({
+    data: MONTHLY.map((m) => ({
+      propertyId: property.id, year: 2026, month: m.month,
+      occupancy: m.occLy * 100, arr: m.arrLy, revenue: m.revLy, rnSold: 0,
+    })),
+  });
+
   await prisma.weeklyChannelRn.createMany({
     data: CHANNELS.map((c, i) => ({
       reportWeekId: WEEK_ID,

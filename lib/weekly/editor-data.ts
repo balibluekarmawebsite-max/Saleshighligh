@@ -2,6 +2,7 @@ import { unstable_noStore as noStore } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
 import { getAnnualBudget } from "@/lib/weekly/annual-budget";
+import { getAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import { type WeeklyProgressItem } from "@/lib/weekly/dashboard-data";
 import { type WeeklySectionId } from "@/lib/weekly/sections";
 import { weekLabel } from "@/lib/weekly/week";
@@ -441,27 +442,32 @@ export async function getWeeklyFullEditorData(
   const pctFracStr = (f: number | null): string =>
     f == null ? "" : String(Math.round(f * 100 * 100) / 100);
 
-  // Section B — 12 months (always all 12 rows, filled where present). Actuals &
-  // Last Year come from the per-week stats; Budget is the fixed ANNUAL budget
-  // (shared across all weeks of the year), read from WeeklyBudget.
-  const annualBudget = await getAnnualBudget(report.propertyId, report.year);
+  // Section B — 12 months (always all 12 rows, filled where present). Actuals
+  // come from the per-week stats; Budget and Last Year are both FIXED annual
+  // references (shared across every week of the year), read from WeeklyBudget /
+  // WeeklyLastYear and edited only on the "Budget & Last Year" page.
+  const [annualBudget, annualLastYear] = await Promise.all([
+    getAnnualBudget(report.propertyId, report.year),
+    getAnnualLastYear(report.propertyId, report.year),
+  ]);
   const byMonth = new Map(report.monthlyStats.map((m) => [m.month, m]));
   const monthly: SectionRow[] = MONTHS_FULL.map((label, i) => {
     const m = byMonth.get(i + 1);
     const b = annualBudget.get(i + 1);
+    const ly = annualLastYear.get(i + 1);
     return {
       month: String(i + 1),
       monthLabel: label,
       rnSold: sstr(m?.rnSold),
       occActual: pctStr(m?.occActual),
       occBudget: pctFracStr(b?.occFraction ?? null),
-      occLy: pctStr(m?.occLy),
+      occLy: pctFracStr(ly?.occFraction ?? null),
       arrActual: decStr(m?.arrActual),
       arrBudget: numStr(b?.arr ?? null),
-      arrLy: decStr(m?.arrLy),
+      arrLy: numStr(ly?.arr ?? null),
       revActual: decStr(m?.revActual),
       revBudget: numStr(b?.revenue ?? null),
-      revLy: decStr(m?.revLy),
+      revLy: numStr(ly?.revenue ?? null),
     };
   });
 

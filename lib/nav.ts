@@ -15,6 +15,7 @@ import {
   Share2,
   Upload,
   UtensilsCrossed,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,6 +79,7 @@ export const WEEKLY_NAV: DashNavItem[] = [
   { label: "Dashboard", href: "dashboard", icon: LayoutDashboard },
   { label: "Trends", href: "trends", icon: LineChart },
   { label: "Weekly Reports", href: "reports", icon: FileText, aliases: ["editor"] },
+  { label: "Budget & Last Year", href: "baseline", icon: Wallet },
   { label: "Data Import", href: "import", icon: Upload },
   { label: "Request Scrape", href: "scrape", icon: DownloadCloud },
   { label: "Department Inputs", href: "departments", icon: ClipboardList },
