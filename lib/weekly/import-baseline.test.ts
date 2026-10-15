@@ -5,7 +5,7 @@ import { BASELINE_IMPORT_COLUMNS, baselineCsvTemplate, parseBaselineRows } from 
 /**
  * The Budget & Last Year upload (year-scoped) reuses the shared column parser.
  * Percent columns are returned RAW here (e.g. 84, not 0.84) — the ÷100 to a
- * fraction happens on apply (importAnnualBaseline → saveAnnual*).
+ * fraction happens on apply (applyBaselineRows → saveAnnual*).
  */
 describe("Budget & Last Year upload parsing", () => {
   it("parses a valid month row with budget + last year", () => {

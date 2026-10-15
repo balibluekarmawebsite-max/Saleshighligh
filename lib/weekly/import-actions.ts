@@ -15,8 +15,15 @@ import {
   parseBaselineRows,
   parseWeeklyRows,
 } from "@/lib/weekly/import";
+import { normalizeNumber } from "@/lib/import/parse";
 import { isGroqConfigured } from "@/lib/weekly/import/ai";
 import { BASELINE_AI_SECTION } from "@/lib/weekly/import/ai-sections";
+import {
+  type Cell,
+  cleanBaselineRows,
+  detectBaselineFromGrid,
+  detectedRowsToPreview,
+} from "@/lib/weekly/import/baseline-workbook";
 import { extractSectionRows } from "@/lib/weekly/import/extract";
 
 export interface ApplyResult {
@@ -72,26 +79,25 @@ const hasAnyBaselineValue = (
   items: { occFraction: number | null; arr: number | null; revenue: number | null }[],
 ): boolean => items.some((i) => i.occFraction != null || i.arr != null || i.revenue != null);
 
-/** Parse a possibly-string value (AI output) into a number, stripping separators. */
-const numStr = (v: unknown): number | null => {
-  if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (v == null) return null;
-  const n = Number(String(v).replace(/,/g, "").trim());
-  return Number.isFinite(n) ? n : null;
-};
-/** Percent string/number (0–100) → stored fraction (0–1). */
+// Locale-aware number parsing (handles "2.261.496" and "83,33%"), and the
+// empty string → null (NOT 0), so a blank cell never becomes a real 0 that
+// would defeat the per-side guard or overwrite a value with 0.
+const numStr = (v: unknown): number | null => normalizeNumber(v);
+/** Percent string/number (0–100) → stored fraction (0–1); blank → null. */
 const pctStr = (v: unknown): number | null => {
-  const n = numStr(v);
+  const n = normalizeNumber(v);
   return n == null ? null : n / 100;
 };
 
+type PreviewRow = Record<string, string>;
 type BaselineItem = { month: number; occFraction: number | null; arr: number | null; revenue: number | null };
 
 /**
- * Write the fixed Budget + Last Year for a property + year, each side (replace-
- * all) only when it carries values — so a budget-only source never wipes Last
- * Year and vice versa — and both in one transaction so a failure can't leave
- * one updated and the other stale.
+ * Write the fixed Budget + Last Year for a property + year. Each side is written
+ * only when it carries values (so a budget-only source never touches Last Year
+ * and vice versa), both in one transaction, and in MERGE mode — only the months
+ * present are upserted; months absent from the file are left untouched, never
+ * deleted. (Clearing a month is done on the grid, not by an upload.)
  */
 async function writeAnnualBaseline(
   propertyId: string,
@@ -105,78 +111,97 @@ async function writeAnnualBaseline(
     return { ok: false, message: "No Budget or Last Year values found." };
   }
   await prisma.$transaction(async (tx) => {
-    if (hasBudget) await saveAnnualBudget(propertyId, year, budgetItems, tx);
-    if (hasLy) await saveAnnualLastYear(propertyId, year, lyItems, tx);
+    if (hasBudget) await saveAnnualBudget(propertyId, year, budgetItems, tx, { merge: true });
+    if (hasLy) await saveAnnualLastYear(propertyId, year, lyItems, tx, { merge: true });
   });
   return { ok: true };
 }
 
+/** Map clean preview rows → the Budget + Last Year item arrays for writing. */
+function baselineItemsFromRows(rows: PreviewRow[]): { budget: BaselineItem[]; lastyear: BaselineItem[] } {
+  const budget = rows.map((r) => ({
+    month: Number(r.month),
+    occFraction: pctStr(r.budgetOcc),
+    arr: numStr(r.budgetArr),
+    revenue: numStr(r.budgetRevenue),
+  }));
+  const lastyear = rows.map((r) => ({
+    month: Number(r.month),
+    occFraction: pctStr(r.lastyearOcc),
+    arr: numStr(r.lastyearArr),
+    revenue: numStr(r.lastyearRevenue),
+  }));
+  return { budget, lastyear };
+}
+
 /**
- * Upload the fixed Budget & Last Year for a property + year from a CSV/Excel
- * file (year-scoped — no week, no weekly actuals). Replace-all for the year:
- * the uploaded 12 months become the year's Budget and Last Year, so blank
- * months are cleared. Writes to the same fixed tables the Budget & Last Year
- * page edits.
+ * Read a Budget & Last Year file (CSV / Excel) for PREVIEW — no AI, no writes.
+ * Tries our strict template columns first, then falls back to detecting the
+ * standard "Budget / Last Year" monthly table anywhere in the workbook (any
+ * sheet), so the report's own export format is read as-is. Numbers are parsed
+ * locale-aware (Indonesian "2.261.496" / "83,33%").
  */
-export async function importAnnualBaseline(
-  _prev: ApplyResult | null,
+export async function readBaselineFile(
   formData: FormData,
-): Promise<ApplyResult> {
+): Promise<{ ok: boolean; rows?: PreviewRow[]; message?: string }> {
   const property = String(formData.get("property") ?? "").toUpperCase();
-  const year = Number(formData.get("year"));
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return { ok: false, message: "Attach a .csv or .xlsx file." };
-  }
   const user = await getCurrentUser();
   if (!canEditProperty(user, property)) {
     return { ok: false, message: `You don't have import access to ${property}.` };
   }
-  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-    return { ok: false, message: "Invalid year." };
-  }
-  const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
-  if (!prop) return { ok: false, message: "Property not found." };
-
-  const parsed = parseBaselineRows(await readRecords(file));
-  if (!parsed.ok) {
-    return { ok: false, message: "Fix the highlighted rows and try again.", issues: parsed.issues };
-  }
-  if (parsed.rows.length === 0) {
-    return { ok: false, message: "No valid rows found in the file." };
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "Attach a .csv or .xlsx file." };
   }
 
-  const budgetItems = parsed.rows.map((row) => ({
-    month: num(row.month) ?? 0,
-    occFraction: pct(row.budgetOcc),
-    arr: num(row.budgetArr),
-    revenue: num(row.budgetRevenue),
-  }));
-  const lyItems = parsed.rows.map((row) => ({
-    month: num(row.month) ?? 0,
-    occFraction: pct(row.lastyearOcc),
-    arr: num(row.lastyearArr),
-    revenue: num(row.lastyearRevenue),
-  }));
+  let wb: XLSX.WorkBook;
+  try {
+    wb = XLSX.read(Buffer.from(await file.arrayBuffer()), { type: "buffer" });
+  } catch {
+    return { ok: false, message: "Could not read that file." };
+  }
 
-  const w = await writeAnnualBaseline(prop.id, year, budgetItems, lyItems);
-  if (!w.ok) return { ok: false, message: w.message };
+  // 1. Strict template (our exact headers) on the first sheet.
+  const firstName = wb.SheetNames[0];
+  const firstSheet = firstName ? wb.Sheets[firstName] : undefined;
+  if (firstSheet) {
+    const records = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: null });
+    const parsed = parseBaselineRows(records);
+    if (parsed.rows.length > 0) {
+      const cleaned = cleanBaselineRows(
+        parsed.rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v == null ? "" : String(v)]))),
+      );
+      if (cleaned.length > 0) return { ok: true, rows: cleaned };
+    }
+  }
 
-  await logAudit("weekly_baseline_import", `${property} ${year}`, { rows: parsed.rows.length });
-  // Baseline feeds every week of the year — refresh the whole property subtree.
-  revalidatePath(`/weekly/${property}`, "layout");
-  return { ok: true, written: parsed.rows.length };
+  // 2. Detect the standard Budget / Last Year table in any sheet.
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    if (!sheet) continue;
+    const grid = XLSX.utils.sheet_to_json<Cell[]>(sheet, { header: 1, defval: null, blankrows: false });
+    const detected = detectBaselineFromGrid(grid);
+    if (detected.length > 0) {
+      const cleaned = cleanBaselineRows(detectedRowsToPreview(detected));
+      if (cleaned.length > 0) return { ok: true, rows: cleaned };
+    }
+  }
+
+  return {
+    ok: false,
+    message: "Couldn't find a Budget & Last Year table in that file. Use the template, or try AI mode.",
+  };
 }
 
 /**
  * AI step 1 — read a budget sheet in ANY layout (CSV / Excel / screenshot) and
- * map it to our Budget & Last Year rows for preview. Writes nothing. The month
- * values come back as the AI's strings; the UI previews them and then calls
- * applyBaselineRows to commit. Groq-backed, EDITOR/ADMIN + property access.
+ * map it to our Budget & Last Year rows for preview. Writes nothing. Returns
+ * clean rows (one per valid month, deduped, ≤12) so the preview equals what
+ * will apply. Groq-backed, EDITOR/ADMIN + property access.
  */
 export async function aiExtractBaseline(
   formData: FormData,
-): Promise<{ ok: boolean; rows?: Record<string, string>[]; message?: string }> {
+): Promise<{ ok: boolean; rows?: PreviewRow[]; message?: string }> {
   const property = String(formData.get("property") ?? "").toUpperCase();
   const file = formData.get("file");
   const user = await getCurrentUser();
@@ -194,16 +219,18 @@ export async function aiExtractBaseline(
     file: { buffer: Buffer.from(await file.arrayBuffer()), filename: file.name, type: file.type || "" },
   });
   if (!res.ok) return { ok: false, message: res.error };
-  if (res.rows.length === 0) {
-    return { ok: false, message: "The AI didn't find any Budget or Last Year rows in that file." };
+  const rows = cleanBaselineRows(res.rows);
+  if (rows.length === 0) {
+    return { ok: false, message: "The AI didn't find any month rows (1–12) in that file." };
   }
-  return { ok: true, rows: res.rows };
+  return { ok: true, rows };
 }
 
 /**
- * AI step 2 — commit the previewed, AI-mapped rows to the fixed Budget & Last
- * Year for a property + year (replace-all per side, same guards as the template
- * upload). Separate from extraction so the user reviews before anything writes.
+ * Step 2 — commit the previewed rows (from AI or the file reader) to the fixed
+ * Budget & Last Year for a property + year. MERGE per side: only the months in
+ * the file are written; months not in the file are left unchanged. Separate
+ * from the read step so the user reviews before anything writes.
  */
 export async function applyBaselineRows(input: {
   property: string;
@@ -222,27 +249,13 @@ export async function applyBaselineRows(input: {
   const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
   if (!prop) return { ok: false, message: "Property not found." };
 
-  const rows = (Array.isArray(input.rows) ? input.rows : [])
-    .map((r) => ({
-      month: numStr(r.month),
-      budgetOcc: pctStr(r.budgetOcc),
-      budgetArr: numStr(r.budgetArr),
-      budgetRevenue: numStr(r.budgetRevenue),
-      lastyearOcc: pctStr(r.lastyearOcc),
-      lastyearArr: numStr(r.lastyearArr),
-      lastyearRevenue: numStr(r.lastyearRevenue),
-    }))
-    .filter((r): r is typeof r & { month: number } =>
-      r.month != null && Number.isInteger(r.month) && r.month >= 1 && r.month <= 12,
-    );
+  const rows = cleanBaselineRows(input.rows);
   if (rows.length === 0) {
-    return { ok: false, message: "The AI did not return any month rows (1–12) to apply." };
+    return { ok: false, message: "No month rows (1–12) to apply." };
   }
 
-  const budgetItems = rows.map((r) => ({ month: r.month, occFraction: r.budgetOcc, arr: r.budgetArr, revenue: r.budgetRevenue }));
-  const lyItems = rows.map((r) => ({ month: r.month, occFraction: r.lastyearOcc, arr: r.lastyearArr, revenue: r.lastyearRevenue }));
-
-  const w = await writeAnnualBaseline(prop.id, year, budgetItems, lyItems);
+  const { budget, lastyear } = baselineItemsFromRows(rows);
+  const w = await writeAnnualBaseline(prop.id, year, budget, lastyear);
   if (!w.ok) return { ok: false, message: w.message };
 
   await logAudit("weekly_baseline_ai_import", `${property} ${year}`, { rows: rows.length });

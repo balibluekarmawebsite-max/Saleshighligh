@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useFormState, useFormStatus } from "react-dom";
 import { Check, Download, Loader2, Sparkles, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { baselineCsvTemplate } from "@/lib/weekly/import";
-import { aiExtractBaseline, applyBaselineRows, importAnnualBaseline } from "@/lib/weekly/import-actions";
+import { aiExtractBaseline, applyBaselineRows, readBaselineFile } from "@/lib/weekly/import-actions";
 import { cn } from "@/lib/utils";
 
-type AiRow = Record<string, string>;
+type Row = Record<string, string>;
 
 const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -18,11 +17,11 @@ const FILE_INPUT =
 
 /**
  * Upload the fixed Budget & Last Year for one property + year, as an alternative
- * to typing the two grids below. Two modes:
- *   • AI — upload any layout (Excel / CSV / screenshot); Groq maps it into our
- *     template, you review the mapped rows, then apply.
- *   • Template — a strict CSV in our exact column order.
- * Replace-all per side for the year.
+ * to typing the two grids. Two modes, both preview before writing and MERGE
+ * (update the months in the file; leave other months unchanged):
+ *   • Excel / CSV — our template, or the report's own Budget/Last Year table,
+ *     read deterministically (no AI needed).
+ *   • AI — any layout, including a screenshot; shown only when Groq is set up.
  */
 export function BaselineUpload({
   property,
@@ -35,7 +34,7 @@ export function BaselineUpload({
   locked: boolean;
   aiConfigured: boolean;
 }) {
-  const [mode, setMode] = useState<"ai" | "template">(aiConfigured ? "ai" : "template");
+  const [mode, setMode] = useState<"file" | "ai">("file");
 
   if (locked) return null;
 
@@ -57,8 +56,8 @@ export function BaselineUpload({
         <div className="min-w-0">
           <h2 className="font-serif text-lg font-semibold text-foreground">Upload</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Import the whole year at once instead of typing. Applying replaces the months present
-            for {year}.
+            Import a year instead of typing. You review before it saves, and only the months in your
+            file are updated — other months for {year} are left unchanged.
           </p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={downloadTemplate}>
@@ -66,71 +65,53 @@ export function BaselineUpload({
         </Button>
       </div>
 
-      {aiConfigured && (
-        <div className="mt-4 inline-flex rounded-lg border border-border p-0.5 text-sm">
-          {(["ai", "template"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={cn(
-                "rounded-md px-3 py-1 font-medium transition-colors",
-                mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {m === "ai" ? "AI (any layout)" : "Template file"}
-            </button>
-          ))}
+      <div className="mt-4 inline-flex rounded-lg border border-border p-0.5 text-sm">
+        {(["file", "ai"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            className={cn(
+              "rounded-md px-3 py-1 font-medium transition-colors",
+              mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {m === "file" ? "Excel / CSV" : "AI (any layout)"}
+          </button>
+        ))}
+      </div>
+
+      {mode === "ai" && !aiConfigured ? (
+        <div className="mt-4 rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+          AI mode needs <code className="text-xs">GROQ_API_KEY</code> set on the server (see Settings).
+          Until then, use <strong>Excel / CSV</strong> — it reads our template and the report&apos;s own
+          Budget &amp; Last Year table.
         </div>
-      )}
-
-      {mode === "ai" && aiConfigured ? (
-        <AiMode property={property} year={year} />
       ) : (
-        <TemplateMode property={property} year={year} />
+        <ReadApply key={mode} property={property} year={year} variant={mode} />
       )}
     </div>
   );
 }
 
-function TemplateSubmit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" size="sm" disabled={pending}>
-      {pending ? <Loader2 className="animate-spin" /> : <Upload />}
-      {pending ? "Importing…" : "Upload & apply"}
-    </Button>
-  );
-}
-
-function TemplateMode({ property, year }: { property: string; year: number }) {
-  const [state, formAction] = useFormState(importAnnualBaseline, null);
-  return (
-    <div className="mt-4 space-y-3">
-      <p className="text-sm text-muted-foreground">
-        A CSV / Excel in our exact column order — one row per month (1–12) with Budget and Last Year
-        occupancy %, ARR and revenue.
-      </p>
-      <form action={formAction} className="flex flex-wrap items-center gap-3">
-        <input type="hidden" name="property" value={property} />
-        <input type="hidden" name="year" value={year} />
-        <input type="file" name="file" accept=".csv,.xlsx,.xls" required className={FILE_INPUT} />
-        <TemplateSubmit />
-      </form>
-      <Result state={state} year={year} />
-    </div>
-  );
-}
-
-function AiMode({ property, year }: { property: string; year: number }) {
+function ReadApply({
+  property,
+  year,
+  variant,
+}: {
+  property: string;
+  year: number;
+  variant: "file" | "ai";
+}) {
+  const ai = variant === "ai";
   const [file, setFile] = useState<File | null>(null);
-  const [rows, setRows] = useState<AiRow[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<number | null>(null);
   const [reading, startReading] = useTransition();
   const [applying, setApplying] = useState(false);
 
-  function reset() {
+  function clear() {
     setRows(null);
     setDone(null);
     setError(null);
@@ -138,14 +119,14 @@ function AiMode({ property, year }: { property: string; year: number }) {
 
   function read() {
     if (!file) return;
-    reset();
+    clear();
     const fd = new FormData();
     fd.set("property", property);
     fd.set("file", file);
     startReading(async () => {
-      const res = await aiExtractBaseline(fd);
+      const res = ai ? await aiExtractBaseline(fd) : await readBaselineFile(fd);
       if (!res.ok) {
-        setError(res.message ?? "AI could not read that file.");
+        setError(res.message ?? "Could not read that file.");
         return;
       }
       setRows(res.rows ?? []);
@@ -173,38 +154,45 @@ function AiMode({ property, year }: { property: string; year: number }) {
   return (
     <div className="mt-4 space-y-3">
       <p className="text-sm text-muted-foreground">
-        Upload a budget sheet in <em>any</em> layout — an Excel/CSV or even a screenshot. AI reads
-        the Budget and Last Year figures and maps them into our template; you review before anything
-        is saved.
+        {ai ? (
+          <>
+            Upload a budget sheet in <em>any</em> layout — an Excel/CSV or a screenshot. AI reads the
+            Budget and Last Year figures; you review the mapped months before saving.
+          </>
+        ) : (
+          <>
+            Upload our template, or the weekly report&apos;s own Budget / Last Year table (Excel). One
+            row per month with Budget and Last Year occupancy %, ARR and revenue.
+          </>
+        )}
       </p>
+
       <div className="flex flex-wrap items-center gap-3">
         <input
           type="file"
-          accept=".csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp"
+          accept={ai ? ".csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp" : ".csv,.xlsx,.xls"}
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
-            reset();
+            clear();
           }}
           className={FILE_INPUT}
         />
         <Button type="button" size="sm" onClick={read} disabled={!file || reading}>
-          {reading ? <Loader2 className="animate-spin" /> : <Sparkles />}
-          {reading ? "Reading…" : "Read with AI"}
+          {reading ? <Loader2 className="animate-spin" /> : ai ? <Sparkles /> : <Upload />}
+          {reading ? "Reading…" : ai ? "Read with AI" : "Read & preview"}
         </Button>
       </div>
 
       {error && <p className="text-sm text-variance-negative">{error}</p>}
       {done != null && (
         <p className="flex items-center gap-1.5 text-sm text-variance-positive">
-          <Check className="h-4 w-4" /> Applied {done} month{done === 1 ? "" : "s"} to {year}.
+          <Check className="h-4 w-4" /> Updated {done} month{done === 1 ? "" : "s"} for {year}.
         </p>
       )}
 
       {rows && rows.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            Mapped from your file — review, then apply:
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">Review the mapped months, then apply:</p>
           <PreviewTable rows={rows} />
           <div className="flex items-center gap-2">
             <Button type="button" size="sm" onClick={apply} disabled={applying}>
@@ -212,7 +200,7 @@ function AiMode({ property, year }: { property: string; year: number }) {
               {applying ? "Applying…" : `Apply ${rows.length} month${rows.length === 1 ? "" : "s"} to ${year}`}
             </Button>
             <span className="text-xs text-muted-foreground">
-              Replaces the months shown; occupancy is a %, money in IDR.
+              Updates these months only; occupancy is a %, money in IDR.
             </span>
           </div>
         </div>
@@ -221,7 +209,7 @@ function AiMode({ property, year }: { property: string; year: number }) {
   );
 }
 
-function PreviewTable({ rows }: { rows: AiRow[] }) {
+function PreviewTable({ rows }: { rows: Row[] }) {
   const cell = (v: string | undefined) => (v && String(v).trim() !== "" ? v : "—");
   const monthLabel = (m: string | undefined) => {
     const n = Number(m);
@@ -242,7 +230,7 @@ function PreviewTable({ rows }: { rows: AiRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, 12).map((r, i) => (
+          {rows.map((r, i) => (
             <tr key={i} className="border-b border-border/60 tabular-nums">
               <td className="px-2 py-1 text-left font-medium text-foreground">{monthLabel(r.month)}</td>
               <td className="px-2 py-1 text-right">{cell(r.budgetOcc)}</td>
@@ -255,39 +243,6 @@ function PreviewTable({ rows }: { rows: AiRow[] }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function Result({
-  state,
-  year,
-}: {
-  state: { ok: boolean; written?: number; message?: string; issues?: { row: number; message: string }[] } | null;
-  year: number;
-}) {
-  if (!state) return null;
-  if (state.ok) {
-    return (
-      <p className="flex items-center gap-1.5 text-sm text-variance-positive">
-        <Check className="h-4 w-4" /> Imported {state.written} month{state.written === 1 ? "" : "s"} into {year}.
-      </p>
-    );
-  }
-  return (
-    <div className="space-y-1 text-sm text-variance-negative">
-      <p>{state.message}</p>
-      {state.issues && state.issues.length > 0 && (
-        <ul className="list-disc space-y-0.5 pl-5 text-xs">
-          {state.issues.slice(0, 8).map((iss, i) => (
-            <li key={i}>
-              {iss.row > 0 ? `Row ${iss.row}: ` : ""}
-              {iss.message}
-            </li>
-          ))}
-          {state.issues.length > 8 && <li>…and {state.issues.length - 8} more.</li>}
-        </ul>
-      )}
     </div>
   );
 }

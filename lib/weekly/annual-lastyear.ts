@@ -81,7 +81,10 @@ export async function saveAnnualLastYear(
   items: AnnualLastYearInput[],
   /** Run inside an existing transaction (e.g. to write Budget + Last Year atomically). */
   tx?: Prisma.TransactionClient,
+  /** merge: only upsert the months provided; never delete others (uploads). Default replace-all (the grid). */
+  opts?: { merge?: boolean },
 ): Promise<void> {
+  const merge = opts?.merge ?? false;
   const byMonth = new Map<number, AnnualLastYearInput>();
   for (const it of items) {
     if (!Number.isInteger(it.month) || it.month < 1 || it.month > 12) continue;
@@ -89,7 +92,10 @@ export async function saveAnnualLastYear(
   }
 
   const run = async (client: Prisma.TransactionClient) => {
-    for (let month = 1; month <= 12; month++) {
+    const months = merge
+      ? [...byMonth.keys()].sort((a, b) => a - b)
+      : Array.from({ length: 12 }, (_, i) => i + 1);
+    for (const month of months) {
       const it = byMonth.get(month);
       const occPct = it?.occFraction == null ? null : occFractionToPct(it.occFraction);
       const arr = it?.arr ?? null;
@@ -98,7 +104,8 @@ export async function saveAnnualLastYear(
       const hasAny = occPct != null || arr != null || revenue != null || rnSold != null;
 
       if (!hasAny) {
-        await client.weeklyLastYear.deleteMany({ where: { propertyId, year, month } });
+        // Replace mode clears an empty month; merge mode leaves it untouched.
+        if (!merge) await client.weeklyLastYear.deleteMany({ where: { propertyId, year, month } });
         continue;
       }
       await client.weeklyLastYear.upsert({
