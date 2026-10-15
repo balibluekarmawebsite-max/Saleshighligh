@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Check, Download, Loader2, Sparkles, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { formatNumber } from "@/lib/format";
 import { baselineCsvTemplate } from "@/lib/weekly/import";
 import { aiExtractBaseline, applyBaselineRows, readBaselineFile } from "@/lib/weekly/import-actions";
 import { cn } from "@/lib/utils";
@@ -210,10 +211,18 @@ function ReadApply({
 }
 
 function PreviewTable({ rows }: { rows: Row[] }) {
-  const cell = (v: string | undefined) => (v && String(v).trim() !== "" ? v : "—");
-  const occ = (v: string | undefined) => {
+  const num = (v: string | undefined): number | null => {
     const n = Number(String(v ?? "").replace(/,/g, "").trim());
-    return v && String(v).trim() !== "" && Number.isFinite(n) ? n.toFixed(2) : "—";
+    return v && String(v).trim() !== "" && Number.isFinite(n) ? n : null;
+  };
+  // Occupancy → 2 decimals; money (ARR / revenue) → thousand separators.
+  const occ = (v: string | undefined) => {
+    const n = num(v);
+    return n == null ? "—" : n.toFixed(2);
+  };
+  const money = (v: string | undefined) => {
+    const n = num(v);
+    return n == null ? "—" : formatNumber(n);
   };
   const monthLabel = (m: string | undefined) => {
     const n = Number(m);
@@ -238,11 +247,11 @@ function PreviewTable({ rows }: { rows: Row[] }) {
             <tr key={i} className="border-b border-border/60 tabular-nums">
               <td className="px-2 py-1 text-left font-medium text-foreground">{monthLabel(r.month)}</td>
               <td className="px-2 py-1 text-right">{occ(r.budgetOcc)}</td>
-              <td className="px-2 py-1 text-right">{cell(r.budgetArr)}</td>
-              <td className="px-2 py-1 text-right">{cell(r.budgetRevenue)}</td>
+              <td className="px-2 py-1 text-right">{money(r.budgetArr)}</td>
+              <td className="px-2 py-1 text-right">{money(r.budgetRevenue)}</td>
               <td className="px-2 py-1 text-right">{occ(r.lastyearOcc)}</td>
-              <td className="px-2 py-1 text-right">{cell(r.lastyearArr)}</td>
-              <td className="px-2 py-1 text-right">{cell(r.lastyearRevenue)}</td>
+              <td className="px-2 py-1 text-right">{money(r.lastyearArr)}</td>
+              <td className="px-2 py-1 text-right">{money(r.lastyearRevenue)}</td>
             </tr>
           ))}
         </tbody>
