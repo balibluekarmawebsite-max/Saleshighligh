@@ -15,6 +15,7 @@ import * as XLSX from "xlsx";
 import {
   coerceRows,
   groqChat,
+  isGroqConfigured,
   parseJsonLoose,
   type GroqImage,
 } from "@/lib/weekly/import/ai";
@@ -22,6 +23,27 @@ import {
   buildImportSystemPrompt,
   type AiImportSection,
 } from "@/lib/weekly/import/ai-sections";
+import {
+  type ActivityRow,
+  detectSalesActivityInWorkbook,
+} from "@/lib/weekly/import/sales-activity-workbook";
+
+const activityToRow = (r: ActivityRow): Record<string, string> => ({
+  dateLabel: r.dateLabel,
+  title: r.title,
+  notes: r.notes,
+});
+
+/**
+ * Deterministic spreadsheet readers by section id. For a non-image file these run
+ * BEFORE the AI: they read the report's own layout in full (no 12k-char / token
+ * truncation), so a long Sales-Activity sheet imports completely. The AI remains
+ * the fallback for screenshots, pasted text and layouts these don't recognise.
+ */
+const DETERMINISTIC_READERS: Record<string, (buf: Buffer) => Record<string, string>[]> = {
+  sales: (buf) => detectSalesActivityInWorkbook(buf).map(activityToRow),
+  ecommerce: (buf) => detectSalesActivityInWorkbook(buf).map(activityToRow),
+};
 
 const MAX_TEXT = 12000;
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -82,6 +104,13 @@ export async function extractSectionRows(
       image = { data: file.buffer.toString("base64"), mediaType: type || "image/png" };
       userContent = "Extract the data from this screenshot into the required rows.";
     } else {
+      // Deterministic-first: read the known layout in full before falling back
+      // to the AI (which truncates long sheets).
+      const reader = DETERMINISTIC_READERS[section.id];
+      if (reader) {
+        const rows = reader(file.buffer);
+        if (rows.length > 0) return { ok: true, rows };
+      }
       const asText = workbookToText(file.buffer);
       if (!asText.trim()) {
         return { ok: false, status: 400, error: "Could not read any rows from that file." };
@@ -92,6 +121,18 @@ export async function extractSectionRows(
     userContent = `INPUT DATA (pasted text):\n\n${text.slice(0, MAX_TEXT)}`;
   } else {
     return { ok: false, status: 400, error: "Attach a file or paste some text." };
+  }
+
+  // Reaching here means the deterministic readers didn't resolve it, so the AI
+  // is required — gate on Groq now (not at the route) so a deterministic read
+  // above never needs it.
+  if (!isGroqConfigured()) {
+    return {
+      ok: false,
+      status: 501,
+      error:
+        "AI import isn't configured (set GROQ_API_KEY on the server). An Excel/CSV in the standard Sales-Activity layout is read without AI — check the Date / Subject / Remarks columns.",
+    };
   }
 
   const system = buildImportSystemPrompt(section, year, platform);

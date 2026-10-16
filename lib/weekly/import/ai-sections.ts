@@ -165,6 +165,14 @@ export function getAiImportSection(id: string): AiImportSection | undefined {
 }
 
 /**
+ * Sections whose standard spreadsheet layout is read DETERMINISTICALLY (no AI):
+ * a non-image file in that layout imports in full without Groq. Keep in sync with
+ * the readers in `import/extract.ts`. Client-safe so the UI can enable "Process"
+ * for a file upload even when Groq isn't configured.
+ */
+export const DETERMINISTIC_SECTION_IDS = new Set<string>(["sales", "ecommerce"]);
+
+/**
  * Standalone AI-extraction spec for the year-scoped Budget & Last Year upload.
  * Deliberately NOT part of AI_IMPORT_SECTIONS (those are the week-scoped Data
  * Import sections), so it never appears in the Data Import picker. It maps any

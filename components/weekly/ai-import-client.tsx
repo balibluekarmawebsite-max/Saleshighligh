@@ -20,6 +20,7 @@ import { csvTemplate, getImportSpec } from "@/lib/weekly/import";
 import { applyAiImport } from "@/lib/weekly/import/ai-actions";
 import {
   AI_IMPORT_SECTIONS,
+  DETERMINISTIC_SECTION_IDS,
   getAiImportSection,
   type AiImportSection,
 } from "@/lib/weekly/import/ai-sections";
@@ -340,9 +341,13 @@ function SectionPanel({
           )}
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={process} disabled={processing || !aiConfigured}>
-              {processing ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              {processing ? "Reading…" : "Process with AI"}
+            <Button
+              type="button"
+              onClick={process}
+              disabled={processing || (!aiConfigured && !(mode === "file" && DETERMINISTIC_SECTION_IDS.has(section.id)))}
+            >
+              {processing ? <Loader2 className="animate-spin" /> : aiConfigured ? <Sparkles /> : <Upload />}
+              {processing ? "Reading…" : aiConfigured ? "Process with AI" : "Read file"}
             </Button>
             {rows && rows.length > 0 && (
               <Button type="button" variant="default" onClick={apply} disabled={applying}>

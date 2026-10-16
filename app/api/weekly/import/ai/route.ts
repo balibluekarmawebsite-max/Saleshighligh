@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 
 import { requireRole } from "@/lib/auth-helpers";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { isGroqConfigured } from "@/lib/weekly/import/ai";
 import { getAiImportSection } from "@/lib/weekly/import/ai-sections";
 import { extractSectionRows, type ExtractFile } from "@/lib/weekly/import/extract";
 import { isWeekId } from "@/lib/weekly/week";
@@ -21,12 +20,8 @@ export async function POST(req: NextRequest) {
   const guard = await requireRole(["ADMIN", "EDITOR"]);
   if ("response" in guard) return guard.response;
 
-  if (!isGroqConfigured()) {
-    return Response.json(
-      { error: "AI import is not configured — set GROQ_API_KEY on the server." },
-      { status: 501 },
-    );
-  }
+  // Note: the Groq gate lives in extractSectionRows now — a spreadsheet in a
+  // layout we read deterministically (e.g. Sales Activity) imports without AI.
 
   let form: FormData;
   try {
