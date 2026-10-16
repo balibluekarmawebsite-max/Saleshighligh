@@ -141,6 +141,7 @@ export default async function WeeklyEditorPage({
           subtitle="Room nights and revenue by booking agent / source (Booking.com, Expedia, …). ARR and % share are calculated."
           labelHeader="Agent / Source" addLabel="Add agent"
           initial={data.segments} action={saveSegments}
+          dropZeroRevenue
         />
       ),
     },

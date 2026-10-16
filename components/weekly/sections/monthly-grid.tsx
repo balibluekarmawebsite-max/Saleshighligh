@@ -91,14 +91,14 @@ export function MonthlyGrid({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] border-collapse text-sm">
+          <table className="w-full min-w-[1000px] border-collapse text-sm">
             <thead>
               <tr className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <th rowSpan={2} className="py-2 pr-3 text-left align-bottom">Month</th>
                 <th rowSpan={2} className="py-2 px-2 text-right align-bottom">RN Sold</th>
                 <th colSpan={3} className="border-b border-border py-1 px-2 text-center">Occupancy %</th>
                 <th colSpan={3} className="border-b border-border py-1 px-2 text-center">ARR</th>
-                <th colSpan={2} className="border-b border-border py-1 px-2 text-center">Revenue</th>
+                <th colSpan={3} className="border-b border-border py-1 px-2 text-center">Revenue</th>
               </tr>
               <tr className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 <th className="py-1 px-2 text-right">Act</th>
@@ -109,6 +109,7 @@ export function MonthlyGrid({
                 <th className="py-1 px-2 text-right">LY</th>
                 <th className="py-1 px-2 text-right">Act</th>
                 <th className="py-1 px-2 text-right">Bud</th>
+                <th className="py-1 px-2 text-right">LY</th>
               </tr>
             </thead>
             <tbody>
@@ -124,6 +125,7 @@ export function MonthlyGrid({
                   ))}
                   <td className="py-1.5 px-2">{cell(i, "revActual")}</td>
                   <td className="py-1.5 px-2">{cell(i, "revBudget")}</td>
+                  <td className="py-1.5 px-2">{cell(i, "revLy")}</td>
                 </tr>
               ))}
             </tbody>
@@ -139,6 +141,7 @@ export function MonthlyGrid({
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(rate(revLy, rnTotal))}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(revAct)}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispNum(revBud)}</td>
+                <td className="py-2 px-2 text-right tabular-nums">{dispNum(revLy)}</td>
               </tr>
             </tfoot>
           </table>

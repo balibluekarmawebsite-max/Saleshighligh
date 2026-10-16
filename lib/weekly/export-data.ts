@@ -263,10 +263,14 @@ export async function getWeeklyExportData(
   const headlineMonthLabel = chosen ? (MONTHS_SHORT[chosen - 1] ?? null) : null;
 
   // ── Section C: agent / source production ────────────────────────────────────
+  // A tentative booking — a source with room nights but ZERO revenue (and so
+  // zero ARR) — is left off the report: it isn't confirmed business yet. Totals
+  // and % share are computed over the confirmed sources only.
+  const confirmedSegments = report.segmentProductions.filter((s) => (dec(s.grossRevenue) ?? 0) > 0);
   const segTotals = productionTotals(
-    report.segmentProductions.map((s) => ({ rnSold: s.rnSold, grossRevenue: dec(s.grossRevenue) })),
+    confirmedSegments.map((s) => ({ rnSold: s.rnSold, grossRevenue: dec(s.grossRevenue) })),
   );
-  const segmentRows: WeeklyProductionRow[] = report.segmentProductions.map((s) => {
+  const segmentRows: WeeklyProductionRow[] = confirmedSegments.map((s) => {
     const revenue = dec(s.grossRevenue);
     return {
       label: s.label,

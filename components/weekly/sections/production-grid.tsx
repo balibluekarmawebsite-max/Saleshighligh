@@ -35,6 +35,7 @@ export function ProductionGrid({
   addLabel,
   initial,
   action,
+  dropZeroRevenue = false,
 }: {
   property: string;
   week: string;
@@ -45,12 +46,23 @@ export function ProductionGrid({
   addLabel: string;
   initial: Row[];
   action: SaveAction;
+  /** Treat a row with zero revenue as a tentative booking: dim it and leave it
+   *  out of the Total, to match the report (which omits it entirely). */
+  dropZeroRevenue?: boolean;
 }) {
   const { rows, update, add, remove } = useRows(initial);
   const [state, formAction] = useFormState(action, null);
 
+  const isTentative = (row: Row): boolean =>
+    dropZeroRevenue && (toNum(row.grossRevenue) ?? 0) <= 0;
+
   const totalRevenue = sumCol(rows, "grossRevenue");
-  const totalRn = sumCol(rows, "rnSold");
+  // Tentative (zero-revenue) rows are excluded from the Total so the editor
+  // matches the report; their revenue is already 0, so only RN needs excluding.
+  const totalRn = rows.reduce(
+    (s, r) => s + (isTentative(r) ? 0 : toNum(r.rnSold) ?? 0),
+    0,
+  );
 
   return (
     <SectionCardShell>
@@ -60,7 +72,14 @@ export function ProductionGrid({
         <input type="hidden" name="rows" value={JSON.stringify(rows)} />
 
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <SectionHeading title={title} subtitle={subtitle} />
+          <div className="min-w-0">
+            <SectionHeading title={title} subtitle={subtitle} />
+            {dropZeroRevenue && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Sources with zero revenue are tentative bookings — shown dimmed and left off the report.
+              </p>
+            )}
+          </div>
           {!locked && <SaveButton state={state} />}
         </div>
 
@@ -87,16 +106,28 @@ export function ProductionGrid({
               {rows.map((row, i) => {
                 const rev = toNum(row.grossRevenue);
                 const rn = toNum(row.rnSold);
+                const tentative = isTentative(row);
                 return (
-                  <tr key={i} className="border-b border-border/60">
+                  <tr
+                    key={i}
+                    className={`border-b border-border/60${tentative ? " opacity-55" : ""}`}
+                    title={tentative ? "Tentative booking (no revenue) — left off the report" : undefined}
+                  >
                     <td className="py-1.5 pr-3">
-                      <GridCell
-                        value={row.label}
-                        onChange={(v) => update(i, "label", v)}
-                        locked={locked}
-                        fmt="text"
-                        placeholder={labelHeader}
-                      />
+                      <div className="flex items-center gap-2">
+                        <GridCell
+                          value={row.label}
+                          onChange={(v) => update(i, "label", v)}
+                          locked={locked}
+                          fmt="text"
+                          placeholder={labelHeader}
+                        />
+                        {tentative && (
+                          <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Tentative
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-1.5 px-3">
                       <GridCell
