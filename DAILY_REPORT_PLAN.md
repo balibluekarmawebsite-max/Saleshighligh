@@ -20,8 +20,9 @@ This plan covers:
    build first).
 3. An **ingestion pipeline** for the new daily VHP pulls (reusing the existing
    scrape-job + import infrastructure).
-4. The **calculations**, **report UI/export**, and **daily automation** that
-   come after the store exists.
+4. The **calculations**, **report UI/export** that come after the store exists.
+5. **Delivery automation** — email the report to owner + management and post it to
+   the management WhatsApp group, **every morning at 07:00** (§6).
 
 > **Separate from the weekly module.** The daily data comes from *different* VHP
 > pulls than weekly Sections B/C, at a finer (per-day) grain. We store it in its
@@ -173,7 +174,7 @@ feeds plug into the same machinery:
 
 ---
 
-## 5. Calculations, report, automation (after the store exists)
+## 5. Calculations & report (after the store exists)
 
 - **`lib/daily/calculations.ts`** — pure, tested functions: occupancy on hand,
   pickup/day, increasement %, ADR, RevPAR, net pickup (reservations −
@@ -182,12 +183,71 @@ feeds plug into the same machinery:
   daily chart, per-stay-date actuals, segment budget-vs-actual, and BEP, per
   property + period.
 - **Export** — Excel/PDF mirroring the sample workbook's layout.
-- **Automation** — a scheduled daily pull + build (cron) so the report is ready
-  each morning without manual work.
+
+Delivery of that report (email + WhatsApp, every morning) is §6.
 
 ---
 
-## 6. Step-by-step build order
+## 6. Delivery automation — email + WhatsApp (every morning, 07:00 WITA)
+
+One scheduled job at **07:00 Asia/Makassar (WITA)** runs: build the report →
+render a **PDF + a short text summary** → **email** it → **post it to WhatsApp** →
+record what was sent (so a retry never double-sends). We reuse the existing cron
+pattern — a systemd timer hitting a token-gated `/api/cron/...` endpoint, exactly
+like the weekly sync.
+
+### 6a. Email — free and simple
+
+Daily volume is tiny (one email, a handful of recipients), so this is effectively
+free several ways:
+
+| Option | Cost | Notes |
+| ------ | ---- | ----- |
+| **Nodemailer + our own SMTP** (bluekarmasecrets.com mailbox, or a Gmail app password) | **Free** | No third party, simplest. Gmail SMTP caps ~500/day — far above our need. **Recommended start.** |
+| **Brevo** (free plan) | **Free** | 300 emails/day over SMTP/API; small "Brevo" footer on the free tier; better deliverability than raw SMTP. |
+| **Resend** (free plan) | **Free** | 3,000/month (100/day) on a verified domain; clean developer API. |
+
+Recommendation: start with **Nodemailer + our domain SMTP** (zero dependencies,
+zero cost); move to Brevo/Resend only if mail lands in spam. The report goes as a
+**PDF attachment + an inline HTML summary**; recipients are a configurable list
+(owner + management).
+
+### 6b. WhatsApp group — the honest trade-off
+
+Posting into an **existing WhatsApp group** is the hard part. The **official**
+WhatsApp Cloud API does **not** let you post into a normal group: its new Groups
+API needs an Official Business Account, the group must be created/invited through
+the API, and it caps at ~8 participants — so it cannot post into your existing
+management group, and it is a paid platform beyond a small free tier.
+
+The only **free** way into your real management group is an **unofficial**
+WhatsApp-Web library:
+
+| Option | Cost | Posts to your group? | Trade-off |
+| ------ | ---- | -------------------- | --------- |
+| **Baileys** (`@whiskeysockets/baileys`) | **Free / open-source** | ✅ via group JID (`…@g.us`) | WebSocket, **no browser** needed — light on the VPS. **Recommended** of the two. |
+| **whatsapp-web.js** | **Free / open-source** | ✅ | Drives headless Chromium (heavier). |
+| **Official Cloud API** | Free tier then paid | ❌ existing groups | 1:1 template messages to individuals only. |
+
+**Important caveats for the unofficial route (Baileys):**
+
+- It is **against WhatsApp's Terms of Service** — a real risk the number gets
+  **banned**. Use a **dedicated secondary number** (a spare SIM/device), **never**
+  anyone's personal WhatsApp.
+- It links like WhatsApp Web: a **one-time QR scan** to pair, then a **session
+  file** kept on the server (re-scan if it logs out).
+- Keep it low-key: **one message a day**, a text summary + the report link (or a
+  single small PDF/image), to the one group only.
+
+**Pragmatic recommendation:** post a concise **text summary + link** (optionally
+the PDF) to the group via **Baileys on a dedicated number**, accepting the
+ToS/ban risk. If zero risk is required, the fallback is the official Cloud API
+sending **direct messages to each manager** (not the group) — more setup, has
+cost, and loses the single-group convenience.
+
+---
+
+## 7. Step-by-step build order
 
 | Phase | Deliverable | Needs |
 | ----- | ----------- | ----- |
@@ -196,14 +256,16 @@ feeds plug into the same machinery:
 | **D2 · Ingestion** | New scrape-job sections + `daily-sync-run` upserts + Excel fallback importer + audit. | D1 |
 | **D3 · Calculations** | `lib/daily/calculations.ts` + vitest tests (occ, pickup, pace, BEP). | D1 |
 | **D4 · Report + export** | Daily report dashboard pages + Excel/PDF export. | D2, D3 |
-| **D5 · Automation** | Scheduled daily pull + auto-build (cron). | D2–D4 |
+| **D5 · Email delivery** | Scheduled 07:00 build → PDF → email to owner + management (Nodemailer + our SMTP). | D4 |
+| **D6 · WhatsApp delivery** | Post the report summary + link to the management group via Baileys (dedicated number). | D5 |
+| **D7 · Hardening** | Idempotent send log (no double-send), retries, a failure alert if a morning send fails. | D5, D6 |
 
 We can start **D1 (schema/storage)** immediately on the shapes in §3, and refine
 once D0's real pull is in hand.
 
 ---
 
-## 7. Open questions (need your input before D1 is final)
+## 8. Open questions (need your input)
 
 1. **The new VHP pull(s):** please share a sample export of the data you'll pull
    for the daily report — especially the one with **reservation room nights** and
@@ -215,3 +277,10 @@ once D0's real pull is in hand.
 4. **Scope:** all three properties (BKDS/BKDU/BKV) from the start, or BKDU first?
 5. **History:** back-fill 2025 + 2026-to-date from the existing workbook, or start
    fresh from go-live?
+6. **Email recipients:** the owner + management addresses the 07:00 email should go
+   to, and which mailbox/SMTP we send *from* (our domain, or a Gmail app password).
+7. **WhatsApp:** can you provide a **dedicated secondary number** for the bot and
+   add it to the management group — and are you OK with the unofficial-library
+   **ToS/ban risk** (Baileys)? If not, we use official 1:1 messages to each manager
+   instead of the group.
+8. **Send time:** confirm **07:00 Asia/Makassar (WITA)** for the daily send.
