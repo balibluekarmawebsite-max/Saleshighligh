@@ -165,8 +165,15 @@ export function ChannelsGrid({
             <tfoot>
               <tr className="border-t-2 border-border font-semibold text-foreground">
                 <td className="py-2 pr-3">Total</td>
-                <td colSpan={12} />
-                <td className="py-2 px-2 text-right tabular-nums">{dispNum(grandYtd)}</td>
+                {MONTHS.map((m) => {
+                  const monthTotal = rows.reduce((s, r) => s + (toNum(r[m.key]) ?? 0), 0);
+                  return (
+                    <td key={m.key} className="py-2 px-1.5 text-right tabular-nums">
+                      {dispNum(monthTotal || null)}
+                    </td>
+                  );
+                })}
+                <td className="py-2 px-2 text-right tabular-nums">{dispNum(grandYtd || null)}</td>
                 <td className="py-2 px-2 text-right tabular-nums">{dispPct(rows.length ? 100 : null)}</td>
                 <td />
               </tr>

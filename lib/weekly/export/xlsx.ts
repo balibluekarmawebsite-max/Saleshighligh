@@ -497,7 +497,11 @@ function channelsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
       const row = ws.addRow([r.source, ...r.months, r.ytd, pc(r.share)]);
       row.eachCell((cell, col) => dataCell(cell, cols[col - 1]!));
     }
-    const total = ws.addRow(["Total", ...MONTHS.map(() => null), block.ytdTotal, block.rows.length ? 1 : null]);
+    const monthTotals = MONTHS.map((_, i) => {
+      const sum = block.rows.reduce((s, r) => s + (r.months[i] ?? 0), 0);
+      return sum || null;
+    });
+    const total = ws.addRow(["Total", ...monthTotals, block.ytdTotal || null, block.rows.length ? 1 : null]);
     for (let i = 0; i < cols.length; i++) totalCell(total.getCell(i + 1), cols[i]!);
   }
   setWidths(ws, cols);
