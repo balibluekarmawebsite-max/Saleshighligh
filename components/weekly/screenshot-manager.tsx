@@ -15,6 +15,40 @@ import { SCREENSHOT_CATEGORIES } from "@/lib/weekly/screenshots";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+/**
+ * Downscale + re-encode an image in the browser before upload, so a multi-MB
+ * screenshot (e.g. a Retina macOS screenshot) becomes a small (~a few hundred KB)
+ * JPEG. This keeps the upload POST well under every size/timeout limit between the
+ * browser and the app (CDN, reverse proxy, Next server-action body limit) — the
+ * usual reason a large screenshot "fails to upload" or "the server doesn't
+ * respond". Falls back to the original file on any failure, or if re-encoding
+ * wouldn't actually shrink it.
+ */
+async function compressImage(file: File, maxDim = 2000, quality = 0.85): Promise<File> {
+  if (typeof document === "undefined" || !file.type.startsWith("image/")) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", quality),
+    );
+    if (!blob || blob.size >= file.size) return file;
+    const name = file.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
+    return new File([blob], name, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 function ScreenshotCard({
   shot,
   locked,
@@ -205,14 +239,16 @@ export function ScreenshotManager({
     setError(null);
     const file = fileRef.current?.files?.[0];
     if (!file) { setError("Choose an image first."); return; }
-    const fd = new FormData();
-    fd.set("property", property);
-    fd.set("week", week);
-    fd.set("category", perBlock ? defaultCategory : category);
-    if (blockKey) fd.set("blockKey", blockKey);
-    fd.set("title", title);
-    fd.set("file", file);
     startTransition(async () => {
+      // Shrink large images in the browser first so the POST stays small.
+      const toSend = await compressImage(file);
+      const fd = new FormData();
+      fd.set("property", property);
+      fd.set("week", week);
+      fd.set("category", perBlock ? defaultCategory : category);
+      if (blockKey) fd.set("blockKey", blockKey);
+      fd.set("title", title);
+      fd.set("file", toSend);
       const r = await uploadWeeklyScreenshot(fd);
       if (!r?.ok) { setError(r?.message ?? "Upload failed — the server didn't respond. Try again, or re-sign in."); return; }
       setTitle("");
