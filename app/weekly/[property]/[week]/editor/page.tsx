@@ -246,14 +246,16 @@ export default async function WeeklyEditorPage({
     },
     {
       key: "J", code: "J", label: "Action Plan", done: data.completion.J,
-      node: withImport("action_plans", <PlansCards property={p} week={w} locked={readOnly} initial={data.actionPlans} />),
+      // Import lives inside each category card (per-category), not at the top.
+      node: <PlansCards property={p} week={w} locked={readOnly} initial={data.actionPlans} aiConfigured={aiConfigured} />,
     },
     {
       key: "OWNER", code: "★", label: "Owner Overview", done: data.completion.OWNER,
+      // Only the Repeater Guest table is imported here; Channel Mix syncs from
+      // Section C and Digital Ads is pulled live, so neither needs an importer.
       node: (
         <div className="space-y-4">
           {imp("owner_repeater")}
-          {imp("owner_channel_mix")}
           <OwnerOverview
             property={p} week={w} locked={readOnly}
             repeaters={data.ownerRepeaters} mix={data.ownerChannelMix}

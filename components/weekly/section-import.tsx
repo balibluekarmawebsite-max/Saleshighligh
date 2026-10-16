@@ -34,6 +34,7 @@ export function SectionImport({
   aiConfigured,
   defaultYear,
   defaultPlatform,
+  forceCategory,
 }: {
   property: string;
   week: string;
@@ -42,6 +43,13 @@ export function SectionImport({
   aiConfigured: boolean;
   defaultYear?: number;
   defaultPlatform?: string;
+  /**
+   * When set, every imported row's `category` is overwritten with this value
+   * before preview/apply — used for the per-category Action Plan cards so a file
+   * dropped on "Offline Agent" imports into that category only (and replaces only
+   * it). An empty string targets the uncategorized bucket.
+   */
+  forceCategory?: string;
 }) {
   const section = getAiImportSection(sectionId);
   const [open, setOpen] = useState(false);
@@ -61,6 +69,10 @@ export function SectionImport({
 
   const spec = section.csvTemplateId ? getImportSpec(section.csvTemplateId) : undefined;
   const canProcessOffline = mode === "file" && DETERMINISTIC_SECTION_IDS.has(section.id);
+  // The category is fixed by the card, so don't preview it as a column.
+  const previewFields =
+    forceCategory !== undefined ? section.fields.filter((fl) => fl.key !== "category") : section.fields;
+  const headingText = forceCategory !== undefined ? "Import plans from a file" : "Import this section from a file";
 
   function reset() {
     setRows(null);
@@ -100,7 +112,10 @@ export function SectionImport({
           setRows(null);
           return;
         }
-        setRows(data.rows ?? []);
+        const parsed = data.rows ?? [];
+        // Per-category Action Plan card: force every row into this card's
+        // category so the import targets (and replaces) only that category.
+        setRows(forceCategory !== undefined ? parsed.map((r) => ({ ...r, category: forceCategory })) : parsed);
         if (data.note) setError(data.note);
       } catch {
         setError("Could not reach the import service.");
@@ -151,7 +166,7 @@ export function SectionImport({
       >
         <span className="inline-flex items-center gap-2 text-sm font-medium text-foreground">
           <Upload className="h-4 w-4 text-primary" />
-          Import this section from a file
+          {headingText}
           <span className="font-normal text-muted-foreground">— CSV, Excel{aiConfigured ? " or a screenshot" : ""}</span>
         </span>
         <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open ? "" : "-rotate-90")} />
@@ -272,7 +287,7 @@ export function SectionImport({
               <table className="w-full text-xs">
                 <thead className="text-left text-muted-foreground">
                   <tr className="border-b border-border">
-                    {section.fields.map((fl) => (
+                    {previewFields.map((fl) => (
                       <th key={fl.key} className="px-2 py-1.5 font-medium">{fl.label}</th>
                     ))}
                   </tr>
@@ -280,7 +295,7 @@ export function SectionImport({
                 <tbody>
                   {rows.slice(0, 12).map((row, i) => (
                     <tr key={i} className="border-b border-border/60">
-                      {section.fields.map((fl) => (
+                      {previewFields.map((fl) => (
                         <td key={fl.key} className="px-2 py-1 text-foreground">{row[fl.key] ? row[fl.key] : "—"}</td>
                       ))}
                     </tr>

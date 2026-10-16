@@ -6,6 +6,7 @@ import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AiTextActions } from "@/components/weekly/ai-text-actions";
+import { SectionImport } from "@/components/weekly/section-import";
 import { saveActionPlanCategory } from "@/lib/weekly/editor-actions";
 import { ACTION_PLAN_CATEGORIES } from "@/lib/weekly/editor-data";
 import {
@@ -75,6 +76,7 @@ function CategoryCard({
   category,
   label,
   initial,
+  aiConfigured,
 }: {
   property: string;
   week: string;
@@ -82,6 +84,7 @@ function CategoryCard({
   category: string;
   label: string;
   initial: Row[];
+  aiConfigured: boolean;
 }) {
   const [rows, setRows] = useState<PlanRow[]>(() => seedRows(initial));
   const [state, formAction] = useFormState(saveActionPlanCategory, null);
@@ -118,6 +121,16 @@ function CategoryCard({
         <h3 className="text-sm font-semibold text-foreground">{label}</h3>
         {!locked && <SaveButton state={state} />}
       </div>
+
+      {/* Import a file straight into THIS category (replaces only this category). */}
+      <SectionImport
+        property={property}
+        week={week}
+        locked={locked}
+        sectionId="action_plans"
+        aiConfigured={aiConfigured}
+        forceCategory={category}
+      />
 
       {rows.map((row) => (
         <div
@@ -221,11 +234,13 @@ export function PlansCards({
   week,
   locked,
   initial,
+  aiConfigured,
 }: {
   property: string;
   week: string;
   locked: boolean;
   initial: Row[];
+  aiConfigured: boolean;
 }) {
   const cards = buildCategoryCards(initial);
 
@@ -234,7 +249,7 @@ export function PlansCards({
       <div className="mb-4">
         <SectionHeading
           title="J · Next Week Action Plan"
-          subtitle="One section per category — each is saved on its own, so different owners can edit their category without overwriting each other."
+          subtitle="One section per category — each is saved on its own, and you can import a file straight into a category. Different owners can edit their category without overwriting each other."
         />
       </div>
 
@@ -248,6 +263,7 @@ export function PlansCards({
             category={c.category}
             label={c.label}
             initial={c.rows}
+            aiConfigured={aiConfigured}
           />
         ))}
       </div>
