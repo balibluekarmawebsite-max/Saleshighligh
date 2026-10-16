@@ -150,22 +150,24 @@ export async function buildWeeklyDocx(
 
   if (show("overview")) {
     children.push(sectionHeading("A · Sales & Marketing Overview"));
+    const withShots = show("screenshots");
     for (const b of overview) {
       children.push(subHeading(b.heading));
+      // Screenshots attached to this block render inline here (image + summary),
+      // like the Excel sheet; standalone ones stay in the appendix below. Only
+      // included when the Screenshots section is selected for export.
+      const blockShots = withShots ? screenshots.filter((s) => s.blockKey === b.key) : [];
       if (b.body && b.body.trim()) {
         children.push(...prose(b.body));
-      } else {
-        // No narrative typed — fall back to the summaries of the screenshots
-        // attached to this block (e.g. the Booking.com AI summary) so the
-        // heading carries real content instead of "not written for this week".
-        const shotSummaries = screenshots
-          .filter((s) => s.blockKey === b.key && s.summary && s.summary.trim())
-          .map((s) => s.summary as string);
-        if (shotSummaries.length > 0) {
-          for (const sum of shotSummaries) children.push(...prose(sum));
-        } else {
-          children.push(...prose(null));
-        }
+      } else if (blockShots.length === 0) {
+        // Only when the block has no text AND no screenshots to carry it: the
+        // "not written for this week" placeholder.
+        children.push(...prose(null));
+      }
+      for (const s of blockShots) {
+        const img = await imageRunFor(s.imageKey);
+        if (img) children.push(new Paragraph({ spacing: { after: 80 }, children: [img] }));
+        if (s.summary && s.summary.trim()) children.push(...prose(s.summary));
       }
     }
   }
@@ -274,13 +276,25 @@ export async function buildWeeklyDocx(
     }
   }
 
-  if (show("screenshots") && screenshots.length > 0) {
-    children.push(sectionHeading("SM · Screenshots & Summaries"));
-    for (const s of screenshots) {
-      children.push(subHeading(`${screenshotCategoryLabel(s.category)}${s.title ? ` · ${s.title}` : ""}`));
-      const img = await imageRunFor(s.imageKey);
-      if (img) children.push(new Paragraph({ spacing: { after: 80 }, children: [img] }));
-      children.push(...prose(s.summary));
+  if (show("screenshots")) {
+    // Block-attached screenshots already render inline under their Overview
+    // block (when the Overview section is included), so the appendix only shows
+    // the rest — standalone screenshots, plus block-attached ones when Overview
+    // was excluded, so none are ever dropped or duplicated.
+    const blockKeys = new Set(overview.map((b) => b.key));
+    const inlineShown = show("overview");
+    const standalone = screenshots.filter((s) => {
+      const attached = !!s.blockKey && blockKeys.has(s.blockKey);
+      return !attached || !inlineShown;
+    });
+    if (standalone.length > 0) {
+      children.push(sectionHeading("SM · Screenshots & Summaries"));
+      for (const s of standalone) {
+        children.push(subHeading(`${screenshotCategoryLabel(s.category)}${s.title ? ` · ${s.title}` : ""}`));
+        const img = await imageRunFor(s.imageKey);
+        if (img) children.push(new Paragraph({ spacing: { after: 80 }, children: [img] }));
+        children.push(...prose(s.summary));
+      }
     }
   }
 

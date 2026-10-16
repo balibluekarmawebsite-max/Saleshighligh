@@ -468,7 +468,14 @@ export async function getWeeklyExportData(
       // Group by the fixed department order (unknown/blank categories last);
       // Array.sort is stable, so entry order (sortOrder) is kept within a group.
       actionPlans: [...report.actionPlans]
-        .sort((a, b) => actionPlanCategoryRank(a.category) - actionPlanCategoryRank(b.category))
+        .sort((a, b) => {
+          // Fixed categories in report order first; same-rank rows (legacy /
+          // uncategorized all rank last) grouped by category name so they stay
+          // contiguous and deterministic. Ties (same category) keep DB order
+          // (sortOrder) via the stable sort.
+          const r = actionPlanCategoryRank(a.category) - actionPlanCategoryRank(b.category);
+          return r !== 0 ? r : (a.category ?? "").localeCompare(b.category ?? "");
+        })
         .map((a) => ({
           category: a.category,
           plan: a.plan,

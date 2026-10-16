@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { WeeklyReportStatus } from "@prisma/client";
+import { Prisma, WeeklyReportStatus } from "@prisma/client";
 
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { logAudit } from "@/lib/audit";
@@ -300,7 +300,6 @@ export async function saveSection(
         break;
       }
       case "action_plans": {
-        await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid } });
         const data = rows
           .filter((r) => str(r.plan))
           .map((r, i) => ({
@@ -312,6 +311,17 @@ export async function saveSection(
             remark: str(r.remark),
             sortOrder: i,
           }));
+        // Replace only the categories present in this submission, so a save
+        // here (the Department Inputs page) never wipes a category that was
+        // entered through the per-category editor — matching saveActionPlanCategory.
+        const cats = Array.from(new Set(data.map((d) => d.category)));
+        const nonNull = cats.filter((c): c is string => c != null);
+        const orClauses: Prisma.WeeklyActionPlanWhereInput[] = [];
+        if (nonNull.length > 0) orClauses.push({ category: { in: nonNull } });
+        if (cats.includes(null)) orClauses.push({ category: null });
+        if (orClauses.length > 0) {
+          await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid, OR: orClauses } });
+        }
         if (data.length) await tx.weeklyActionPlan.createMany({ data });
         break;
       }

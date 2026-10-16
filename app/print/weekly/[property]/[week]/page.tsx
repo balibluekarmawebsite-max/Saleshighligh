@@ -79,6 +79,15 @@ export default async function WeeklyPrintPage({
   const { property, week, overview, monthly, segments, rateCodes, channels, social, ads, screenshots, departments } = data;
   const activities = [...departments.sales, ...departments.ecommerce];
 
+  // Block-attached screenshots render inline under their Overview block; the
+  // appendix shows the rest (standalone, plus block-attached ones when the
+  // Overview section was excluded) so none are dropped or duplicated.
+  const overviewBlockKeys = new Set(overview.map((b) => b.key));
+  const standaloneShots = screenshots.filter((s) => {
+    const attached = !!s.blockKey && overviewBlockKeys.has(s.blockKey);
+    return !attached || !show("overview");
+  });
+
   return (
     <div className="print-root">
       <style>{PRINT_CSS}</style>
@@ -93,23 +102,29 @@ export default async function WeeklyPrintPage({
       {show("overview") && (
         <Section title="A · Sales &amp; Marketing Overview">
           {overview.map((b) => {
-            // When no narrative was typed, fall back to the summaries of the
-            // screenshots attached to this block so the heading carries real
-            // content instead of "not written for this week".
-            const shotSummaries =
-              b.body && b.body.trim()
-                ? []
-                : screenshots
-                    .filter((s) => s.blockKey === b.key && s.summary && s.summary.trim())
-                    .map((s) => s.summary as string);
+            // Screenshots attached to this block render inline here (image +
+            // summary), like the Excel sheet; standalone ones stay in the
+            // appendix. Only when the Screenshots section is included.
+            const blockShots = show("screenshots")
+              ? screenshots.filter((s) => s.blockKey === b.key)
+              : [];
+            const hasBody = !!(b.body && b.body.trim());
             return (
               <div key={b.key}>
                 <h3>{b.heading}</h3>
-                {shotSummaries.length > 0 ? (
-                  shotSummaries.map((sum, i) => <Prose key={i} text={sum} />)
-                ) : (
-                  <Prose text={b.body} />
-                )}
+                {/* Body, or the placeholder only when nothing else carries the block. */}
+                {(hasBody || blockShots.length === 0) && <Prose text={b.body} />}
+                {blockShots.map((s) => (
+                  <figure key={s.id} className="shot">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={s.imageUrl} alt={s.title || screenshotCategoryLabel(s.category)} />
+                    {s.summary ? (
+                      <figcaption>
+                        <span className="prose">{s.summary}</span>
+                      </figcaption>
+                    ) : null}
+                  </figure>
+                ))}
               </div>
             );
           })}
@@ -211,9 +226,9 @@ export default async function WeeklyPrintPage({
         </Section>
       )}
 
-      {show("screenshots") && screenshots.length > 0 && (
+      {show("screenshots") && standaloneShots.length > 0 && (
         <Section title="SM · Screenshots &amp; Summaries">
-          {screenshots.map((s) => (
+          {standaloneShots.map((s) => (
             <figure key={s.id} className="shot">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={s.imageUrl} alt={s.title || screenshotCategoryLabel(s.category)} />

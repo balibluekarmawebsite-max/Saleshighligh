@@ -721,8 +721,55 @@ function ownerSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
   const mt = ws.addRow(["Total", d.owner.channelMixTotals.rnSold, money(d.owner.channelMixTotals.arr), money(d.owner.channelMixTotals.revenue), d.owner.channelMix.length ? 1 : null]);
   for (let i = 0; i < mixCols.length; i++) totalCell(mt.getCell(i + 1), mixCols[i]!);
 
-  for (let i = 0; i < 5; i++) ws.getColumn(i + 1).width = mixCols[i]!.w;
-  ws.getColumn(1).width = 34;
+  ws.addRow([]);
+  ws.addRow([]);
+
+  // 3 · Digital Ads & ROAS — mirrors the dashboard's Owner Overview snapshot
+  // (pulled live from the section A ads data). Previously the sheet stopped at
+  // the channel mix, so it looked out of sync with the on-screen owner view.
+  titleRow(ws, "3 · Digital Ads & ROAS", 8, 12);
+  if (d.ads.hasData && d.ads.blended) {
+    if (d.ads.summary) {
+      const head = ws.addRow([d.ads.summary.headline]);
+      head.getCell(1).font = { name: FONT, size: 11, color: { argb: INK } };
+      head.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      ws.mergeCells(head.number, 1, head.number, 8);
+    }
+    // Same KPI cards + Google-vs-Meta + recommendations as the A-Overview sheet.
+    adsDashboardBlock(ws, d.ads, 8);
+    // Campaigns table — the dashboard owner view lists these under the ads block.
+    if (d.ads.campaigns.length > 0) {
+      ws.addRow([]);
+      const cTitle = ws.addRow(["Campaigns"]);
+      cTitle.getCell(1).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
+      const campCols: Col[] = [
+        { h: "Campaign", w: 30, a: "L" },
+        { h: "Platform", w: 13, a: "L" },
+        { h: "Impr.", w: 14, a: "R", f: NUM },
+        { h: "Clicks", w: 12, a: "R", f: NUM },
+        { h: "Spend", w: 15, a: "R", f: MONEY },
+        { h: "Conv.", w: 10, a: "R", f: NUM },
+        { h: "ROAS", w: 10, a: "R", f: '0.00"×"' },
+      ];
+      const ch = ws.addRow(campCols.map((c) => c.h));
+      ch.eachCell((cell, col) => headerCell(cell, campCols[col - 1]?.a ?? "L"));
+      for (const c of d.ads.campaigns) {
+        const row = ws.addRow([
+          c.name, c.platformLabel, c.impressions, c.clicks, money(c.spend), c.conversions, c.roas,
+        ]);
+        row.eachCell((cell, col) => dataCell(cell, campCols[col - 1]!));
+      }
+    }
+  } else {
+    const none = ws.addRow(["No ads data for this week yet — add it in section A · Sales & Marketing Overview."]);
+    none.getCell(1).font = { name: FONT, italic: true, size: 11, color: { argb: GREY } };
+    none.getCell(1).alignment = { wrapText: true, vertical: "top" };
+    ws.mergeCells(none.number, 1, none.number, 8);
+  }
+
+  // Widths cover all three sections — 8 columns for the ads KPI card grid.
+  const ownerWidths = [30, 13, 14, 18, 15, 12, 11, 10];
+  ownerWidths.forEach((w, i) => (ws.getColumn(i + 1).width = w));
 }
 
 /** Screenshots not tied to an Overview section (standalone / legacy) — the

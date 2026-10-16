@@ -226,7 +226,16 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
           startLabel: str(r.startLabel), deadlineLabel: str(r.deadlineLabel), remark: str(r.remark), sortOrder: i,
         }));
         if (data.length === 0) { written = 0; break; }
-        await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid } });
+        // Replace ONLY the categories present in this upload, so importing one
+        // category's plans never wipes another category a different owner owns.
+        // (Prisma `in` ignores NULL, so the uncategorized bucket is matched on
+        // its own branch.)
+        const cats = Array.from(new Set(data.map((r) => r.category)));
+        const nonNull = cats.filter((c): c is string => c != null);
+        const orClauses: Prisma.WeeklyActionPlanWhereInput[] = [];
+        if (nonNull.length > 0) orClauses.push({ category: { in: nonNull } });
+        if (cats.includes(null)) orClauses.push({ category: null });
+        await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid, OR: orClauses } });
         await tx.weeklyActionPlan.createMany({ data });
         written = data.length;
         break;
