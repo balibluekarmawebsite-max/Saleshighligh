@@ -324,7 +324,7 @@ function adsDashboardBlock(ws: ExcelJS.Worksheet, ads: WeeklyAdsData, ncol: numb
       { h: "Spend", w: 16, a: "R", f: MONEY },
       { h: "Revenue", w: 16, a: "R", f: MONEY },
       { h: "Conv.", w: 10, a: "R", f: NUM },
-      { h: "ROAS", w: 10, a: "R", f: "0.00" },
+      { h: "ROAS", w: 10, a: "R", f: '0.00"×"' },
     ];
     const vh = ws.addRow(vcols.map((c) => c.h));
     vh.eachCell((cell, col) => headerCell(cell, vcols[col - 1]?.a ?? "L"));

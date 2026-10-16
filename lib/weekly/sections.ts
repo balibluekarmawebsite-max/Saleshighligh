@@ -90,17 +90,9 @@ export const SECTION_SPECS: SectionSpec[] = [
       { key: "participants", label: "Participants", type: "textarea" },
     ],
   },
-  {
-    id: "action_plans",
-    title: "J · Next Week Action Plan",
-    description: "Plans and owners for next week",
-    primaryKey: "plan",
-    fields: [
-      { key: "category", label: "Category", type: "text" },
-      { key: "plan", label: "Plan", type: "textarea" },
-      { key: "startLabel", label: "Start", type: "text" },
-      { key: "deadlineLabel", label: "Deadline", type: "text" },
-      { key: "remark", label: "Remark", type: "textarea" },
-    ],
-  },
+  // J · Next Week Action Plan is intentionally NOT a Department Inputs section:
+  // it is edited only through the per-category Section J editor (PlansCards +
+  // saveActionPlanCategory), so each category saves independently and one owner
+  // can never overwrite another's category. A single flat editor here would
+  // replace-all and defeat that guarantee.
 ];

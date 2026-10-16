@@ -157,18 +157,26 @@ export async function buildWeeklyDocx(
       // like the Excel sheet; standalone ones stay in the appendix below. Only
       // included when the Screenshots section is selected for export.
       const blockShots = withShots ? screenshots.filter((s) => s.blockKey === b.key) : [];
-      if (b.body && b.body.trim()) {
-        children.push(...prose(b.body));
-      } else if (blockShots.length === 0) {
-        // Only when the block has no text AND no screenshots to carry it: the
-        // "not written for this week" placeholder.
-        children.push(...prose(null));
-      }
+      const hasBody = !!(b.body && b.body.trim());
+      if (hasBody) children.push(...prose(b.body));
+      // Render inline screenshots, tracking whether any actually produced output
+      // (an image that failed to embed + no summary would otherwise leave an
+      // empty heading).
+      let renderedShot = false;
       for (const s of blockShots) {
         const img = await imageRunFor(s.imageKey);
-        if (img) children.push(new Paragraph({ spacing: { after: 80 }, children: [img] }));
-        if (s.summary && s.summary.trim()) children.push(...prose(s.summary));
+        if (img) {
+          children.push(new Paragraph({ spacing: { after: 80 }, children: [img] }));
+          renderedShot = true;
+        }
+        if (s.summary && s.summary.trim()) {
+          children.push(...prose(s.summary));
+          renderedShot = true;
+        }
       }
+      // The "not written for this week" placeholder only when the block has no
+      // text AND nothing else carried it.
+      if (!hasBody && !renderedShot) children.push(...prose(null));
     }
   }
 
