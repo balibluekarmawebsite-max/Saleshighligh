@@ -13,6 +13,7 @@ import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { isAdsSyncConfigured, syncAdsIntoReport } from "@/lib/weekly/ads-sync";
 import { isLockedStatus } from "@/lib/weekly/editor-data";
+import { enqueueWeeklyScrapeJobs, isScrapeQueueConfigured } from "@/lib/weekly/jobs";
 import { getPropertyBlogId, isMetricoolConfigured } from "@/lib/weekly/metricool";
 import { syncMetricoolIntoReport, type MetricoolSyncResult } from "@/lib/weekly/metricool-sync";
 import { currentWeekId, weekMeta } from "@/lib/weekly/week";
@@ -23,6 +24,8 @@ export interface WeeklyAutoSyncPropertyResult {
   skippedLocked: boolean;
   metricoolRows: number | null;
   adsRows: number | null;
+  /** Section codes whose VHP scrape job was queued for the poller (B / C). */
+  scrapeQueued: string[];
   errors: string[];
 }
 
@@ -31,6 +34,7 @@ export interface WeeklyAutoSyncResult {
   ranAt: string;
   metricoolConfigured: boolean;
   adsConfigured: boolean;
+  scrapeQueueConfigured: boolean;
   results: WeeklyAutoSyncPropertyResult[];
 }
 
@@ -123,6 +127,7 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
 
   const metricoolConfigured = isMetricoolConfigured();
   const adsConfigured = isAdsSyncConfigured();
+  const scrapeQueueConfigured = isScrapeQueueConfigured();
 
   const props = await prisma.property.findMany({ select: { id: true, code: true }, orderBy: { code: "asc" } });
   const results: WeeklyAutoSyncPropertyResult[] = [];
@@ -134,6 +139,7 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
       skippedLocked: false,
       metricoolRows: null,
       adsRows: null,
+      scrapeQueued: [],
       errors: [],
     };
 
@@ -172,6 +178,13 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
       r.metricoolRows = outcome.metricoolRows;
       r.adsRows = outcome.adsRows;
       r.errors.push(...outcome.errors);
+
+      // Queue the VHP scrape jobs (Sections B & C) so the office-PC poller fills
+      // them automatically, the same trigger that pulls ads + social.
+      if (scrapeQueueConfigured) {
+        const q = await enqueueWeeklyScrapeJobs(prop.code, week);
+        r.scrapeQueued = q.created;
+      }
     } catch (e) {
       r.errors.push(msg(e));
     }
@@ -184,6 +197,7 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
     ranAt: new Date().toISOString(),
     metricoolConfigured,
     adsConfigured,
+    scrapeQueueConfigured,
     results,
   };
 
@@ -194,6 +208,7 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
       skippedLocked: x.skippedLocked,
       metricoolRows: x.metricoolRows,
       adsRows: x.adsRows,
+      scrapeQueued: x.scrapeQueued,
       errors: x.errors,
     })),
   }).catch(() => {});

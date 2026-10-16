@@ -15,6 +15,7 @@ import {
 } from "@/lib/weekly/editor-data";
 import { saveAnnualBudget } from "@/lib/weekly/annual-budget";
 import { saveAnnualLastYear } from "@/lib/weekly/annual-lastyear";
+import { enqueueWeeklyScrapeJobs, isScrapeQueueConfigured } from "@/lib/weekly/jobs";
 import { syncReportSources } from "@/lib/weekly/weekly-sync-run";
 import { weekMeta } from "@/lib/weekly/week";
 
@@ -709,6 +710,15 @@ export async function createWeek(formData: FormData): Promise<void> {
     // per-request — so it cannot hang creation indefinitely. The submit button
     // (CreateWeekButton) shows a pending spinner for the short wait.
     await syncReportSources(created.id, prop.id, property, week).catch(() => {});
+
+    // Queue the VHP scrape jobs (Sections B & C) for the office-PC poller, so a
+    // freshly-created report has its PMS data pulled automatically too, not just
+    // ads + social. Best-effort; a missing poller just leaves the jobs queued.
+    if (isScrapeQueueConfigured()) {
+      await enqueueWeeklyScrapeJobs(property, week, {
+        requestedById: user && user.id !== "system" ? user.id : null,
+      }).catch(() => {});
+    }
     revalidatePath(`/weekly/${property}/${week}/editor`);
   }
   revalidatePath(`/weekly/${property}/${week}/reports`);

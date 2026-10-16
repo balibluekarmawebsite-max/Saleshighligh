@@ -8,9 +8,18 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { weekMeta } from "@/lib/weekly/week";
 
 /** Minutes a job may sit "running" before it's treated as crashed and re-queued. */
 const STALE_LEASE_MS = 30 * 60 * 1000;
+
+/**
+ * True when the VHP scrape queue is wired up (a poller token is set), so it makes
+ * sense to auto-queue scrape jobs. Without a poller, queued jobs would never run.
+ */
+export function isScrapeQueueConfigured(): boolean {
+  return !!(process.env.VHP_JOBS_TOKEN || process.env.IMPORT_API_TOKEN);
+}
 
 export type JobTokenCheck = { ok: true } | { ok: false; status: number; error: string };
 
@@ -186,6 +195,59 @@ export async function createScrapeJob(
     select: { id: true },
   });
   return { ok: true, id: job.id };
+}
+
+/**
+ * Auto-queue the VHP scrape jobs for a week — Section B (the target month) and
+ * Section C (the week's Fri–Thu date range) — so the always-on office-PC poller
+ * fills those sections without anyone clicking "Request Scrape". Idempotent: a
+ * section is skipped when an unfinished job (queued/running) for that exact
+ * property + section + week already exists, so re-running the Friday auto-sync
+ * or re-creating the report never piles up duplicates. Best-effort; never throws.
+ */
+export async function enqueueWeeklyScrapeJobs(
+  propertyCode: string,
+  weekId: string,
+  opts: { requestedById?: string | null } = {},
+): Promise<{ created: string[]; skipped: string[] }> {
+  const created: string[] = [];
+  const skipped: string[] = [];
+  const code = propertyCode.trim().toUpperCase();
+  const meta = weekMeta(weekId);
+  if (!meta) return { created, skipped: ["B", "C"] };
+
+  const day = (d: Date): string => d.toISOString().slice(0, 10);
+  const weekEndingStr = day(meta.endDate);
+  const weekEndingDate = new Date(`${weekEndingStr}T00:00:00.000Z`);
+  const start = day(meta.startDate);
+  const month = weekEndingStr.slice(0, 7); // YYYY-MM from the Thursday end
+
+  for (const section of ["B", "C"] as const) {
+    try {
+      const existing = await prisma.scrapeJob.findFirst({
+        where: { property: code, section, weekEnding: weekEndingDate, status: { in: ["queued", "running"] } },
+        select: { id: true },
+      });
+      if (existing) {
+        skipped.push(section);
+        continue;
+      }
+      const res = await createScrapeJob({
+        property: code,
+        section,
+        month: section === "B" ? month : null,
+        start: section === "C" ? start : null,
+        end: section === "C" ? weekEndingStr : null,
+        weekEnding: weekEndingStr,
+        requestedById: opts.requestedById ?? null,
+      });
+      if (res.ok) created.push(section);
+      else skipped.push(section);
+    } catch {
+      skipped.push(section);
+    }
+  }
+  return { created, skipped };
 }
 
 export interface ScrapeJobView {

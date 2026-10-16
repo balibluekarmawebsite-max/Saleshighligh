@@ -331,9 +331,13 @@ subscription. Leave it unset and the "Generate with AI" buttons simply show
 The app exposes `GET /api/cron/weekly-sync`, which — for every property — makes
 sure the current reporting week's report exists (creating a DRAFT if the team
 hasn't yet), then pulls **Metricool** (Instagram + Facebook → Section H) and
-**ads/ROAS** (when each is configured). It's resilient: one property failing
-never stops the others, and a locked (approved/exported) report is left
-untouched.
+**ads/ROAS** (when each is configured). When the VHP scrape queue is configured
+(§11), it also **queues the Sections B & C scrape jobs** for the office-PC
+poller, so the PMS data is pulled on the same schedule — nobody has to click
+"Request Scrape". It's resilient: one property failing never stops the others,
+and a locked (approved/exported) report is left untouched. The same pulls (ads,
+social, and the B/C scrape jobs) also run automatically when a report is created
+by hand, so a new report prepares its data without any manual sync.
 
 > **Deploy this code first.** The `/api/cron/weekly-sync` route ships in this
 > commit — make sure the server is running a build that includes it (see §8.7:
