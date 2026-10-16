@@ -11,6 +11,7 @@ import { OverviewSection } from "@/components/weekly/sections/overview-section";
 import { OwnerOverview } from "@/components/weekly/sections/owner-overview";
 import { PlansCards } from "@/components/weekly/sections/plans-cards";
 import { ProductionGrid } from "@/components/weekly/sections/production-grid";
+import { SectionImport } from "@/components/weekly/section-import";
 import { SocialSection } from "@/components/weekly/sections/social-section";
 import { TrainingTable } from "@/components/weekly/sections/training-table";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
@@ -23,6 +24,7 @@ import {
   setStatus,
 } from "@/lib/weekly/editor-actions";
 import { getWeeklyFullEditorData } from "@/lib/weekly/editor-data";
+import { isGroqConfigured } from "@/lib/weekly/import/ai";
 import { isMetricoolConfigured, getPropertyBlogId } from "@/lib/weekly/metricool";
 import { getMetricoolSyncMeta } from "@/lib/weekly/metricool-actions";
 import { getWeeklyScreenshots } from "@/lib/weekly/screenshot-data";
@@ -113,6 +115,27 @@ export default async function WeeklyEditorPage({
   const metricoolConfigured = isMetricoolConfigured();
   const metricoolBlogId = await getPropertyBlogId(p.toUpperCase());
   const metricoolMeta = metricoolConfigured ? await getMetricoolSyncMeta(p, w) : null;
+  const aiConfigured = isGroqConfigured();
+
+  // Per-section inline importer (upload a file / screenshot right here, no need
+  // to switch to the Data Import menu). `applyAiImport` revalidates this route,
+  // so the grid under it refreshes with the imported rows.
+  const imp = (sectionId: string, defaultYear?: number) => (
+    <SectionImport
+      property={p}
+      week={w}
+      locked={readOnly}
+      sectionId={sectionId}
+      aiConfigured={aiConfigured}
+      defaultYear={defaultYear}
+    />
+  );
+  const withImport = (sectionId: string, node: React.ReactNode, defaultYear?: number) => (
+    <div className="space-y-4">
+      {imp(sectionId, defaultYear)}
+      {node}
+    </div>
+  );
 
   const sections: EditorSectionTab[] = [
     {
@@ -130,11 +153,12 @@ export default async function WeeklyEditorPage({
     },
     {
       key: "B", code: "B", label: "YTD Actual & Forecast", done: data.completion.B,
-      node: <MonthlyGrid property={p} week={w} locked={readOnly} initial={data.monthly} />,
+      node: withImport("monthly", <MonthlyGrid property={p} week={w} locked={readOnly} initial={data.monthly} />),
     },
     {
       key: "C", code: "C", label: "Agent Production", done: data.completion.C,
-      node: (
+      node: withImport(
+        "segment",
         <ProductionGrid
           property={p} week={w} locked={readOnly}
           title="C · Weekly Agent Production"
@@ -142,48 +166,53 @@ export default async function WeeklyEditorPage({
           labelHeader="Agent / Source" addLabel="Add agent"
           initial={data.segments} action={saveSegments}
           dropZeroRevenue
-        />
+        />,
       ),
     },
     {
       key: "D", code: "D", label: "Rate Code / Promotion", done: data.completion.D,
-      node: (
+      node: withImport(
+        "ratecode",
         <ProductionGrid
           property={p} week={w} locked={readOnly}
           title="D · Rate Code / Promotion"
           subtitle="Production by rate code / promotion. ARR and % share are calculated."
           labelHeader="Rate Code / Promotion" addLabel="Add rate code"
           initial={data.rateCodes} action={saveRateCodes}
-        />
+        />,
       ),
     },
     {
       key: "EF", code: "E/F", label: "Channel Inside", done: data.completion.EF,
-      node: (
+      node: withImport(
+        "channel",
         <ChannelsGrid
           property={p} week={w} locked={readOnly}
           defaultYear={week.year} years={data.channelYears} byYear={data.channelsByYear}
-        />
+        />,
+        week.year,
       ),
     },
     {
       key: "G", code: "G", label: "Sales Activity", done: data.completion.G,
-      node: (
+      node: withImport(
+        "sales",
         <ActivitiesCards
           property={p} week={w} locked={readOnly} sectionId="sales"
           title="G · Sales Activity" subtitle="Add each activity with its date and notes."
           subjectLabel="Subject" addLabel="Add activity" initial={data.sales}
-        />
+        />,
       ),
     },
     {
       key: "G2", code: "G2", label: "E-commerce", done: data.completion.G2,
-      node: (
+      node: withImport(
+        "ecommerce",
         <ActivitiesCards
           property={p} week={w} locked={readOnly} sectionId="ecommerce"
           title="G2 · E-commerce Activities" subtitle="Add each activity with its date and notes."
           subjectLabel="Task" addLabel="Add activity" initial={data.ecommerce}
-        />
+        />,
       ),
     },
     {
@@ -213,20 +242,24 @@ export default async function WeeklyEditorPage({
     },
     {
       key: "I", code: "I", label: "Training", done: data.completion.I,
-      node: <TrainingTable property={p} week={w} locked={readOnly} initial={data.trainings} />,
+      node: withImport("training", <TrainingTable property={p} week={w} locked={readOnly} initial={data.trainings} />),
     },
     {
       key: "J", code: "J", label: "Action Plan", done: data.completion.J,
-      node: <PlansCards property={p} week={w} locked={readOnly} initial={data.actionPlans} />,
+      node: withImport("action_plans", <PlansCards property={p} week={w} locked={readOnly} initial={data.actionPlans} />),
     },
     {
       key: "OWNER", code: "★", label: "Owner Overview", done: data.completion.OWNER,
       node: (
-        <OwnerOverview
-          property={p} week={w} locked={readOnly}
-          repeaters={data.ownerRepeaters} mix={data.ownerChannelMix}
-          segments={data.segments} ads={ads}
-        />
+        <div className="space-y-4">
+          {imp("owner_repeater")}
+          {imp("owner_channel_mix")}
+          <OwnerOverview
+            property={p} week={w} locked={readOnly}
+            repeaters={data.ownerRepeaters} mix={data.ownerChannelMix}
+            segments={data.segments} ads={ads}
+          />
+        </div>
       ),
     },
     // Screenshots & Digital Ads were removed as standalone sections — screenshots
