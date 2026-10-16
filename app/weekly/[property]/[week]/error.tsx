@@ -32,6 +32,11 @@ export default function WeeklyError({
         This section hit an error while rendering. Try again, or reload the page — a reload also
         refreshes the app after a recent update, which fixes most one-off errors.
       </p>
+      {error.message && (
+        <p className="mt-2 max-w-md text-xs text-muted-foreground">
+          Details: <code className="rounded bg-secondary px-1 py-0.5 break-words">{error.message}</code>
+        </p>
+      )}
       {error.digest && (
         <p className="mt-2 text-xs text-muted-foreground">
           Reference: <code className="rounded bg-secondary px-1 py-0.5">{error.digest}</code>

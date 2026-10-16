@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 
+import { RenderBoundary } from "@/components/weekly/render-boundary";
 import { cn } from "@/lib/utils";
 
 export interface EditorSectionTab {
@@ -74,7 +75,9 @@ export function WeeklyEditorShell({ sections }: { sections: EditorSectionTab[] }
         </div>
       </nav>
 
-      <div key={current?.key} className="min-w-0">{current?.node}</div>
+      <div key={current?.key} className="min-w-0">
+        <RenderBoundary label={current?.label}>{current?.node}</RenderBoundary>
+      </div>
     </div>
   );
 }

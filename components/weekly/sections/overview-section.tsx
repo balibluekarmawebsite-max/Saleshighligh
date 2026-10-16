@@ -7,6 +7,7 @@ import { ImageIcon, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AiTextActions } from "@/components/weekly/ai-text-actions";
 import { OverviewAdsBlock } from "@/components/weekly/sections/overview-ads-block";
+import { RenderBoundary } from "@/components/weekly/render-boundary";
 import { ScreenshotManager } from "@/components/weekly/screenshot-manager";
 import { saveOverview } from "@/lib/weekly/editor-actions";
 import type { WeeklyAdsData } from "@/lib/weekly/ads-data";
@@ -169,6 +170,7 @@ export function OverviewSection({
                 )}
               </label>
 
+              <RenderBoundary label={b.heading}>
               {b.key === "roas" ? (
                 <OverviewAdsBlock property={property} week={week} locked={locked} ads={ads} />
               ) : (
@@ -234,6 +236,7 @@ export function OverviewSection({
                   </div>
                 )}
               </div>
+              </RenderBoundary>
             </div>
           );
         })}
