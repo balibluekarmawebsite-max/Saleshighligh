@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
 import { Plus, X } from "lucide-react";
 
@@ -12,12 +13,23 @@ import {
   SaveButton,
   SectionCardShell,
   SectionHeading,
-  useRows,
   type Row,
 } from "@/components/weekly/sections/shared";
 
-/** A blank plan row (stable content → safe to pass through useRows). */
+/** A blank plan row. */
 const blankPlan = (): Row => ({ plan: "", remark: "", startLabel: "", deadlineLabel: "" });
+
+/**
+ * A plan row carrying a stable client id. Keying + editing by this id (not the
+ * array index) keeps each row's React identity across add/remove, so removing a
+ * row while an AI rewrite streams on a *later* row can't unmount the streaming
+ * instance or write its result onto the wrong (shifted) row.
+ */
+type PlanRow = Row & { _rid: string };
+let ridSeq = 0;
+const withRid = (r: Row): PlanRow => ({ ...r, _rid: `p${ridSeq++}` });
+const seedRows = (initial: Row[]): PlanRow[] =>
+  (initial.length ? initial : [blankPlan()]).map(withRid);
 
 interface CategoryCardModel {
   /** Stored category value ("" → uncategorized/null). */
@@ -71,31 +83,51 @@ function CategoryCard({
   label: string;
   initial: Row[];
 }) {
-  // Seed one blank plan when the category is empty, so there's a textbox ready.
-  const { rows, update, add, remove } = useRows(initial.length ? initial : [blankPlan()]);
+  const [rows, setRows] = useState<PlanRow[]>(() => seedRows(initial));
   const [state, formAction] = useFormState(saveActionPlanCategory, null);
+
+  // Re-seed when the server sends fresh rows for THIS category (after a save +
+  // revalidate). Unchanged props keep in-progress edits, like the other grids.
+  const sig = JSON.stringify(initial);
+  useEffect(() => {
+    setRows(seedRows(JSON.parse(sig) as Row[]));
+  }, [sig]);
+
+  const updateRow = (rid: string, key: string, val: string) =>
+    setRows((rs) => rs.map((r) => (r._rid === rid ? { ...r, [key]: val } : r)));
+  const removeRow = (rid: string) => setRows((rs) => rs.filter((r) => r._rid !== rid));
+  const addRow = () => setRows((rs) => [...rs, withRid(blankPlan())]);
+
+  // Strip the client-only _rid before submitting; the server reads plan / remark
+  // / start / deadline and takes the category from the hidden input per card.
+  const submitRows = rows.map((r) => ({
+    plan: r.plan ?? "",
+    remark: r.remark ?? "",
+    startLabel: r.startLabel ?? "",
+    deadlineLabel: r.deadlineLabel ?? "",
+  }));
 
   return (
     <form action={formAction} className="space-y-3 rounded-lg border border-border p-4">
       <input type="hidden" name="property" value={property} />
       <input type="hidden" name="week" value={week} />
       <input type="hidden" name="category" value={category} />
-      <input type="hidden" name="rows" value={JSON.stringify(rows)} />
+      <input type="hidden" name="rows" value={JSON.stringify(submitRows)} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-foreground">{label}</h3>
         {!locked && <SaveButton state={state} />}
       </div>
 
-      {rows.map((row, i) => (
+      {rows.map((row) => (
         <div
-          key={i}
+          key={row._rid}
           className="relative space-y-3 rounded-md border border-border/60 bg-muted/10 p-3"
         >
           {!locked && rows.length > 1 && (
             <button
               type="button"
-              onClick={() => remove(i)}
+              onClick={() => removeRow(row._rid)}
               className="absolute right-2 top-2 text-muted-foreground transition-colors hover:text-variance-negative"
               aria-label="Remove plan"
             >
@@ -108,7 +140,7 @@ function CategoryCard({
             </label>
             <textarea
               value={row.plan ?? ""}
-              onChange={(e) => update(i, "plan", e.target.value)}
+              onChange={(e) => updateRow(row._rid, "plan", e.target.value)}
               disabled={locked}
               rows={3}
               className={`${CELL} resize-y`}
@@ -117,7 +149,7 @@ function CategoryCard({
             {!locked && (
               <AiTextActions
                 value={row.plan ?? ""}
-                onResult={(t) => update(i, "plan", t)}
+                onResult={(t) => updateRow(row._rid, "plan", t)}
                 actions={["rewrite", "en", "id"]}
                 className="mt-1.5"
               />
@@ -130,7 +162,7 @@ function CategoryCard({
               </label>
               <input
                 value={row.remark ?? ""}
-                onChange={(e) => update(i, "remark", e.target.value)}
+                onChange={(e) => updateRow(row._rid, "remark", e.target.value)}
                 disabled={locked}
                 className={CELL}
                 placeholder="e.g. Meeting"
@@ -142,7 +174,7 @@ function CategoryCard({
               </label>
               <input
                 value={row.startLabel ?? ""}
-                onChange={(e) => update(i, "startLabel", e.target.value)}
+                onChange={(e) => updateRow(row._rid, "startLabel", e.target.value)}
                 disabled={locked}
                 className={CELL}
                 placeholder="e.g. 02 Oct"
@@ -154,7 +186,7 @@ function CategoryCard({
               </label>
               <input
                 value={row.deadlineLabel ?? ""}
-                onChange={(e) => update(i, "deadlineLabel", e.target.value)}
+                onChange={(e) => updateRow(row._rid, "deadlineLabel", e.target.value)}
                 disabled={locked}
                 className={CELL}
                 placeholder="e.g. 08 Oct"
@@ -170,7 +202,7 @@ function CategoryCard({
           variant="ghost"
           size="sm"
           className="text-primary"
-          onClick={() => add(blankPlan())}
+          onClick={addRow}
         >
           <Plus /> Add another plan
         </Button>
