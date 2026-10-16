@@ -5,6 +5,7 @@ import { useFormState } from "react-dom";
 import { ImageIcon, Loader2, ShieldAlert, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { AdsEditor } from "@/components/weekly/ads-editor";
 import { AdsOverviewBody } from "@/components/weekly/ads-overview";
 import { AiTextActions } from "@/components/weekly/ai-text-actions";
 import { ScreenshotManager } from "@/components/weekly/screenshot-manager";
@@ -170,16 +171,22 @@ export function OverviewSection({
               </label>
 
               {b.key === "roas" ? (
-                ads.hasData && ads.blended ? (
-                  <div className="rounded-lg border border-border bg-muted/20 p-4">
-                    <AdsOverviewBody ads={ads} />
-                    <p className="mt-3 text-[11px] text-muted-foreground">
-                      Pulled live from the Digital Ads panel for this report period — no manual entry needed.
-                    </p>
-                  </div>
+                locked ? (
+                  ads.hasData && ads.blended ? (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                      <AdsOverviewBody ads={ads} />
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-sm text-muted-foreground">
+                      No ads data was captured for this week.
+                    </div>
+                  )
                 ) : (
-                  <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-sm text-muted-foreground">
-                    No ads data for this week yet. Sync the Digital Ads &amp; ROAS section (I) to populate this.
+                  // Editable: Sync now (pulls this week from the ads dashboard) +
+                  // a manual-entry grid, so ads can be pulled or typed right here.
+                  // New reports auto-sync on creation; this is the refresh/fallback.
+                  <div className="rounded-lg border border-border bg-muted/20 p-4">
+                    <AdsEditor property={property} week={week} locked={false} data={ads} />
                   </div>
                 )
               ) : (

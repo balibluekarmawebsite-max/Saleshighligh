@@ -51,6 +51,65 @@ async function storeSyncMeta(propertyId: string, week: string, result: Metricool
   }
 }
 
+export interface ReportSyncOutcome {
+  metricoolRows: number | null;
+  adsRows: number | null;
+  errors: string[];
+}
+
+/**
+ * Best-effort pull of Metricool + ads into a single report, run in parallel.
+ * Never throws: each source is independently guarded, so one failing (or a
+ * missing brand / unset key) never aborts the other or the caller. Shared by
+ * the scheduled auto-sync and the manual "create week" action, so a report
+ * comes pre-populated the same way however it was created.
+ */
+export async function syncReportSources(
+  reportId: string,
+  propertyId: string,
+  propertyCode: string,
+  week: string,
+  opts: { metricoolConfigured?: boolean; adsConfigured?: boolean } = {},
+): Promise<ReportSyncOutcome> {
+  const metricoolConfigured = opts.metricoolConfigured ?? isMetricoolConfigured();
+  const adsConfigured = opts.adsConfigured ?? isAdsSyncConfigured();
+  const out: ReportSyncOutcome = { metricoolRows: null, adsRows: null, errors: [] };
+
+  const tasks: Promise<void>[] = [];
+
+  if (metricoolConfigured) {
+    tasks.push(
+      (async () => {
+        const blogId = await getPropertyBlogId(propertyCode).catch(() => null);
+        if (!blogId) return; // property has no brand assigned — skip quietly
+        try {
+          const res = await syncMetricoolIntoReport(reportId, propertyCode);
+          out.metricoolRows = res.rows;
+          await storeSyncMeta(propertyId, week, res);
+        } catch (e) {
+          out.errors.push(`metricool: ${msg(e)}`);
+        }
+      })(),
+    );
+  }
+
+  if (adsConfigured) {
+    tasks.push(
+      (async () => {
+        try {
+          const res = await syncAdsIntoReport(reportId, propertyCode);
+          out.adsRows = res.rows;
+        } catch (e) {
+          out.errors.push(`ads: ${msg(e)}`);
+        }
+      })(),
+    );
+  }
+
+  await Promise.all(tasks); // inner try/catch means this never rejects
+  return out;
+}
+
 /**
  * Run the weekly auto-sync for every property. `week` defaults to the current
  * reporting week (its Thursday end, yyyy-mm-dd).
@@ -104,27 +163,13 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
         continue;
       }
 
-      if (metricoolConfigured) {
-        const blogId = await getPropertyBlogId(prop.code);
-        if (blogId) {
-          try {
-            const res = await syncMetricoolIntoReport(report.id, prop.code);
-            r.metricoolRows = res.rows;
-            await storeSyncMeta(prop.id, week, res);
-          } catch (e) {
-            r.errors.push(`metricool: ${msg(e)}`);
-          }
-        }
-      }
-
-      if (adsConfigured) {
-        try {
-          const res = await syncAdsIntoReport(report.id, prop.code);
-          r.adsRows = res.rows;
-        } catch (e) {
-          r.errors.push(`ads: ${msg(e)}`);
-        }
-      }
+      const outcome = await syncReportSources(report.id, prop.id, prop.code, week, {
+        metricoolConfigured,
+        adsConfigured,
+      });
+      r.metricoolRows = outcome.metricoolRows;
+      r.adsRows = outcome.adsRows;
+      r.errors.push(...outcome.errors);
     } catch (e) {
       r.errors.push(msg(e));
     }

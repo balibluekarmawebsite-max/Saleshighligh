@@ -15,6 +15,7 @@ import {
 } from "@/lib/weekly/editor-data";
 import { saveAnnualBudget } from "@/lib/weekly/annual-budget";
 import { saveAnnualLastYear } from "@/lib/weekly/annual-lastyear";
+import { syncReportSources } from "@/lib/weekly/weekly-sync-run";
 import { weekMeta } from "@/lib/weekly/week";
 
 export interface ActionResult {
@@ -683,7 +684,7 @@ export async function createWeek(formData: FormData): Promise<void> {
     where: { propertyId: prop.id, startDate: meta.startDate },
   });
   if (!existing) {
-    await prisma.weeklyReport.create({
+    const created = await prisma.weeklyReport.create({
       data: {
         propertyId: prop.id,
         startDate: meta.startDate,
@@ -694,8 +695,24 @@ export async function createWeek(formData: FormData): Promise<void> {
         status: "DRAFT",
         ownerId: user && user.id !== "system" ? user.id : null,
       },
+      select: { id: true },
     });
     await logAudit("weekly_create", `${property} ${week}`, {});
+
+    // Pre-fill the fresh report with this week's ads + social, exactly like the
+    // Friday auto-sync — so the ROAS / Social blocks are populated the moment
+    // the report is opened, instead of showing an empty "sync it yourself"
+    // state. Best-effort and time-bounded: a slow or failed external API must
+    // never block (or noticeably delay) report creation.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      syncReportSources(created.id, prop.id, property, week).catch(() => {}),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, 25_000);
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    revalidatePath(`/weekly/${property}/${week}/editor`);
   }
   revalidatePath(`/weekly/${property}/${week}/reports`);
 }
