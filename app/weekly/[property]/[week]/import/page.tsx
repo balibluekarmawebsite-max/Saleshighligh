@@ -1,6 +1,6 @@
 import { AlertCircle } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { CreateWeekButton } from "@/components/weekly/create-week-button";
 import { AiImportClient } from "@/components/weekly/ai-import-client";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { createWeek } from "@/lib/weekly/editor-actions";
@@ -31,7 +31,7 @@ export default async function WeeklyImportPage({
           <form action={createWeek} className="mt-4">
             <input type="hidden" name="property" value={params.property} />
             <input type="hidden" name="week" value={params.week} />
-            <Button type="submit">Create this week&apos;s report</Button>
+            <CreateWeekButton>Create this week&apos;s report</CreateWeekButton>
           </form>
         )}
       </div>

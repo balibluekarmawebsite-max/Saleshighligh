@@ -2,6 +2,7 @@ import Link from "next/link";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CreateWeekButton } from "@/components/weekly/create-week-button";
 import { WeeklyEditorShell, type EditorSectionTab } from "@/components/weekly/editor-shell";
 import { ActivitiesCards } from "@/components/weekly/sections/activities-cards";
 import { ChannelsGrid } from "@/components/weekly/sections/channels-grid";
@@ -91,7 +92,7 @@ export default async function WeeklyEditorPage({
           <form action={createWeek} className="mt-4">
             <input type="hidden" name="property" value={p} />
             <input type="hidden" name="week" value={w} />
-            <Button type="submit">Create this week&apos;s report</Button>
+            <CreateWeekButton>Create this week&apos;s report</CreateWeekButton>
           </form>
         )}
         <Link

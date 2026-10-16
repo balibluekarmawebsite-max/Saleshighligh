@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withReportLock } from "@/lib/weekly/report-lock";
 import { SOCIAL_METRIC_ROWS } from "@/lib/weekly/editor-data";
 import {
   METRICOOL_NETWORKS,
@@ -168,14 +169,18 @@ export async function syncMetricoolIntoReport(
   const syncedAt = new Date().toISOString();
 
   if (writes.length) {
-    await prisma.$transaction([
-      ...writes.map((w) =>
-        prisma.weeklySocialMetric.deleteMany({
-          where: { reportWeekId: reportId, platform: w.platform, metricKey: { in: w.keys } },
-        }),
-      ),
-      ...writes.map((w) => prisma.weeklySocialMetric.createMany({ data: w.data })),
-    ]);
+    // Serialize per report so a concurrent writer (cron / manual sync) can't
+    // interleave the delete+recreate of the social-metric rows.
+    await withReportLock(`metricool:${reportId}`, () =>
+      prisma.$transaction([
+        ...writes.map((w) =>
+          prisma.weeklySocialMetric.deleteMany({
+            where: { reportWeekId: reportId, platform: w.platform, metricKey: { in: w.keys } },
+          }),
+        ),
+        ...writes.map((w) => prisma.weeklySocialMetric.createMany({ data: w.data })),
+      ]),
+    );
   }
 
   return { blogId, brandLabel, window, networks, rows, syncedAt };

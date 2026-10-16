@@ -127,6 +127,12 @@ export function AdsEditor({
                       inputMode="decimal"
                       value={grid[p.id]?.[c.key] ?? ""}
                       onChange={(e) => set(p.id, c.key, e.target.value)}
+                      // This grid can render inside the Overview's section form
+                      // (Section A). Enter must not submit that form — it would
+                      // run the section Save, which doesn't persist ads.
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.preventDefault();
+                      }}
                       disabled={locked}
                       className="h-8 w-28 rounded-md border border-border bg-card px-2 text-right text-sm text-foreground disabled:opacity-60"
                     />
@@ -140,7 +146,7 @@ export function AdsEditor({
 
       {!locked && (
         <div className="flex items-center gap-3">
-          <Button type="button" size="sm" onClick={onSave} disabled={pending}>Save</Button>
+          <Button type="button" size="sm" onClick={onSave} disabled={pending}>Save ads</Button>
           {saveMsg && (
             <span className={saveMsg === "Saved." ? "flex items-center gap-1 text-sm text-variance-positive" : "text-sm text-variance-negative"}>
               {saveMsg === "Saved." && <Check className="h-4 w-4" />} {saveMsg}

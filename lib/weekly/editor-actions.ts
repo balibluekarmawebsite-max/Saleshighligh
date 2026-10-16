@@ -702,16 +702,13 @@ export async function createWeek(formData: FormData): Promise<void> {
     // Pre-fill the fresh report with this week's ads + social, exactly like the
     // Friday auto-sync — so the ROAS / Social blocks are populated the moment
     // the report is opened, instead of showing an empty "sync it yourself"
-    // state. Best-effort and time-bounded: a slow or failed external API must
-    // never block (or noticeably delay) report creation.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      syncReportSources(created.id, prop.id, property, week).catch(() => {}),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, 25_000);
-      }),
-    ]);
-    if (timer) clearTimeout(timer);
+    // state. We await it fully (rather than detaching) so the editor renders
+    // with the data already in place and no background writer can later race a
+    // manual "Sync now". It is best-effort (never throws) and each external
+    // call is independently timeout-bounded — ads via AbortSignal, Metricool
+    // per-request — so it cannot hang creation indefinitely. The submit button
+    // (CreateWeekButton) shows a pending spinner for the short wait.
+    await syncReportSources(created.id, prop.id, property, week).catch(() => {});
     revalidatePath(`/weekly/${property}/${week}/editor`);
   }
   revalidatePath(`/weekly/${property}/${week}/reports`);

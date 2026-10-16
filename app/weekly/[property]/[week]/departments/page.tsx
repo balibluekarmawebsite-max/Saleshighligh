@@ -1,7 +1,7 @@
 import { AlertCircle, Lock } from "lucide-react";
 
 import { SectionCard } from "@/components/dashboard/section-card";
-import { Button } from "@/components/ui/button";
+import { CreateWeekButton } from "@/components/weekly/create-week-button";
 import { SectionEditor } from "@/components/weekly/section-editor";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { createWeek } from "@/lib/weekly/editor-actions";
@@ -34,7 +34,7 @@ export default async function WeeklyDepartmentsPage({
           <form action={createWeek} className="mt-4">
             <input type="hidden" name="property" value={params.property} />
             <input type="hidden" name="week" value={params.week} />
-            <Button type="submit">Create this week&apos;s report</Button>
+            <CreateWeekButton>Create this week&apos;s report</CreateWeekButton>
           </form>
         )}
       </div>

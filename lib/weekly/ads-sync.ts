@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { withReportLock } from "@/lib/weekly/report-lock";
 
 const DEFAULT_BASE = "https://ads.bluekarmasecrets.com";
 
@@ -22,6 +23,12 @@ export function adsApiBase(): string {
 
 export function isAdsSyncConfigured(): boolean {
   return !!process.env.ADS_API_KEY;
+}
+
+/** Request timeout (ms) so a stalled ads API can't hang a sync (or report creation). */
+function adsTimeoutMs(): number {
+  const n = Number(process.env.ADS_API_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : 20_000;
 }
 
 const n = (v: unknown): number | null =>
@@ -110,6 +117,7 @@ export async function fetchAdsReport(
     res = await fetch(url, {
       headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
       cache: "no-store",
+      signal: AbortSignal.timeout(adsTimeoutMs()),
     });
   } catch (err) {
     throw new Error(`Could not reach the ads API: ${err instanceof Error ? err.message : "network error"}`);
@@ -183,18 +191,23 @@ export async function syncAdsIntoReport(
     create: { reportWeekId: reportId, platform, spend, revenue, conversionValue, conversions, impressions, reach, clicks, source: "api", windowFrom: window.from, windowTo: window.to, sortOrder },
   });
 
-  await prisma.$transaction([
-    prisma.weeklyAdsRoas.upsert(summaryRow("blended", blended.spend, blended.revenue, blended.conversionValue, blended.conversions, blended.impressions, blended.reach, blended.clicks, 0)),
-    ...platforms.map((p, i) => prisma.weeklyAdsRoas.upsert(summaryRow(p.platform, p.spend, null, p.conversionValue, p.conversions, p.impressions, p.reach, p.clicks, i + 1))),
-    prisma.weeklyAdsDaily.deleteMany({ where: { reportWeekId: reportId } }),
-    prisma.weeklyAdsDaily.createMany({
-      data: daily.map((d, i) => ({ reportWeekId: reportId, date: d.date, spend: d.spend, conversionValue: d.conversionValue, conversions: d.conversions, impressions: d.impressions, reach: d.reach, clicks: d.clicks, sortOrder: i })),
-    }),
-    prisma.weeklyAdsCampaign.deleteMany({ where: { reportWeekId: reportId } }),
-    prisma.weeklyAdsCampaign.createMany({
-      data: campaigns.map((c, i) => ({ reportWeekId: reportId, campaignId: c.campaignId, campaignName: c.campaignName, platform: c.platform, spend: c.spend, conversionValue: c.conversionValue, conversions: c.conversions, impressions: c.impressions, reach: c.reach, clicks: c.clicks, sortOrder: i })),
-    }),
-  ]);
+  // Serialize the delete+recreate per report so a concurrent writer (the cron,
+  // a manual "Sync now", or report creation) can't interleave and duplicate the
+  // (unconstrained) campaign rows.
+  await withReportLock(`ads:${reportId}`, () =>
+    prisma.$transaction([
+      prisma.weeklyAdsRoas.upsert(summaryRow("blended", blended.spend, blended.revenue, blended.conversionValue, blended.conversions, blended.impressions, blended.reach, blended.clicks, 0)),
+      ...platforms.map((p, i) => prisma.weeklyAdsRoas.upsert(summaryRow(p.platform, p.spend, null, p.conversionValue, p.conversions, p.impressions, p.reach, p.clicks, i + 1))),
+      prisma.weeklyAdsDaily.deleteMany({ where: { reportWeekId: reportId } }),
+      prisma.weeklyAdsDaily.createMany({
+        data: daily.map((d, i) => ({ reportWeekId: reportId, date: d.date, spend: d.spend, conversionValue: d.conversionValue, conversions: d.conversions, impressions: d.impressions, reach: d.reach, clicks: d.clicks, sortOrder: i })),
+      }),
+      prisma.weeklyAdsCampaign.deleteMany({ where: { reportWeekId: reportId } }),
+      prisma.weeklyAdsCampaign.createMany({
+        data: campaigns.map((c, i) => ({ reportWeekId: reportId, campaignId: c.campaignId, campaignName: c.campaignName, platform: c.platform, spend: c.spend, conversionValue: c.conversionValue, conversions: c.conversions, impressions: c.impressions, reach: c.reach, clicks: c.clicks, sortOrder: i })),
+      }),
+    ]),
+  );
 
   return { rows: 1 + platforms.length, window };
 }

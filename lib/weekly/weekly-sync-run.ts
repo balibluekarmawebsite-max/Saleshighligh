@@ -39,16 +39,15 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** Persist the Metricool sync diagnostic (so the preview + Excel note show it). */
 async function storeSyncMeta(propertyId: string, week: string, result: MetricoolSyncResult) {
   const key = `sync_${week}`;
-  const existing = await prisma.weeklySetting.findFirst({
-    where: { propertyId, group: "metricool", key },
-    select: { id: true },
-  });
   const value = result as unknown as object;
-  if (existing) {
-    await prisma.weeklySetting.update({ where: { id: existing.id }, data: { value } });
-  } else {
-    await prisma.weeklySetting.create({ data: { propertyId, group: "metricool", key, value } });
-  }
+  // Atomic upsert on the (propertyId, group, key) unique key — so a manual
+  // create coinciding with the Friday cron (both the first write for this
+  // week) resolves as an update rather than raising a spurious P2002.
+  await prisma.weeklySetting.upsert({
+    where: { propertyId_group_key: { propertyId, group: "metricool", key } },
+    create: { propertyId, group: "metricool", key, value },
+    update: { value },
+  });
 }
 
 export interface ReportSyncOutcome {
@@ -80,9 +79,12 @@ export async function syncReportSources(
   if (metricoolConfigured) {
     tasks.push(
       (async () => {
-        const blogId = await getPropertyBlogId(propertyCode).catch(() => null);
-        if (!blogId) return; // property has no brand assigned — skip quietly
         try {
+          // Inside the try so a thrown blogId lookup (e.g. a transient DB error)
+          // is recorded as a metricool error rather than silently swallowed; a
+          // genuinely unassigned brand returns null and is skipped quietly.
+          const blogId = await getPropertyBlogId(propertyCode);
+          if (!blogId) return;
           const res = await syncMetricoolIntoReport(reportId, propertyCode);
           out.metricoolRows = res.rows;
           await storeSyncMeta(propertyId, week, res);

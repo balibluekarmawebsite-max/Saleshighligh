@@ -75,18 +75,14 @@ async function findReport(propertyCode: string, week: string) {
 
 /** Persist the last sync's diagnostic so the preview + Excel note can show it. */
 async function storeSyncMeta(propertyId: string, week: string, result: MetricoolSyncResult) {
-  const existing = await prisma.weeklySetting.findFirst({
-    where: { propertyId, group: "metricool", key: `sync_${week}` },
-    select: { id: true },
-  });
   const value = result as unknown as object;
-  if (existing) {
-    await prisma.weeklySetting.update({ where: { id: existing.id }, data: { value } });
-  } else {
-    await prisma.weeklySetting.create({
-      data: { propertyId, group: "metricool", key: `sync_${week}`, value },
-    });
-  }
+  // Atomic upsert on the (propertyId, group, key) unique key, so a manual sync
+  // coinciding with the Friday cron resolves as an update, not a spurious P2002.
+  await prisma.weeklySetting.upsert({
+    where: { propertyId_group_key: { propertyId, group: "metricool", key: `sync_${week}` } },
+    create: { propertyId, group: "metricool", key: `sync_${week}`, value },
+    update: { value },
+  });
 }
 
 /** The last Metricool sync diagnostic for a property + week, or null. */

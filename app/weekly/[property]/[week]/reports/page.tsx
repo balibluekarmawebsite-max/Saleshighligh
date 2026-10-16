@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CreateWeekButton } from "@/components/weekly/create-week-button";
 import { DeleteWeekButton } from "@/components/weekly/delete-week-button";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { weeklyHref } from "@/lib/nav";
@@ -56,9 +57,9 @@ export default async function WeeklyReportsPage({
             <form action={createWeek}>
               <input type="hidden" name="property" value={params.property} />
               <input type="hidden" name="week" value={thisWeek} />
-              <Button type="submit" size="sm">
+              <CreateWeekButton size="sm">
                 <Plus /> New week — {weekLabel(thisWeek)}
-              </Button>
+              </CreateWeekButton>
             </form>
           )
         )}
