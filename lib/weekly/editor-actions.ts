@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { NARRATIVE_MODEL } from "@/lib/weekly/ai-prompts";
 import {
+  ACTION_PLAN_CATEGORIES,
   ALL_TEXT_BLOCKS,
   OVERVIEW_BLOCKS,
   SOCIAL_NARRATIVE_BLOCKS,
@@ -321,6 +322,59 @@ export async function saveSection(
 
   await logAudit("weekly_section_save", `${property} ${week}`, { section: sectionId });
   revalidatePath(`/weekly/${property}/${week}/departments`);
+  return { ok: true, message: "Saved." };
+}
+
+/** Position of an Action Plan category in the fixed order (unknown/blank last). */
+function actionPlanRank(category: string | null): number {
+  const i = category ? (ACTION_PLAN_CATEGORIES as readonly string[]).indexOf(category) : -1;
+  return i === -1 ? ACTION_PLAN_CATEGORIES.length : i;
+}
+
+/**
+ * Section J — save ONE Action Plan category on its own. The wipe is scoped to
+ * that single category (null-safe), so a save never clears the plans of another
+ * category a different owner is responsible for — no cross-category overwrite.
+ * (useFormState signature.)
+ */
+export async function saveActionPlanCategory(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  // The category this card owns ("" → stored as null/uncategorized).
+  const category = str(formData.get("category"));
+  const base = actionPlanRank(category) * 100;
+  const data = rows
+    .filter((r) => str(r.plan))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      category,
+      plan: str(r.plan) as string,
+      startLabel: str(r.startLabel),
+      deadlineLabel: str(r.deadlineLabel),
+      remark: str(r.remark),
+      sortOrder: base + i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    // `category` may be null — Prisma matches `category: null` as IS NULL, so the
+    // uncategorized bucket is scoped correctly too.
+    await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: guard.id, category } });
+    if (data.length) await tx.weeklyActionPlan.createMany({ data });
+  });
+
+  await logAudit("weekly_action_plan_save", `${property} ${week}`, {
+    category: category ?? "(uncategorized)",
+    rows: data.length,
+  });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
   return { ok: true, message: "Saved." };
 }
 

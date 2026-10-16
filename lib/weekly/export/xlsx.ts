@@ -385,19 +385,26 @@ async function overviewSheet(
     const h = ws.addRow([b.heading]);
     h.getCell(1).font = { name: FONT, bold: true, size: 12, color: { argb: TEAL } };
     ws.mergeCells(h.number, 1, h.number, NCOL);
-    const body = ws.addRow([b.body && b.body.trim() ? b.body : "— not written for this week —"]);
-    body.getCell(1).font = { name: FONT, size: 11, color: { argb: b.body ? INK : GREY } };
-    body.getCell(1).alignment = { wrapText: true, vertical: "top" };
-    ws.mergeCells(body.number, 1, body.number, NCOL);
+
+    const hasBody = !!(b.body && b.body.trim());
+    const blockShots = withScreenshots ? d.screenshots.filter((s) => s.blockKey === b.key) : [];
+    const adsInline = withAds && b.key === "roas" && d.ads.hasData && !!d.ads.blended;
+    // Print the body (or the "not written" placeholder) UNLESS the block has no
+    // typed text but is carried by an inline ads block or screenshot summaries
+    // right below — otherwise the placeholder wrongly sits above real content.
+    if (hasBody || (!adsInline && blockShots.length === 0)) {
+      const body = ws.addRow([hasBody ? (b.body as string) : "— not written for this week —"]);
+      body.getCell(1).font = { name: FONT, size: 11, color: { argb: hasBody ? INK : GREY } };
+      body.getCell(1).alignment = { wrapText: true, vertical: "top" };
+      ws.mergeCells(body.number, 1, body.number, NCOL);
+    }
     // Section 9 (ROAS / Digital Ads): render the dashboard-style ads block inline.
-    if (withAds && b.key === "roas" && d.ads.hasData && d.ads.blended) {
+    if (adsInline) {
       adsDashboardBlock(ws, d.ads, NCOL);
     }
     // Screenshots uploaded under this section — image + summary, inline.
-    if (withScreenshots) {
-      for (const s of d.screenshots.filter((s) => s.blockKey === b.key)) {
-        await screenshotBlock(wb, ws, s, NCOL);
-      }
+    for (const s of blockShots) {
+      await screenshotBlock(wb, ws, s, NCOL);
     }
     ws.addRow([]);
   }

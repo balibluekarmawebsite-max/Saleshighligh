@@ -152,7 +152,21 @@ export async function buildWeeklyDocx(
     children.push(sectionHeading("A · Sales & Marketing Overview"));
     for (const b of overview) {
       children.push(subHeading(b.heading));
-      children.push(...prose(b.body));
+      if (b.body && b.body.trim()) {
+        children.push(...prose(b.body));
+      } else {
+        // No narrative typed — fall back to the summaries of the screenshots
+        // attached to this block (e.g. the Booking.com AI summary) so the
+        // heading carries real content instead of "not written for this week".
+        const shotSummaries = screenshots
+          .filter((s) => s.blockKey === b.key && s.summary && s.summary.trim())
+          .map((s) => s.summary as string);
+        if (shotSummaries.length > 0) {
+          for (const sum of shotSummaries) children.push(...prose(sum));
+        } else {
+          children.push(...prose(null));
+        }
+      }
     }
   }
 

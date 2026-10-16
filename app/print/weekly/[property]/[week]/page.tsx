@@ -92,12 +92,27 @@ export default async function WeeklyPrintPage({
 
       {show("overview") && (
         <Section title="A · Sales &amp; Marketing Overview">
-          {overview.map((b) => (
-            <div key={b.key}>
-              <h3>{b.heading}</h3>
-              <Prose text={b.body} />
-            </div>
-          ))}
+          {overview.map((b) => {
+            // When no narrative was typed, fall back to the summaries of the
+            // screenshots attached to this block so the heading carries real
+            // content instead of "not written for this week".
+            const shotSummaries =
+              b.body && b.body.trim()
+                ? []
+                : screenshots
+                    .filter((s) => s.blockKey === b.key && s.summary && s.summary.trim())
+                    .map((s) => s.summary as string);
+            return (
+              <div key={b.key}>
+                <h3>{b.heading}</h3>
+                {shotSummaries.length > 0 ? (
+                  shotSummaries.map((sum, i) => <Prose key={i} text={sum} />)
+                ) : (
+                  <Prose text={b.body} />
+                )}
+              </div>
+            );
+          })}
         </Section>
       )}
 
