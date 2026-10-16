@@ -1,0 +1,217 @@
+# Daily Reservation Report — Data Storage & Automation Plan
+
+Guidance for building the **Daily Report** module for the BK Sales Dashboard.
+This is a planning document — we build it step by step, phase by phase.
+
+---
+
+## 1. Goal
+
+Today the dashboard stores **weekly** data (Sections B & C) pulled from VHP.
+The next project is an **automated Daily Reservation Report**. For that we first
+need a **dedicated database store** for a *different* set of VHP pulls — recorded
+**day by day** — that the daily report will later read from.
+
+This plan covers:
+
+1. The data the daily report needs (learned from the sample workbook
+   `Daily_Reservation_Report_BKU_2026.xlsx`).
+2. A **database schema** to store it (raw inputs only — the storage layer we
+   build first).
+3. An **ingestion pipeline** for the new daily VHP pulls (reusing the existing
+   scrape-job + import infrastructure).
+4. The **calculations**, **report UI/export**, and **daily automation** that
+   come after the store exists.
+
+> **Separate from the weekly module.** The daily data comes from *different* VHP
+> pulls than weekly Sections B/C, at a finer (per-day) grain. We store it in its
+> own `Daily*` models so the two domains stay decoupled.
+
+---
+
+## 2. What the sample daily report contains
+
+The workbook is **per property, per year**, with these repeating sheet types:
+
+| Sheet | Grain | What it holds |
+| ----- | ----- | ------------- |
+| `<MONTH> PU <YEAR>` (Pick-Up) | snapshot-day × stay-month | **Occupancy on hand** recorded each day as bookings accumulate; summary rows: Room Sold, ADR, Revenue Nett, Gross selling, Average Pickup/day, Increasement %, Occ on Hand. Exists for 2025 (last year) and 2026 (this year). |
+| `<MONTH> room rev <YEAR>` | stay-date | Room Nights, Revenue, ADR actually materialised per arrival date. |
+| `Market segment` | segment × month | Budget vs Actual room nights + Revenue Budget per market segment. |
+| `BKDU Yielding and forecast` | property / month | Capacity config: rooms available (38), rooms OOO, days in month, saleable room nights; pickup pace. |
+| `BEP` | property / month | Break-even: fixed cost, variable cost, VC ratio, BEP, monthly budget vs BEP. |
+
+**The three daily data feeds we must store:**
+
+1. **Pick-up / on-the-books** — for each **snapshot date**, the rooms (and
+   revenue) on the books for each future **stay period**. This is what grows day
+   by day and drives "Occ on Hand" and "Average Pickup/day".
+2. **Daily reservations & cancellations** — for each **business date**, how many
+   **reservation room nights** were taken and how many **cancellation room
+   nights** occurred. *(This is the new VHP pull you will prepare — it is not in
+   the sample as raw numbers; the sample only shows the net pick-up.)*
+3. **Per-stay-date actuals** — Room Nights + Revenue per **stay date**
+   (the `room rev` sheets).
+
+Plus three mostly-static **reference** inputs: **capacity** (rooms, OOO),
+**segment budget/actual**, and **BEP** parameters.
+
+---
+
+## 3. Proposed database schema (the storage layer)
+
+New Prisma models, **raw inputs only** (every derived metric — occupancy %, ADR,
+RevPAR, pickup/day, increasement %, pace vs LY, BEP gap — is computed in a
+`lib/daily/calculations.ts`, never stored). Money/rates are `Decimal`, counts
+are `Int`. Everything references the existing `Property`.
+
+```prisma
+/// Rooms available vs out-of-order for a property-month (saleable = (avail-ooo)*days).
+model DailyCapacity {
+  id              String   @id @default(cuid())
+  propertyId      String
+  year            Int
+  month           Int      // 1-12
+  roomsAvailable  Int
+  roomsOutOfOrder Int      @default(0)
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@unique([propertyId, year, month])
+}
+
+/// Pick-up snapshot: on the books for a stay period, as seen on `snapshotDate`.
+model DailyPickupSnapshot {
+  id           String   @id @default(cuid())
+  propertyId   String
+  snapshotDate DateTime // the day the reading was taken (@db.Date)
+  stayYear     Int
+  stayMonth    Int      // 1-12  (date-level later if VHP gives it)
+  roomNights   Int                 // rooms on the books for that stay period
+  revenue      Decimal? @db.Decimal(14, 2)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@unique([propertyId, snapshotDate, stayYear, stayMonth])
+  @@index([propertyId, stayYear, stayMonth])
+}
+
+/// The NEW daily pull: reservations taken and cancellations, per business date.
+model DailyReservationActivity {
+  id                     String   @id @default(cuid())
+  propertyId             String
+  businessDate           DateTime // the transaction day (@db.Date)
+  reservationRoomNights  Int      @default(0)
+  cancellationRoomNights Int      @default(0)
+  reservationRevenue     Decimal? @db.Decimal(14, 2)
+  cancellationRevenue    Decimal? @db.Decimal(14, 2)
+  property               Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@unique([propertyId, businessDate])
+  @@index([propertyId, businessDate])
+}
+
+/// Materialised per-stay-date actuals (the `room rev` sheets).
+model DailyRoomRevenue {
+  id         String   @id @default(cuid())
+  propertyId String
+  stayDate   DateTime // @db.Date
+  roomNights Int
+  revenue    Decimal  @db.Decimal(14, 2)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@unique([propertyId, stayDate])
+  @@index([propertyId, stayDate])
+}
+
+/// Market-segment budget vs actual per property-month.
+model DailySegmentPerformance {
+  id            String   @id @default(cuid())
+  propertyId    String
+  year          Int
+  month         Int
+  segment       String   // FIT/WALK IN, Direct Booking, Website, OTA, Local TA, B2B, …
+  budgetRoomNights Int?
+  actualRoomNights Int?
+  budgetRevenue    Decimal? @db.Decimal(14, 2)
+  actualRevenue    Decimal? @db.Decimal(14, 2)
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@unique([propertyId, year, month, segment])
+}
+
+/// Break-even parameters per property-month.
+model DailyBreakEven {
+  id            String   @id @default(cuid())
+  propertyId    String
+  year          Int
+  month         Int
+  budgetRevenue Decimal? @db.Decimal(14, 2)
+  fixedCost     Decimal? @db.Decimal(14, 2)
+  variableCost  Decimal? @db.Decimal(14, 2)
+  bepAdr        Decimal? @db.Decimal(14, 2)
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@unique([propertyId, year, month])
+}
+```
+
+> The exact fields (and whether pick-up is stored as room nights vs occupancy %,
+> and at month vs stay-date grain) are **finalised in Phase D0** once we see the
+> real VHP pull. The shapes above are the starting point.
+
+---
+
+## 4. Ingestion pipeline (reuse what we already have)
+
+We already run a scrape-job system for weekly B/C: `ScrapeJob` model → office-PC
+poller claims jobs → pushes results to `/api/import` (token-gated). The daily
+feeds plug into the same machinery:
+
+- **New job sections** on `ScrapeJob` (e.g. `daily_pickup`, `daily_activity`,
+  `daily_room_rev`) so the office-PC scraper knows which VHP pull to run.
+- **A daily sync runner** (`lib/daily/daily-sync-run.ts`) that queues those jobs
+  and, when results arrive, upserts them **idempotently** by their natural keys
+  (`propertyId` + date). Re-running a day overwrites that day only — never
+  duplicates.
+- **A manual/Excel fallback** (like the weekly importer): upload the daily
+  workbook, parse each sheet, preview, apply — so history can be back-filled and
+  a failed scrape can be fixed by hand.
+- **Audit**: every daily import writes an audit row, same as weekly.
+
+---
+
+## 5. Calculations, report, automation (after the store exists)
+
+- **`lib/daily/calculations.ts`** — pure, tested functions: occupancy on hand,
+  pickup/day, increasement %, ADR, RevPAR, net pickup (reservations −
+  cancellations), pace vs last year, pace vs budget, BEP gap.
+- **Daily report dashboard** — the pick-up matrix, a reservations-vs-cancellations
+  daily chart, per-stay-date actuals, segment budget-vs-actual, and BEP, per
+  property + period.
+- **Export** — Excel/PDF mirroring the sample workbook's layout.
+- **Automation** — a scheduled daily pull + build (cron) so the report is ready
+  each morning without manual work.
+
+---
+
+## 6. Step-by-step build order
+
+| Phase | Deliverable | Needs |
+| ----- | ----------- | ----- |
+| **D0 · Spec** | Finalise the exact columns of each new VHP daily pull + the storage grain (month vs stay-date for pick-up; per-business-date for reservations/cancellations). A short data spec you sign off on. | **A sample of the NEW VHP pull(s)** you will prepare. |
+| **D1 · Schema** | The `Daily*` Prisma models above + migration (`prisma migrate`). This is the "database storage" you asked for first. | D0 |
+| **D2 · Ingestion** | New scrape-job sections + `daily-sync-run` upserts + Excel fallback importer + audit. | D1 |
+| **D3 · Calculations** | `lib/daily/calculations.ts` + vitest tests (occ, pickup, pace, BEP). | D1 |
+| **D4 · Report + export** | Daily report dashboard pages + Excel/PDF export. | D2, D3 |
+| **D5 · Automation** | Scheduled daily pull + auto-build (cron). | D2–D4 |
+
+We can start **D1 (schema/storage)** immediately on the shapes in §3, and refine
+once D0's real pull is in hand.
+
+---
+
+## 7. Open questions (need your input before D1 is final)
+
+1. **The new VHP pull(s):** please share a sample export of the data you'll pull
+   for the daily report — especially the one with **reservation room nights** and
+   **cancellation room nights** per day. The column names/order drive the parser.
+2. **Pick-up grain:** store on-the-books by stay-**month** (as the sample matrix
+   shows) or by stay-**date** (finer)? Does VHP give room nights, or only occ %?
+3. **Reservations/cancellations grain:** per business date **total**, or per
+   business date **split by stay date / segment**?
+4. **Scope:** all three properties (BKDS/BKDU/BKV) from the start, or BKDU first?
+5. **History:** back-fill 2025 + 2026-to-date from the existing workbook, or start
+   fresh from go-live?
