@@ -78,7 +78,7 @@ function ScreenshotCard({
         category,
         aiGenerated: fromAi && !edited,
       });
-      setSaveState(r.ok ? "saved" : "error");
+      setSaveState(r?.ok ? "saved" : "error");
     });
   }
 
@@ -86,7 +86,7 @@ function ScreenshotCard({
     if (!window.confirm("Delete this screenshot?")) return;
     startTransition(async () => {
       const r = await deleteWeeklyScreenshot(shot.id);
-      if (r.ok) router.refresh();
+      if (r?.ok) router.refresh();
       else setSaveState("error");
     });
   }
@@ -214,7 +214,7 @@ export function ScreenshotManager({
     fd.set("file", file);
     startTransition(async () => {
       const r = await uploadWeeklyScreenshot(fd);
-      if (!r.ok) { setError(r.message ?? "Upload failed."); return; }
+      if (!r?.ok) { setError(r?.message ?? "Upload failed — the server didn't respond. Try again, or re-sign in."); return; }
       setTitle("");
       if (fileRef.current) fileRef.current.value = "";
       router.refresh();
