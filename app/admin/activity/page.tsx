@@ -13,6 +13,7 @@ const ACTION_LABEL: Record<string, string> = {
   "period.reopen": "Re-opened period",
   "user.create": "Created user",
   "user.update": "Updated user",
+  daily_cancellation_import: "Daily — Cancellation Report imported",
 };
 
 export default async function ActivityPage() {
