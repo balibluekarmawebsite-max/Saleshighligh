@@ -331,3 +331,22 @@ nights — don't filter them out in the scraper.
 
 Errors mirror §7: `401` bad token, `400` missing property/file, `422` the file
 isn't a recognised Cancellation Report.
+
+### Verify what landed
+
+**GET** the same endpoint with the token to confirm a push (same-day book-and-
+cancel excluded from the counts):
+
+```
+curl -H "Authorization: Bearer <IMPORT_API_TOKEN>" \
+  "https://<dashboard-host>/api/daily/cancellation?property=BKDU&from=2026-10-01&to=2026-10-31"
+```
+
+```json
+{ "ok": true, "property": "BKDU",
+  "totals": { "lines": 11, "roomNights": 46, "sameDayRoomNights": 2 },
+  "byDate": [ { "cancelDate": "2026-10-18", "lines": 11, "roomNights": 46, "sameDayRoomNights": 2 } ] }
+```
+
+Each successful push is also recorded in the dashboard **Activity log**
+(`/admin/activity`) as `daily_cancellation_import`.

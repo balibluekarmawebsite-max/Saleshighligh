@@ -1,7 +1,23 @@
 import type { NextRequest } from "next/server";
 
+import { getCancellationSummary } from "@/lib/daily/cancellation-data";
 import { runCancellationImport } from "@/lib/daily/import-cancellation";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+
+/** Shared-secret bearer check for this feed (same token as the import push). */
+function checkToken(req: NextRequest): Response | null {
+  const token = process.env.IMPORT_API_TOKEN;
+  if (!token) {
+    return Response.json(
+      { ok: false, error: "IMPORT_API_TOKEN is not set on the server — refusing to accept pushes." },
+      { status: 503 },
+    );
+  }
+  if (req.headers.get("authorization") !== `Bearer ${token}`) {
+    return Response.json({ ok: false, error: "invalid token" }, { status: 401 });
+  }
+  return null;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,16 +40,8 @@ const MAX_BODY_BYTES = 25 * 1024 * 1024;
  * token request isn't redirected to /login.
  */
 export async function POST(req: NextRequest) {
-  const token = process.env.IMPORT_API_TOKEN;
-  if (!token) {
-    return Response.json(
-      { ok: false, error: "IMPORT_API_TOKEN is not set on the server — refusing to accept pushes." },
-      { status: 503 },
-    );
-  }
-  if (req.headers.get("authorization") !== `Bearer ${token}`) {
-    return Response.json({ ok: false, error: "invalid token" }, { status: 401 });
-  }
+  const authError = checkToken(req);
+  if (authError) return authError;
 
   if (!rateLimit(req, "api-daily-cancellation", 60, 60_000)) return tooManyRequests();
 
@@ -73,4 +81,31 @@ export async function POST(req: NextRequest) {
 
   const result = await runCancellationImport({ property, fileBuffer, text, filename, source });
   return Response.json(result.body, { status: result.status });
+}
+
+/**
+ * Verify what landed. GET with the same bearer token:
+ *   /api/daily/cancellation?property=BKDU[&from=2026-10-01&to=2026-10-31]
+ * Returns the stored line count and counted cancellation room nights (same-day
+ * book-and-cancel excluded) per cancel date, so a push can be confirmed.
+ */
+export async function GET(req: NextRequest) {
+  const authError = checkToken(req);
+  if (authError) return authError;
+
+  if (!rateLimit(req, "api-daily-cancellation-get", 120, 60_000)) return tooManyRequests();
+
+  const { searchParams } = new URL(req.url);
+  const property = (searchParams.get("property") ?? "").trim();
+  const from = searchParams.get("from") ?? undefined;
+  const to = searchParams.get("to") ?? undefined;
+  if (!property) {
+    return Response.json({ ok: false, error: "property query param is required." }, { status: 400 });
+  }
+
+  const summary = await getCancellationSummary(property, from, to);
+  if (!summary) {
+    return Response.json({ ok: false, error: `unknown property "${property}".` }, { status: 400 });
+  }
+  return Response.json({ ok: true, ...summary });
 }
