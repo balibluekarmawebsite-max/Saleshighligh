@@ -263,6 +263,13 @@ cost, and loses the single-group convenience.
 We can start **D1 (schema/storage)** immediately on the shapes in §3, and refine
 once D0's real pull is in hand.
 
+### Progress
+
+- **D1 — ✅ built.** The six `Daily*` models are in `prisma/schema.prisma` and the
+  migration is `prisma/migrations/20261019120000_add_daily_report/`. Apply it on
+  the VPS with `npx prisma migrate deploy` (then `npm run db:generate` if needed).
+  Fields will be refined in D0 once the real VHP pull is in hand.
+
 ---
 
 ## 8. Open questions (need your input)

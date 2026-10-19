@@ -153,6 +153,14 @@ model Property {
   weeklySettings       WeeklySetting[]
   weeklyImports        WeeklyImport[]
 
+  // Daily Report module (see DAILY_REPORT_PLAN.md)
+  dailyCapacities          DailyCapacity[]
+  dailyPickupSnapshots     DailyPickupSnapshot[]
+  dailyReservationActivity DailyReservationActivity[]
+  dailyRoomRevenue         DailyRoomRevenue[]
+  dailySegmentPerformance  DailySegmentPerformance[]
+  dailyBreakEven           DailyBreakEven[]
+
   @@map("properties")
 }
 
@@ -532,7 +540,7 @@ model Forecast {
 
 /// Competitive supply context for the property's market area.
 model MarketSupply {
-  id                      String  @id @default(cuid())
+  id                      String @id @default(cuid())
   periodId                String
   areaName                String
   propertiesCount         Int
@@ -1283,4 +1291,126 @@ model ScrapeJob {
 
   @@index([status, requestedAt])
   @@map("scrape_jobs")
+}
+
+// ─── Daily Report module ────────────────────────────────────────────────────
+// Day-by-day VHP feeds that power the automated Daily Reservation Report
+// (see DAILY_REPORT_PLAN.md). RAW inputs only — every derived metric
+// (occupancy %, ADR, RevPAR, pickup/day, increasement %, pace, BEP gap) is
+// computed in lib/daily/calculations.ts, never stored. Keyed by (property, date).
+
+/// Rooms available vs out-of-order for a property-month. Saleable room nights =
+/// (roomsAvailable - roomsOutOfOrder) * days-in-month is computed, not stored.
+model DailyCapacity {
+  id              String   @id @default(cuid())
+  propertyId      String
+  year            Int
+  month           Int // 1-12
+  roomsAvailable  Int
+  roomsOutOfOrder Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year, month])
+  @@map("daily_capacities")
+}
+
+/// Pick-up snapshot: rooms (and revenue) on the books for a stay period, as read
+/// on `snapshotDate`. The occupancy-on-hand matrix is these rows accumulating
+/// over the snapshot days. (stayMonth today; stay-date grain can be added later.)
+model DailyPickupSnapshot {
+  id           String   @id @default(cuid())
+  propertyId   String
+  snapshotDate DateTime @db.Date
+  stayYear     Int
+  stayMonth    Int // 1-12
+  roomNights   Int
+  revenue      Decimal? @db.Decimal(16, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, snapshotDate, stayYear, stayMonth])
+  @@index([propertyId, stayYear, stayMonth])
+  @@map("daily_pickup_snapshots")
+}
+
+/// The NEW daily VHP pull: reservation and cancellation room nights per business
+/// (transaction) date. Net pickup = reservations - cancellations is computed.
+model DailyReservationActivity {
+  id                     String   @id @default(cuid())
+  propertyId             String
+  businessDate           DateTime @db.Date
+  reservationRoomNights  Int      @default(0)
+  cancellationRoomNights Int      @default(0)
+  reservationRevenue     Decimal? @db.Decimal(16, 2)
+  cancellationRevenue    Decimal? @db.Decimal(16, 2)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, businessDate])
+  @@index([propertyId, businessDate])
+  @@map("daily_reservation_activity")
+}
+
+/// Materialised per-stay-date actuals (the "room rev" sheets): room nights +
+/// revenue for each arrival/stay date. ADR is computed.
+model DailyRoomRevenue {
+  id         String   @id @default(cuid())
+  propertyId String
+  stayDate   DateTime @db.Date
+  roomNights Int
+  revenue    Decimal  @db.Decimal(16, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, stayDate])
+  @@index([propertyId, stayDate])
+  @@map("daily_room_revenue")
+}
+
+/// Market-segment budget vs actual per property-month.
+model DailySegmentPerformance {
+  id               String   @id @default(cuid())
+  propertyId       String
+  year             Int
+  month            Int
+  segment          String
+  budgetRoomNights Int?
+  actualRoomNights Int?
+  budgetRevenue    Decimal? @db.Decimal(16, 2)
+  actualRevenue    Decimal? @db.Decimal(16, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year, month, segment])
+  @@map("daily_segment_performance")
+}
+
+/// Break-even parameters per property-month (fixed/variable cost, budget, BEP ADR).
+model DailyBreakEven {
+  id            String   @id @default(cuid())
+  propertyId    String
+  year          Int
+  month         Int
+  budgetRevenue Decimal? @db.Decimal(16, 2)
+  fixedCost     Decimal? @db.Decimal(16, 2)
+  variableCost  Decimal? @db.Decimal(16, 2)
+  bepAdr        Decimal? @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, year, month])
+  @@map("daily_break_even")
 }
