@@ -103,7 +103,15 @@ export async function GET(req: NextRequest) {
     return Response.json({ ok: false, error: "property query param is required." }, { status: 400 });
   }
 
-  const summary = await getCancellationSummary(property, from, to);
+  let summary;
+  try {
+    summary = await getCancellationSummary(property, from, to);
+  } catch (error) {
+    // Most likely the migration hasn't been applied yet (table missing) — return
+    // a readable message instead of a bare 500.
+    const message = error instanceof Error ? error.message : "query failed.";
+    return Response.json({ ok: false, error: message }, { status: 500 });
+  }
   if (!summary) {
     return Response.json({ ok: false, error: `unknown property "${property}".` }, { status: 400 });
   }
