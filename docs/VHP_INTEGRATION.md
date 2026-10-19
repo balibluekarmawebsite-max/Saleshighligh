@@ -45,7 +45,7 @@ Content-Type: multipart/form-data
 |---|---|---|---|
 | `file` | ✅ | the CSV file | the VHP export. CSV or XLSX. Max 20 MB. |
 | `property` | ✅ | `BKDS` | one of `BKDS`, `BKDU`, `BKV` |
-| `section` | ✅ | `C` | `B` or `C` (see §4). Letters or internal ids both work. |
+| `section` | ✅ | `C` | `B` (Yearly Occupancy Report) or `C` (Reservation Report) — see §4. (`CANCEL` is reserved for the upcoming Cancellation Report.) |
 | `week_ending` | ✅ | `2026-10-08` | `YYYY-MM-DD`, the **Thursday** that ends the reporting week (see §6) |
 | `source` | optional | `vhp:reservation-by-creation-date` | free text, recorded in the audit log |
 
@@ -56,10 +56,13 @@ they are not needed for B or C.)
 
 ## 4. Section mapping
 
-| VHP report | `section` | Fills in the dashboard |
-|---|---|---|
-| **Yearly forecast** — per-month occupancy / ADR / revenue (ACTUALS) | `B` | B · YTD Actual & Forecast — the **Actual** columns |
-| **Reservation by Creation Date** — grouped by booking agent | `C` | C · Weekly Agent Production |
+The three scraped-data feeds have canonical names (see `lib/scrape-sections.ts`):
+
+| Feed name | `section` | VHP report | Fills in the dashboard |
+|---|---|---|---|
+| **Yearly Occupancy Report** | `B` | Yearly Forecast Of Room Occupancy (actuals) | B · YTD Actual & Forecast — the **Actual** columns |
+| **Reservation Report** | `C` | Reservation By Creation Date (by booking agent) | C · Weekly Agent Production |
+| **Cancellation Report** *(upcoming)* | `CANCEL` | Cancellation room nights per day | Daily Report — reservation/cancellation activity. **Name reserved; ingestion lands in D2** (see `DAILY_REPORT_PLAN.md`). Don't post `CANCEL` yet — the endpoint to receive it is being built. |
 
 ### Important: Section B is **actuals only**
 

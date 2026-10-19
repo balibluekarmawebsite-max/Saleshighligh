@@ -157,6 +157,13 @@ model DailyBreakEven {
 
 ## 4. Ingestion pipeline (reuse what we already have)
 
+**Feed names** (canonical, in `lib/scrape-sections.ts`): the scraped VHP feeds are
+**Yearly Occupancy Report** (`B`), **Reservation Report** (`C`), and the new
+**Cancellation Report** (`CANCEL`) — the last feeds the daily report's cancellation
+room nights into `DailyReservationActivity`. The name is reserved now; its
+ingestion endpoint/parser is built in **D2** once the cancellation pull format is
+in hand.
+
 We already run a scrape-job system for weekly B/C: `ScrapeJob` model → office-PC
 poller claims jobs → pushes results to `/api/import` (token-gated). The daily
 feeds plug into the same machinery:

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, Loader2, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { WEEKLY_SCRAPE_SECTIONS, scrapeSectionName } from "@/lib/scrape-sections";
 import type { ScrapeJobView } from "@/lib/weekly/jobs";
 import type { PollerHeartbeat } from "@/lib/weekly/poller-heartbeat";
 import { requestScrape, type ScrapeActionResult } from "@/app/weekly/[property]/[week]/scrape/actions";
@@ -143,8 +144,11 @@ export function ScrapeClient({
                 disabled={!canEdit}
                 className={FIELD}
               >
-                <option value="C">C — Reservation by Creation Date (by booking agent)</option>
-                <option value="B">B — Yearly Forecast of Room Occupancy</option>
+                {WEEKLY_SCRAPE_SECTIONS.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.name} — {s.vhpSource}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -179,8 +183,8 @@ export function ScrapeClient({
 
           <p className="text-xs text-muted-foreground">
             {section === "C"
-              ? "The scraper sets VHP's reservation date filter to exactly this range, exports, and uploads Section C."
-              : "The scraper sets VHP's Month selector to this month, opens the Yearly Forecast (Show Revenue on) and uploads Section B. Pick the current month to refresh, or a past month to backfill — VHP fills that month through to year-end."}
+              ? "The Reservation Report sets VHP's reservation date filter to exactly this range, exports, and fills Section C · Weekly Agent Production."
+              : "The Yearly Occupancy Report sets VHP's Month selector to this month, opens the Yearly Forecast (Show Revenue on) and fills Section B · YTD Actual & Forecast. Pick the current month to refresh, or a past month to backfill — VHP fills that month through to year-end."}
           </p>
 
           <div className="flex items-center gap-3">
@@ -227,7 +231,7 @@ export function ScrapeClient({
                 {jobs.map((j) => (
                   <tr key={j.id} className="border-b border-border/60">
                     <td className="py-2 pr-3 font-medium text-foreground">{j.property}</td>
-                    <td className="py-2 px-3">{j.section}</td>
+                    <td className="py-2 px-3">{scrapeSectionName(j.section)}</td>
                     <td className="py-2 px-3 tabular-nums text-muted-foreground">{j.period}</td>
                     <td className="py-2 px-3">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[j.status] ?? "bg-slate-100 text-slate-600"}`}>
