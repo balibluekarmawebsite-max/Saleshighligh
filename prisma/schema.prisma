@@ -154,12 +154,12 @@ model Property {
   weeklyImports        WeeklyImport[]
 
   // Daily Report module (see DAILY_REPORT_PLAN.md)
-  dailyCapacities          DailyCapacity[]
-  dailyPickupSnapshots     DailyPickupSnapshot[]
-  dailyReservationActivity DailyReservationActivity[]
-  dailyRoomRevenue         DailyRoomRevenue[]
-  dailySegmentPerformance  DailySegmentPerformance[]
-  dailyBreakEven           DailyBreakEven[]
+  dailyCapacities         DailyCapacity[]
+  dailyPickupSnapshots    DailyPickupSnapshot[]
+  dailyCancellations      DailyCancellation[]
+  dailyRoomRevenue        DailyRoomRevenue[]
+  dailySegmentPerformance DailySegmentPerformance[]
+  dailyBreakEven          DailyBreakEven[]
 
   @@map("properties")
 }
@@ -1338,24 +1338,34 @@ model DailyPickupSnapshot {
   @@map("daily_pickup_snapshots")
 }
 
-/// The NEW daily VHP pull: reservation and cancellation room nights per business
-/// (transaction) date. Net pickup = reservations - cancellations is computed.
-model DailyReservationActivity {
-  id                     String   @id @default(cuid())
-  propertyId             String
-  businessDate           DateTime @db.Date
-  reservationRoomNights  Int      @default(0)
-  cancellationRoomNights Int      @default(0)
-  reservationRevenue     Decimal? @db.Decimal(16, 2)
-  cancellationRevenue    Decimal? @db.Decimal(16, 2)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+/// The NEW "Cancellation Report" VHP pull — one RAW row per cancelled reservation
+/// line (Cancel Date = the business/transaction day it was cancelled). The daily
+/// report's cancellation room nights per day EXCLUDE lines where cancelDate ==
+/// createdDate (same-day book-and-cancel) — that exclusion is applied in
+/// lib/daily/calculations.ts, so both dates are stored raw here. Re-importing a
+/// cancel date replaces that day's rows (idempotent at the cancelDate grain).
+model DailyCancellation {
+  id                String    @id @default(cuid())
+  propertyId        String
+  cancelDate        DateTime  @db.Date
+  createdDate       DateTime  @db.Date
+  nights            Int // room nights cancelled on this line
+  roomQuantity      Int       @default(1)
+  reservationNumber String?
+  reservationName   String? // agent / source (BOOKING.COM, EXPEDIA, MG HOLIDAY, …)
+  guestName         String?
+  arrivalDate       DateTime? @db.Date
+  departureDate     DateTime? @db.Date
+  roomType          String?
+  roomRate          Decimal?  @db.Decimal(14, 2)
+  cancelReason      String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  @@unique([propertyId, businessDate])
-  @@index([propertyId, businessDate])
-  @@map("daily_reservation_activity")
+  @@index([propertyId, cancelDate])
+  @@map("daily_cancellations")
 }
 
 /// Materialised per-stay-date actuals (the "room rev" sheets): room nights +

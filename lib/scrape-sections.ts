@@ -43,9 +43,9 @@ export const SCRAPE_SECTIONS: ScrapeSectionDef[] = [
   {
     code: "CANCEL",
     name: "Cancellation Report",
-    vhpSource: "Cancellation room nights per day (format to be confirmed)",
+    vhpSource: "Cancelled reservations (per-line; Cancel Date + Created Date)",
     report: "daily",
-    status: "planned",
+    status: "live",
   },
 ];
 

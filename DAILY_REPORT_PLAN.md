@@ -275,7 +275,20 @@ once D0's real pull is in hand.
 - **D1 — ✅ built.** The six `Daily*` models are in `prisma/schema.prisma` and the
   migration is `prisma/migrations/20261019120000_add_daily_report/`. Apply it on
   the VPS with `npx prisma migrate deploy` (then `npm run db:generate` if needed).
-  Fields will be refined in D0 once the real VHP pull is in hand.
+  *Refined after seeing the real Cancellation Report:* the placeholder
+  `DailyReservationActivity` was replaced with **`DailyCancellation`** — one RAW
+  row per cancelled line (the migration was updated in place, so if you already
+  ran `migrate deploy` for the first D1, tell me and I'll add a follow-up
+  migration instead).
+- **D2 — Cancellation Report ingestion ✅ built.** Deterministic parser
+  (`lib/daily/parse-cancellation.ts`, DD/MM/YY dates, skips blanks + TOTAL), the
+  same-day exclusion calc (`lib/daily/calculations.ts`), apply + token-gated
+  endpoint **`POST /api/daily/cancellation`** (`lib/daily/import-cancellation.ts`),
+  and tests against the real sample (verified: raw 48 → **46** counted after
+  excluding the one same-day book-and-cancel). The scraper posts the CSV as-is;
+  see VHP_INTEGRATION.md §11. The **same-day rule** (Cancel Date = Created Date →
+  excluded) lives in the calc, so raw lines are kept.
+  *Still to do in D2:* the pick-up, room-revenue, segment and capacity feeds.
 
 ---
 

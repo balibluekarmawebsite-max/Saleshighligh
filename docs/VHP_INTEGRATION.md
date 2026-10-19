@@ -62,7 +62,7 @@ The three scraped-data feeds have canonical names (see `lib/scrape-sections.ts`)
 |---|---|---|---|
 | **Yearly Occupancy Report** | `B` | Yearly Forecast Of Room Occupancy (actuals) | B · YTD Actual & Forecast — the **Actual** columns |
 | **Reservation Report** | `C` | Reservation By Creation Date (by booking agent) | C · Weekly Agent Production |
-| **Cancellation Report** *(upcoming)* | `CANCEL` | Cancellation room nights per day | Daily Report — reservation/cancellation activity. **Name reserved; ingestion lands in D2** (see `DAILY_REPORT_PLAN.md`). Don't post `CANCEL` yet — the endpoint to receive it is being built. |
+| **Cancellation Report** | `CANCEL` | Cancelled reservations (per-line) | Daily Report — `daily_cancellations`. **Live:** POST the CSV to **`/api/daily/cancellation`** (not `/api/import` — see §11). |
 
 ### Important: Section B is **actuals only**
 
@@ -290,3 +290,44 @@ def push(path, property_code, section, week_ending, source):
   - [ ] Section B files contain **actuals only** (no budget / last year).
 - [ ] Log every response; retry only on 429/5xx with backoff.
 - [ ] Alert on 401 (token), 409 (locked week), 422 (unreadable file), 501 (AI off).
+
+---
+
+## 11. Cancellation Report (daily feed)
+
+The **Cancellation Report** (`CANCEL`) belongs to the **Daily Report**, not the
+weekly one, so it uses a **separate endpoint** — there's no week, just cancel
+dates.
+
+**POST** `multipart/form-data` to **`/api/daily/cancellation`**:
+
+```
+Authorization: Bearer <IMPORT_API_TOKEN>
+property=BKDU
+source=vhp:cancellation          (optional, for logs)
+file=@cancelled-reservation.csv
+```
+
+- Post the VHP cancelled-reservations export **as-is** (the raw per-line CSV: the
+  header row `Reservation Number … Cancel Date, …, Created Date, …`, the data
+  lines, and the `TOTAL` row — all handled; blank lead rows and the `TOTAL` row
+  are skipped automatically). Dates are read as `DD/MM/YY`.
+- **Idempotent per cancel date:** every cancel date present in the file replaces
+  that day's stored rows, so re-posting a day (or a date range) is safe.
+- Typically run it **daily** for the previous day's cancellations, or for a date
+  range to back-fill.
+
+**The same-day rule is applied by the dashboard, not the scraper.** Send every
+line. Lines where **Cancel Date = Created Date** (booked and cancelled the same
+day) are stored but **excluded** from the report's counted cancellation room
+nights — don't filter them out in the scraper.
+
+**Success** → `200`:
+
+```json
+{ "ok": true, "property": "BKDU", "cancelDates": ["2026-10-18"], "written": 11,
+  "message": "Cancellation Report stored — 11 line(s) across 1 cancel date(s)." }
+```
+
+Errors mirror §7: `401` bad token, `400` missing property/file, `422` the file
+isn't a recognised Cancellation Report.

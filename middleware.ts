@@ -42,9 +42,10 @@ export const config = {
   // cron API (self-gated by CRON_SECRET so the scheduler's token request isn't
   // redirected to /login), the data-push + jobs APIs (/api/import, /api/jobs,
   // self-gated by IMPORT_API_TOKEN / VHP_JOBS_TOKEN so the VHP scraper's token
-  // requests aren't redirected to /login), the /print route (self-gated so the
-  // PDF exporter's headless-browser fetch can reach it), and /uploads (static
-  // user images, served by unguessable key — the PDF exporter loads them as
-  // <img> sub-resources without a session).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth|api/cron|api/import|api/jobs).*)"],
+  // requests aren't redirected to /login — the daily report's /api/daily pushes
+  // the same way), the /print route (self-gated so the PDF exporter's
+  // headless-browser fetch can reach it), and /uploads (static user images,
+  // served by unguessable key — the PDF exporter loads them as <img>
+  // sub-resources without a session).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth|api/cron|api/import|api/jobs|api/daily).*)"],
 };
