@@ -28,10 +28,13 @@ export function isMonthId(s: string): boolean {
   return m >= 1 && m <= 12;
 }
 
+// Labels are pinned to UTC so they match the yyyy-mm id regardless of the
+// server's local timezone (a server behind UTC would otherwise render the 1st
+// of a month as the previous month).
 const monthShort = (year: number, month: number): string =>
-  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-US", { month: "short" });
+  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-US", { month: "short", timeZone: "UTC" });
 const monthLong = (year: number, month: number): string =>
-  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-GB", { month: "long", year: "numeric" });
+  new Date(Date.UTC(year, month - 1, 1)).toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 
 export interface DailyMonthOption {
   month: string; // yyyy-mm (the snapshot month)

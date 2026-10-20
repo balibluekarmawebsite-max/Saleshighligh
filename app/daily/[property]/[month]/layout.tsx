@@ -16,21 +16,24 @@ export default async function DailyLayout({
 }) {
   const shell = await getDailyShellData();
   const me = process.env.AUTH_SECRET ? await getCurrentUser() : null;
-  const validProperty = shell.properties.some((p) => p.code === params.property);
+  // Treat the uppercase DB code as canonical (the data layer normalizes too), so
+  // a manually-typed lowercase property URL still resolves instead of 404ing.
+  const property = params.property.toUpperCase();
+  const validProperty = shell.properties.some((p) => p.code === property);
   if (!validProperty || !isMonthId(params.month)) {
     notFound();
   }
 
   return (
     <AppShell
-      property={params.property}
+      property={property}
       period={params.month}
       userEmail={me?.email ?? null}
       header={
         <DailyContextBar
           properties={shell.properties}
-          months={shell.monthsByProperty[params.property] ?? []}
-          property={params.property}
+          months={shell.monthsByProperty[property] ?? []}
+          property={property}
           month={params.month}
         />
       }

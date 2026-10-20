@@ -19,7 +19,7 @@ function monthLabel(month: string): string {
   const y = Number(month.slice(0, 4));
   const m = Number(month.slice(5, 7));
   if (!y || !m) return month;
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-GB", { month: "long", year: "numeric" });
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 /** Daily Report top bar: section title, property switcher, and a month picker. */
