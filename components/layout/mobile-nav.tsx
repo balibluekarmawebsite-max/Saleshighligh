@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
+  DAILY_NAV,
   DASHBOARD_NAV,
   WEEKLY_NAV,
+  dailyHref,
   dashHref,
   projectForPath,
   weeklyHref,
@@ -29,13 +31,16 @@ export function MobileNav({
 }) {
   const pathname = usePathname();
   const project = projectForPath(pathname);
-  const base = project === "weekly" ? "weekly" : "dashboard";
+  const base = project === "weekly" ? "weekly" : project === "daily" ? "daily" : "dashboard";
   const rel = currentRel(pathname, base);
-  const navItems: DashNavItem[] = project === "weekly" ? WEEKLY_NAV : DASHBOARD_NAV;
+  const navItems: DashNavItem[] =
+    project === "weekly" ? WEEKLY_NAV : project === "daily" ? DAILY_NAV : DASHBOARD_NAV;
   const hrefFor = (relPath: string) =>
     project === "weekly"
       ? weeklyHref(property, period, relPath)
-      : dashHref(property, period, relPath);
+      : project === "daily"
+        ? dailyHref(property, period, relPath)
+        : dashHref(property, period, relPath);
 
   return (
     <nav className="flex gap-2 overflow-x-auto border-b border-border bg-white px-4 py-2 lg:hidden">

@@ -318,7 +318,18 @@ once D0's real pull is in hand.
   latest, Increasement % = latest − first occ, Average Pickup/day = increasement
   ÷ readings) — verified against the real report (Oct: 85.16% / 396 / 2,175,021 /
   +7.53% / 0.40%). Tests in `lib/daily/pickup-calc.test.ts`. *Still to do:*
-  cancellation/room-revenue/segment/BEP calcs, then the D4 report grid + export.
+  cancellation/room-revenue/segment/BEP calcs.
+- **D4 — Pick-Up report page ✅ built.** New **`/daily`** project area (third
+  alongside `/dashboard` and `/weekly`): project switcher + sidebar + mobile nav
+  entries (`lib/nav.ts` `DAILY_NAV`/`dailyHref`, `components/layout/sidebar.tsx`,
+  `mobile-nav.tsx`), a `DailyContextBar` (property switcher + snapshot-month
+  picker), and the Occupancy Pick-Up grid at
+  `/daily/[property]/[yyyy-mm]/pickup`. `lib/daily/pickup-report-data.ts`
+  assembles the grid (rows = snapshot dates, columns = stay months, cells = occ
+  on hand) + the summary rows; `components/daily/pickup-grid.tsx` renders it
+  (teal header, gold-tinted Room Sold / Revenue rows, variance-coloured
+  Increasement % / Avg Pickup). Empty-safe. *Still to do:* room-revenue / segment
+  / capacity feeds + their report sections; cancellations overlay; export.
   *Still to do in D2:* the room-revenue, segment and capacity feeds.
 
 ---

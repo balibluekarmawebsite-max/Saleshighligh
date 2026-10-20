@@ -7,9 +7,11 @@ import { BarChart3, Building2, Settings } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import {
   ADMIN_NAV,
+  DAILY_NAV,
   DASHBOARD_NAV,
   PROJECTS,
   WEEKLY_NAV,
+  dailyHref,
   dashHref,
   projectForPath,
   weeklyHref,
@@ -38,13 +40,16 @@ export function Sidebar({
   const isGroup = property === "GROUP";
   const isWeekly = project === "weekly";
 
-  const base = project === "weekly" ? "weekly" : "dashboard";
+  const base = project === "weekly" ? "weekly" : project === "daily" ? "daily" : "dashboard";
   const rel = currentRel(pathname, base);
-  const navItems: DashNavItem[] = project === "weekly" ? WEEKLY_NAV : DASHBOARD_NAV;
+  const navItems: DashNavItem[] =
+    project === "weekly" ? WEEKLY_NAV : project === "daily" ? DAILY_NAV : DASHBOARD_NAV;
   const hrefFor = (relPath: string) =>
     project === "weekly"
       ? weeklyHref(property, period, relPath)
-      : dashHref(property, period, relPath);
+      : project === "daily"
+        ? dailyHref(property, period, relPath)
+        : dashHref(property, period, relPath);
 
   return (
     <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-white lg:flex">

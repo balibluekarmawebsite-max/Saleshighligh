@@ -1,6 +1,7 @@
 import {
   BarChart3,
   BedDouble,
+  CalendarClock,
   CalendarRange,
   Download,
   DownloadCloud,
@@ -12,13 +13,14 @@ import {
   Megaphone,
   Settings,
   Share2,
+  TrendingUp,
   UtensilsCrossed,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 
-/** The two top-level projects in the app. Each has its own section menu. */
-export type ProjectKey = "sales" | "weekly";
+/** The top-level projects in the app. Each has its own section menu. */
+export type ProjectKey = "sales" | "weekly" | "daily";
 
 export interface ProjectDef {
   key: ProjectKey;
@@ -31,11 +33,14 @@ export interface ProjectDef {
 export const PROJECTS: ProjectDef[] = [
   { key: "sales", label: "Sales Highlight", href: "/dashboard", icon: BarChart3 },
   { key: "weekly", label: "Weekly Reports", href: "/weekly", icon: CalendarRange },
+  { key: "daily", label: "Daily Report", href: "/daily", icon: CalendarClock },
 ];
 
 /** Which project a pathname belongs to (defaults to sales). */
 export function projectForPath(pathname: string): ProjectKey {
-  return pathname.startsWith("/weekly") ? "weekly" : "sales";
+  if (pathname.startsWith("/weekly")) return "weekly";
+  if (pathname.startsWith("/daily")) return "daily";
+  return "sales";
 }
 
 /** A section link, relative to a project's /[property]/[period] root. */
@@ -81,6 +86,12 @@ export const WEEKLY_NAV: DashNavItem[] = [
   { label: "Request Scrape", href: "scrape", icon: DownloadCloud },
   { label: "Export Center", href: "export", icon: Download },
   { label: "Settings", href: "settings", icon: Settings },
+];
+
+// ─── Daily Report ───────────────────────────────────────────────────────────
+
+export const DAILY_NAV: DashNavItem[] = [
+  { label: "Occupancy Pick-Up", href: "pickup", icon: TrendingUp },
 ];
 
 export interface AdminNavItem {
@@ -133,4 +144,17 @@ export function weeklySectionTitle(rel: string): string {
     if (child) return `${item.label} — ${child.label}`;
   }
   return "Weekly Reports";
+}
+
+// ─── Daily Report hrefs + titles ────────────────────────────────────────────
+
+/** Build an absolute Daily Report href from a property, snapshot month and relative path. */
+export function dailyHref(property: string, month: string, rel: string): string {
+  const base = `/daily/${property}/${month}`;
+  return rel ? `${base}/${rel}` : base;
+}
+
+/** Human title for a Daily Report section, given the path relative to the month root. */
+export function dailySectionTitle(rel: string): string {
+  return DAILY_NAV.find((item) => item.href === rel)?.label ?? "Occupancy Pick-Up";
 }
