@@ -10,12 +10,9 @@
  */
 
 import { logAudit } from "@/lib/audit";
+import { isoToUtcDate, isValidIsoDate, todayIso } from "@/lib/daily/date";
 import { prisma } from "@/lib/prisma";
 import { parsePickupForecast, type PickupSnapshotRow } from "@/lib/daily/parse-pickup";
-
-const ISO = /^\d{4}-\d{2}-\d{2}$/;
-const day = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`);
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 /**
  * Store an occupancy-pickup snapshot for a property, replacing every row for
@@ -27,7 +24,7 @@ export async function applyPickupRows(
   rows: PickupSnapshotRow[],
 ): Promise<number> {
   if (rows.length === 0) return 0;
-  const snap = day(snapshotDate);
+  const snap = isoToUtcDate(snapshotDate);
   const data = rows.map((r) => ({
     propertyId,
     snapshotDate: snap,
@@ -71,7 +68,9 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     if (!property) return fail(400, "property is required.");
 
     const snapshotDate = (input.snapshotDate ?? "").trim() || todayIso();
-    if (!ISO.test(snapshotDate)) return fail(400, "snapshotDate must be yyyy-mm-dd.");
+    if (!isValidIsoDate(snapshotDate)) {
+      return fail(400, "snapshotDate must be a real calendar date in yyyy-mm-dd form.");
+    }
 
     let text = input.text ?? "";
     if (!text && input.fileBuffer) {
