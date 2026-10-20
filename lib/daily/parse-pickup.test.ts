@@ -40,15 +40,30 @@ describe("parsePickupForecast", () => {
     ]);
   });
 
-  it("reads room nights and revenue per stay month", () => {
+  it("reads room nights, saleable rooms and revenue per stay month", () => {
     const rows = parsePickupForecast(FORECAST_CSV, 2026)!;
     const by = new Map(rows.map((r) => [`${r.stayYear}-${String(r.stayMonth).padStart(2, "0")}`, r]));
 
-    expect(by.get("2026-10")).toEqual({ stayYear: 2026, stayMonth: 10, roomNights: 457, revenue: 821658439 });
-    expect(by.get("2026-11")).toEqual({ stayYear: 2026, stayMonth: 11, roomNights: 331, revenue: 577082116 });
-    expect(by.get("2026-12")).toEqual({ stayYear: 2026, stayMonth: 12, roomNights: 271, revenue: 557904971 });
-    expect(by.get("2027-01")).toEqual({ stayYear: 2027, stayMonth: 1, roomNights: 220, revenue: 420519107 });
-    expect(by.get("2027-09")).toEqual({ stayYear: 2027, stayMonth: 9, roomNights: 52, revenue: 58530277 });
+    expect(by.get("2026-10")).toEqual({ stayYear: 2026, stayMonth: 10, roomNights: 457, saleableRooms: 558, revenue: 821658439 });
+    expect(by.get("2026-11")).toEqual({ stayYear: 2026, stayMonth: 11, roomNights: 331, saleableRooms: 540, revenue: 577082116 });
+    expect(by.get("2026-12")).toEqual({ stayYear: 2026, stayMonth: 12, roomNights: 271, saleableRooms: 558, revenue: 557904971 });
+    expect(by.get("2027-01")).toEqual({ stayYear: 2027, stayMonth: 1, roomNights: 220, saleableRooms: 558, revenue: 420519107 });
+    expect(by.get("2027-09")).toEqual({ stayYear: 2027, stayMonth: 9, roomNights: 52, saleableRooms: 540, revenue: 58530277 });
+  });
+
+  it("does NOT mistake the 'SaleRoom w/ OOO' row for 'Saleable Rooms'", () => {
+    // The real export has both; only the exact "Saleable Rooms" label is the
+    // occupancy denominator.
+    const csv =
+      [
+        "Yearly Forecast Of Room Occupancy",
+        '"Date","01/10 Oct "',
+        '"  Room Occupied","393.00"',
+        '" Saleable Rooms","465.00"',
+        '"SaleRoom w/ OOO","435"',
+      ].join("\n") + "\n";
+    const rows = parsePickupForecast(csv, 2026)!;
+    expect(rows[0]!.saleableRooms).toBe(465);
   });
 
   it("totals the on-the-books room nights across the window", () => {
@@ -81,7 +96,7 @@ describe("parsePickupForecast", () => {
     expect(rows.length).toBe(12);
     expect(rows.every((r) => r.stayYear === 2026)).toBe(true);
     expect(rows.map((r) => r.stayMonth)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-    expect(rows[0]).toEqual({ stayYear: 2026, stayMonth: 1, roomNights: 186, revenue: 558_000_000 });
+    expect(rows[0]).toEqual({ stayYear: 2026, stayMonth: 1, roomNights: 186, saleableRooms: null, revenue: 558_000_000 });
   });
 
   it("keeps a far month with no revenue block as a zero/null row", () => {
@@ -94,8 +109,8 @@ describe("parsePickupForecast", () => {
       ].join("\n") + "\n";
     const rows = parsePickupForecast(csv, 2026)!;
     expect(rows).toEqual([
-      { stayYear: 2026, stayMonth: 10, roomNights: 10, revenue: null },
-      { stayYear: 2026, stayMonth: 11, roomNights: 0, revenue: null },
+      { stayYear: 2026, stayMonth: 10, roomNights: 10, saleableRooms: null, revenue: null },
+      { stayYear: 2026, stayMonth: 11, roomNights: 0, saleableRooms: null, revenue: null },
     ]);
   });
 

@@ -53,3 +53,90 @@ export function cancellationRoomNightsByDate(lines: CancellationLike[]): Map<str
   }
   return byDate;
 }
+
+// ---------------------------------------------------------------------------
+// Occupancy Pickup — the daily "occupancy on hand" movement per stay month.
+//
+// The scraper posts the Yearly Occupancy export once a day; each day is a
+// reading (snapshot) of the rooms on the books for every forward stay month.
+// The Daily Report grid is those readings stacked day over day: one row per
+// snapshot date, one column per stay month, the cell being occupancy on hand.
+// The summary rows (Occ on Hand, Room Sold, Revenue, ADR) use the LATEST
+// reading; Increasement % and Average Pickup/day describe the movement.
+// ---------------------------------------------------------------------------
+
+/** One daily reading for a single stay month (raw snapshot values). */
+export interface PickupPoint {
+  snapshotDate: string; // ISO yyyy-mm-dd — the day the reading was taken
+  roomNights: number;
+  saleableRooms: number | null;
+  revenue: number | null;
+}
+
+/**
+ * Occupancy on hand % = room nights ÷ saleable room nights × 100. Null when the
+ * saleable denominator is missing or zero (so the report can show "—").
+ */
+export function occupancyPct(roomNights: number, saleableRooms: number | null): number | null {
+  if (saleableRooms == null || saleableRooms <= 0) return null;
+  return (roomNights / saleableRooms) * 100;
+}
+
+/** One cell of the movement series — a single day's reading with its occ %. */
+export interface PickupSeriesPoint {
+  snapshotDate: string;
+  roomNights: number;
+  revenue: number | null;
+  occPct: number | null;
+}
+
+/** A stay month's full movement + the Daily Report's summary row for it. */
+export interface StayMonthPickup {
+  /** Readings oldest → newest (the column's cells, top to bottom). */
+  series: PickupSeriesPoint[];
+  /** Number of readings tracked (the divisor for Average Pickup/day). */
+  days: number;
+  /** Occ on Hand — the latest reading's occupancy %. */
+  occOnHand: number | null;
+  /** Room Sold — the latest reading's room nights. */
+  roomSold: number;
+  /** Revenue Nett — the latest reading's revenue. */
+  revenue: number | null;
+  /** ADR — latest revenue ÷ latest room sold. */
+  adr: number | null;
+  /** Increasement % — latest occ % minus the first reading's occ % (points). */
+  increasementPct: number | null;
+  /** Average Pickup/day — Increasement % ÷ number of readings. */
+  avgPickupPerDay: number | null;
+}
+
+/**
+ * Collapse a stay month's daily readings into its movement series + summary row.
+ * Readings are sorted oldest → newest; the latest drives Occ on Hand / Room Sold
+ * / Revenue / ADR, and first → latest drives Increasement % and Average
+ * Pickup/day — matching the Daily Reservation Report's yellow summary rows.
+ */
+export function stayMonthPickup(points: PickupPoint[]): StayMonthPickup {
+  const series: PickupSeriesPoint[] = [...points]
+    .sort((a, b) => (a.snapshotDate < b.snapshotDate ? -1 : a.snapshotDate > b.snapshotDate ? 1 : 0))
+    .map((p) => ({
+      snapshotDate: p.snapshotDate,
+      roomNights: p.roomNights,
+      revenue: p.revenue,
+      occPct: occupancyPct(p.roomNights, p.saleableRooms),
+    }));
+
+  const days = series.length;
+  const latest = series[days - 1];
+  const first = series[0];
+
+  const roomSold = latest?.roomNights ?? 0;
+  const revenue = latest?.revenue ?? null;
+  const occOnHand = latest?.occPct ?? null;
+  const adr = revenue != null && roomSold > 0 ? revenue / roomSold : null;
+  const increasementPct =
+    first?.occPct != null && latest?.occPct != null ? latest.occPct - first.occPct : null;
+  const avgPickupPerDay = increasementPct != null && days > 0 ? increasementPct / days : null;
+
+  return { series, days, occOnHand, roomSold, revenue, adr, increasementPct, avgPickupPerDay };
+}

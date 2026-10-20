@@ -21,6 +21,8 @@ export interface PickupSnapshotRow {
   stayMonth: number; // 1-12
   /** Rooms on the books for this stay month (room nights). */
   roomNights: number;
+  /** Saleable room nights for the stay month (occ% denominator), or null if absent. */
+  saleableRooms: number | null;
   /** Room revenue on the books for this stay month (IDR), or null if absent. */
   revenue: number | null;
 }
@@ -66,6 +68,9 @@ export function parsePickupForecast(text: string, reportYear: number): PickupSna
 
   const roomOcc = rows.find((r) => norm(r[0]) === "room occupied");
   if (!roomOcc) return null;
+  // "Saleable Rooms" is the occupancy-% denominator; optional (a minimal export
+  // may omit it). Must not match "SaleRoom w/ OOO", hence the exact label.
+  const saleable = rows.find((r) => norm(r[0]) === "saleable rooms");
 
   // Revenue: each "Period" header names its months; the next "Room Revenue" row
   // carries the values, aligned by column. In a 12-month forward window each
@@ -90,8 +95,15 @@ export function parsePickupForecast(text: string, reportYear: number): PickupSna
     const offset = (month - startMonth + 12) % 12;
     const stayYear = reportYear + Math.floor((startMonth - 1 + offset) / 12);
     const roomNights = Math.round(toNumber(roomOcc[col]));
+    const sale = saleable ? Math.round(toNumber(saleable[col])) : 0;
     const rev = revenueByMonth.get(month);
-    out.push({ stayYear, stayMonth: month, roomNights, revenue: rev ?? null });
+    out.push({
+      stayYear,
+      stayMonth: month,
+      roomNights,
+      saleableRooms: sale > 0 ? sale : null,
+      revenue: rev ?? null,
+    });
   }
 
   return out.length > 0 ? out : null;

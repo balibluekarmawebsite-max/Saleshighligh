@@ -1327,6 +1327,10 @@ model DailyPickupSnapshot {
   stayYear     Int
   stayMonth    Int // 1-12
   roomNights   Int
+  // Saleable room nights for the stay month as read on snapshotDate (VHP's
+  // "Saleable Rooms" row). The denominator for occupancy-on-hand %
+  // (roomNights / saleableRooms) — computed in calculations, never stored.
+  saleableRooms Int?
   revenue      Decimal? @db.Decimal(16, 2)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

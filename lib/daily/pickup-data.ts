@@ -7,11 +7,15 @@
 
 import { Prisma } from "@prisma/client";
 
+import { occupancyPct } from "@/lib/daily/calculations";
 import { prisma } from "@/lib/prisma";
 
 export interface PickupStayMonth {
   stayMonth: string; // yyyy-mm
   roomNights: number;
+  saleableRooms: number | null;
+  /** Occupancy on hand % (room nights ÷ saleable), or null if no denominator. */
+  occPct: number | null;
   revenue: number | null;
 }
 
@@ -56,7 +60,14 @@ export async function getPickupSummary(
 
   const rows = await prisma.dailyPickupSnapshot.findMany({
     where,
-    select: { snapshotDate: true, stayYear: true, stayMonth: true, roomNights: true, revenue: true },
+    select: {
+      snapshotDate: true,
+      stayYear: true,
+      stayMonth: true,
+      roomNights: true,
+      saleableRooms: true,
+      revenue: true,
+    },
     orderBy: [{ snapshotDate: "desc" }, { stayYear: "asc" }, { stayMonth: "asc" }],
   });
 
@@ -69,6 +80,8 @@ export async function getPickupSummary(
     bucket.stayMonths.push({
       stayMonth: `${r.stayYear}-${String(r.stayMonth).padStart(2, "0")}`,
       roomNights: r.roomNights,
+      saleableRooms: r.saleableRooms,
+      occPct: occupancyPct(r.roomNights, r.saleableRooms),
       revenue,
     });
     bucket.totalRoomNights += r.roomNights;

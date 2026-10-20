@@ -304,6 +304,21 @@ once D0's real pull is in hand.
   (no schema change — the table was already in the D1 migration). Occupancy on
   hand, pickup/day and pace vs LY are **computed in D3**, never stored. See
   VHP_INTEGRATION.md §12. Feed registered as `PICKUP` in `lib/scrape-sections.ts`.
+  *Refined after seeing the real Daily Reservation Report (OCT PU tab):* each
+  **row is a snapshot day** (Oct 1…19) and each **column a stay month** — the
+  grid tracks occupancy **movement** day by day, and the summary rows (Occ on
+  Hand, Room Sold, Revenue, ADR) use the **latest** reading. The feed already
+  stores one snapshot/day per stay month; added **`saleableRooms`** (the VHP
+  "Saleable Rooms" row) so occupancy % can be derived — migration
+  `20261020130000_add_pickup_saleable_rooms` (additive nullable column; run
+  `npx prisma migrate deploy`). The scraper must POST the export **once a day**.
+- **D3 — Pickup calculations ✅ built (partial).** `lib/daily/calculations.ts`
+  adds `occupancyPct` (room nights ÷ saleable) and `stayMonthPickup` (sorts the
+  daily readings and derives Occ on Hand, Room Sold, Revenue, ADR = latest ÷
+  latest, Increasement % = latest − first occ, Average Pickup/day = increasement
+  ÷ readings) — verified against the real report (Oct: 85.16% / 396 / 2,175,021 /
+  +7.53% / 0.40%). Tests in `lib/daily/pickup-calc.test.ts`. *Still to do:*
+  cancellation/room-revenue/segment/BEP calcs, then the D4 report grid + export.
   *Still to do in D2:* the room-revenue, segment and capacity feeds.
 
 ---

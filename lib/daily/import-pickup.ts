@@ -31,6 +31,7 @@ export async function applyPickupRows(
     stayYear: r.stayYear,
     stayMonth: r.stayMonth,
     roomNights: r.roomNights,
+    saleableRooms: r.saleableRooms,
     revenue: r.revenue,
   }));
 

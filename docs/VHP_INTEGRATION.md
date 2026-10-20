@@ -373,11 +373,16 @@ file=@yearly-occupancy.csv
 
 - Post the VHP *Yearly Forecast Of Room Occupancy* CSV **as-is** — the same file
   Section B uses (the `Date` header with the 12 month columns, the `Room
-  Occupied` row, and the `Period` / `Room Revenue` blocks). Only those summary
-  rows are read; the daily grid at the top is ignored.
-- `snapshotDate` is the day the reading was taken. **Run it once per day** (e.g.
-  from the same 06:00 scrape) so the occupancy-on-hand matrix builds up one
-  column per day. Omit it to default to today.
+  Occupied` and `Saleable Rooms` rows, and the `Period` / `Room Revenue`
+  blocks). Only those summary rows are read; the daily grid at the top is
+  ignored. `Saleable Rooms` is the occupancy-% denominator (occ on hand =
+  room nights ÷ saleable); it's optional but normally present.
+- `snapshotDate` is the day the reading was taken. **Run it once per day** so the
+  occupancy-on-hand matrix builds up one row per day (that daily movement is the
+  whole point — each day becomes a row, and Occ on Hand / Room Sold / Revenue /
+  ADR use the **latest** reading). Omit `snapshotDate` to default to today. It
+  must be a real calendar date (`yyyy-mm-dd`); an impossible date like
+  `2026-02-29` is rejected with a `400` rather than silently rolled over.
 - **Idempotent per snapshot date:** re-posting a day replaces that day's rows, so
   a re-run or a back-fill of a past date is safe.
 - All 12 forward stay-months are kept (unlike Section B, which drops the
@@ -409,8 +414,10 @@ curl -H "Authorization: Bearer <IMPORT_API_TOKEN>" \
 ```json
 { "ok": true, "property": "BKDU", "latestSnapshot": "2026-10-20",
   "snapshots": [
-    { "snapshotDate": "2026-10-20", "totalRoomNights": 2121, "totalRevenue": 3668475194,
-      "stayMonths": [ { "stayMonth": "2026-10", "roomNights": 457, "revenue": 821658439 }, "..." ] } ] }
+    { "snapshotDate": "2026-10-20", "totalRoomNights": 1389, "totalRevenue": 3721248379,
+      "stayMonths": [
+        { "stayMonth": "2026-10", "roomNights": 393, "saleableRooms": 465, "occPct": 84.52, "revenue": 854634373 },
+        "..." ] } ] }
 ```
 
 Each successful push is also recorded in the dashboard **Activity log**
