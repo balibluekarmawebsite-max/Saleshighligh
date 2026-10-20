@@ -1,6 +1,6 @@
 -- Daily Report module (see DAILY_REPORT_PLAN.md): day-by-day VHP feeds.
--- Capacity, pick-up snapshots, per-line cancellations (Cancellation Report),
--- per-stay-date room revenue, market-segment budget/actual, and break-even.
+-- Capacity, pick-up snapshots, reservation/cancellation activity, per-stay-date
+-- room revenue, market-segment budget/actual, and break-even — all per property.
 
 -- CreateTable
 CREATE TABLE "daily_capacities" (
@@ -32,25 +32,18 @@ CREATE TABLE "daily_pickup_snapshots" (
 );
 
 -- CreateTable
-CREATE TABLE "daily_cancellations" (
+CREATE TABLE "daily_reservation_activity" (
     "id" TEXT NOT NULL,
     "propertyId" TEXT NOT NULL,
-    "cancelDate" DATE NOT NULL,
-    "createdDate" DATE NOT NULL,
-    "nights" INTEGER NOT NULL,
-    "roomQuantity" INTEGER NOT NULL DEFAULT 1,
-    "reservationNumber" TEXT,
-    "reservationName" TEXT,
-    "guestName" TEXT,
-    "arrivalDate" DATE,
-    "departureDate" DATE,
-    "roomType" TEXT,
-    "roomRate" DECIMAL(14,2),
-    "cancelReason" TEXT,
+    "businessDate" DATE NOT NULL,
+    "reservationRoomNights" INTEGER NOT NULL DEFAULT 0,
+    "cancellationRoomNights" INTEGER NOT NULL DEFAULT 0,
+    "reservationRevenue" DECIMAL(16,2),
+    "cancellationRevenue" DECIMAL(16,2),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "daily_cancellations_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "daily_reservation_activity_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -109,7 +102,10 @@ CREATE INDEX "daily_pickup_snapshots_propertyId_stayYear_stayMonth_idx" ON "dail
 CREATE UNIQUE INDEX "daily_pickup_snapshots_propertyId_snapshotDate_stayYear_sta_key" ON "daily_pickup_snapshots"("propertyId", "snapshotDate", "stayYear", "stayMonth");
 
 -- CreateIndex
-CREATE INDEX "daily_cancellations_propertyId_cancelDate_idx" ON "daily_cancellations"("propertyId", "cancelDate");
+CREATE INDEX "daily_reservation_activity_propertyId_businessDate_idx" ON "daily_reservation_activity"("propertyId", "businessDate");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "daily_reservation_activity_propertyId_businessDate_key" ON "daily_reservation_activity"("propertyId", "businessDate");
 
 -- CreateIndex
 CREATE INDEX "daily_room_revenue_propertyId_stayDate_idx" ON "daily_room_revenue"("propertyId", "stayDate");
@@ -130,7 +126,7 @@ ALTER TABLE "daily_capacities" ADD CONSTRAINT "daily_capacities_propertyId_fkey"
 ALTER TABLE "daily_pickup_snapshots" ADD CONSTRAINT "daily_pickup_snapshots_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "properties"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "daily_cancellations" ADD CONSTRAINT "daily_cancellations_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "properties"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "daily_reservation_activity" ADD CONSTRAINT "daily_reservation_activity_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "properties"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "daily_room_revenue" ADD CONSTRAINT "daily_room_revenue_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "properties"("id") ON DELETE CASCADE ON UPDATE CASCADE;
