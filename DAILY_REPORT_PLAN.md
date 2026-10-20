@@ -288,7 +288,23 @@ once D0's real pull is in hand.
   excluding the one same-day book-and-cancel). The scraper posts the CSV as-is;
   see VHP_INTEGRATION.md §11. The **same-day rule** (Cancel Date = Created Date →
   excluded) lives in the calc, so raw lines are kept.
-  *Still to do in D2:* the pick-up, room-revenue, segment and capacity feeds.
+  *Migration fix:* the first D1 migration was amended in place and had already
+  been deployed, so `daily_cancellations` was never created. A corrective
+  migration `prisma/migrations/20261020090000_daily_report_cancellation/` now
+  swaps `daily_reservation_activity` → `daily_cancellations` (verified live on
+  the VPS: raw 2-row smoke test → `roomNights 4`, `sameDayRoomNights 2`).
+- **D2 — Occupancy Pickup ingestion ✅ built.** The pick-up feed snapshots the
+  **same VHP export as Section B** (*Yearly Forecast Of Room Occupancy*) once a
+  day. Deterministic parser (`lib/daily/parse-pickup.ts`, keeps all 12 forward
+  stay-months with roll-over years), apply + token-gated endpoint **`POST
+  /api/daily/pickup`** (`lib/daily/import-pickup.ts`, idempotent per snapshot
+  date, `snapshotDate` defaults to today), verify **GET** + `lib/daily/pickup-
+  data.ts`, and tests against the real forecast fixture. Stores raw room nights +
+  revenue per `(snapshotDate, stayYear, stayMonth)` into `daily_pickup_snapshots`
+  (no schema change — the table was already in the D1 migration). Occupancy on
+  hand, pickup/day and pace vs LY are **computed in D3**, never stored. See
+  VHP_INTEGRATION.md §12. Feed registered as `PICKUP` in `lib/scrape-sections.ts`.
+  *Still to do in D2:* the room-revenue, segment and capacity feeds.
 
 ---
 

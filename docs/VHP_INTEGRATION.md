@@ -56,13 +56,14 @@ they are not needed for B or C.)
 
 ## 4. Section mapping
 
-The three scraped-data feeds have canonical names (see `lib/scrape-sections.ts`):
+The scraped-data feeds have canonical names (see `lib/scrape-sections.ts`):
 
 | Feed name | `section` | VHP report | Fills in the dashboard |
 |---|---|---|---|
 | **Yearly Occupancy Report** | `B` | Yearly Forecast Of Room Occupancy (actuals) | B · YTD Actual & Forecast — the **Actual** columns |
 | **Reservation Report** | `C` | Reservation By Creation Date (by booking agent) | C · Weekly Agent Production |
 | **Cancellation Report** | `CANCEL` | Cancelled reservations (per-line) | Daily Report — `daily_cancellations`. **Live:** POST the CSV to **`/api/daily/cancellation`** (not `/api/import` — see §11). |
+| **Occupancy Pickup Report** | `PICKUP` | Yearly Forecast Of Room Occupancy (daily snapshot) | Daily Report — `daily_pickup_snapshots` (occupancy on hand). **Live:** POST the CSV to **`/api/daily/pickup`** daily — see §12. |
 
 ### Important: Section B is **actuals only**
 
@@ -350,3 +351,67 @@ curl -H "Authorization: Bearer <IMPORT_API_TOKEN>" \
 
 Each successful push is also recorded in the dashboard **Activity log**
 (`/admin/activity`) as `daily_cancellation_import`.
+
+## 12. Occupancy Pickup Report (daily feed)
+
+The **Occupancy Pickup Report** (`PICKUP`) is the backbone of the Daily Report:
+it's the **same VHP export as Section B** — *Yearly Forecast Of Room Occupancy* —
+but captured **once a day**. Each day's reading is a snapshot of the rooms (and
+revenue) on the books for every forward stay month; comparing snapshots day over
+day gives **occupancy on hand**, **pickup per day** and **pace vs last year**
+(all computed by the dashboard, never stored).
+
+**POST** `multipart/form-data` to **`/api/daily/pickup`**:
+
+```
+Authorization: Bearer <IMPORT_API_TOKEN>
+property=BKDU
+snapshotDate=2026-10-20           (optional; defaults to today, UTC)
+source=vhp:pickup                 (optional, for logs)
+file=@yearly-occupancy.csv
+```
+
+- Post the VHP *Yearly Forecast Of Room Occupancy* CSV **as-is** — the same file
+  Section B uses (the `Date` header with the 12 month columns, the `Room
+  Occupied` row, and the `Period` / `Room Revenue` blocks). Only those summary
+  rows are read; the daily grid at the top is ignored.
+- `snapshotDate` is the day the reading was taken. **Run it once per day** (e.g.
+  from the same 06:00 scrape) so the occupancy-on-hand matrix builds up one
+  column per day. Omit it to default to today.
+- **Idempotent per snapshot date:** re-posting a day replaces that day's rows, so
+  a re-run or a back-fill of a past date is safe.
+- All 12 forward stay-months are kept (unlike Section B, which drops the
+  next-year columns), with the correct roll-over year (an October reading stores
+  Oct–Dec this year and Jan–Sep next year).
+
+**Success** → `200`:
+
+```json
+{ "ok": true, "property": "BKDU", "snapshotDate": "2026-10-20",
+  "stayMonths": ["2026-10", "2026-11", "2026-12", "2027-01", "..."],
+  "written": 12,
+  "message": "Occupancy Pickup stored — 12 stay-month(s) as of 2026-10-20." }
+```
+
+Errors mirror §7: `401` bad token, `400` missing property / bad `snapshotDate`,
+`422` the file isn't a recognised Yearly Occupancy forecast.
+
+### Verify what landed
+
+**GET** the same endpoint with the token to confirm a push (newest snapshot
+first):
+
+```
+curl -H "Authorization: Bearer <IMPORT_API_TOKEN>" \
+  "https://<dashboard-host>/api/daily/pickup?property=BKDU&from=2026-10-01&to=2026-10-31"
+```
+
+```json
+{ "ok": true, "property": "BKDU", "latestSnapshot": "2026-10-20",
+  "snapshots": [
+    { "snapshotDate": "2026-10-20", "totalRoomNights": 2121, "totalRevenue": 3668475194,
+      "stayMonths": [ { "stayMonth": "2026-10", "roomNights": 457, "revenue": 821658439 }, "..." ] } ] }
+```
+
+Each successful push is also recorded in the dashboard **Activity log**
+(`/admin/activity`) as `daily_pickup_import`.

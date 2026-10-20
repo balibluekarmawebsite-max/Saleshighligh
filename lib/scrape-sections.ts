@@ -7,7 +7,9 @@
  *
  *   B      → Yearly Occupancy Report   (weekly Section B source)
  *   C      → Reservation Report        (weekly Section C source)
- *   CANCEL → Cancellation Report        (NEW — daily report; ingestion lands in D2)
+ *   CANCEL → Cancellation Report        (daily report; same-day book-and-cancel excluded)
+ *   PICKUP → Occupancy Pickup Report    (daily report; daily snapshot of the
+ *                                        Yearly Occupancy forecast = occ-on-hand)
  */
 
 export type ScrapeReport = "weekly" | "daily";
@@ -44,6 +46,13 @@ export const SCRAPE_SECTIONS: ScrapeSectionDef[] = [
     code: "CANCEL",
     name: "Cancellation Report",
     vhpSource: "Cancelled reservations (per-line; Cancel Date + Created Date)",
+    report: "daily",
+    status: "live",
+  },
+  {
+    code: "PICKUP",
+    name: "Occupancy Pickup Report",
+    vhpSource: "Yearly Forecast Of Room Occupancy (daily snapshot = occ-on-hand)",
     report: "daily",
     status: "live",
   },

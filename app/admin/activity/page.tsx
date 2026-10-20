@@ -14,6 +14,7 @@ const ACTION_LABEL: Record<string, string> = {
   "user.create": "Created user",
   "user.update": "Updated user",
   daily_cancellation_import: "Daily — Cancellation Report imported",
+  daily_pickup_import: "Daily — Occupancy Pickup imported",
 };
 
 export default async function ActivityPage() {
