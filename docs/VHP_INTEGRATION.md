@@ -222,9 +222,22 @@ exactly as it was.
     (`week_ending = current_week_ending()`), with VHP's Month set to the current
     month, per property. On demand, set VHP's Month selector to a past month to
     backfill it (January = the whole year).
+  - **Occupancy Pickup** (Daily Report): **daily, same pull as Section B** — the
+    `Yearly Forecast Of Room Occupancy` export you already run each morning for
+    Section B is *also* POSTed, as-is, to **`/api/daily/pickup`** with
+    `snapshotDate = today`, per property (see §12). One VHP pull, two POSTs: one
+    to `/api/import` (section=B, weekly) and one to `/api/daily/pickup` (daily
+    snapshot). Run it once a day so each day becomes a row in the occupancy
+    movement grid.
+  - **Cancellation** (Daily Report): daily, POST the cancellations export to
+    `/api/daily/cancellation` (see §11).
   - Section **C** (reservation by agent): once per reporting week (e.g. Friday
     after the week closes), posting that week's `week_ending`, per property.
-- **Log** each response (status + body) so a bad week is visible.
+- **Schedule** the daily run at a fixed local time (e.g. 06:00 WITA) on the
+  office PC / scraper host — a plain cron or Task Scheduler entry that loops the
+  three properties. The daily feeds are idempotent per `snapshotDate` / cancel
+  date, so a missed day can be re-run safely.
+- **Log** each response (status + body) so a bad day is visible.
 
 ---
 
