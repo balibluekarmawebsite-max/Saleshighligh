@@ -152,7 +152,14 @@ export async function getPickupReport(propertyCode: string, monthId: string): Pr
       colMap.set(key, { key, stayYear: s.stayYear, stayMonth: s.stayMonth, label: monthShort(s.stayYear, s.stayMonth) });
     }
   }
-  const columns = [...colMap.values()].sort((a, b) => a.stayYear - b.stayYear || a.stayMonth - b.stayMonth);
+  // Only show the snapshot month and the months ahead of it. (The live Yearly
+  // Occupancy export starts at the current month; some backfilled manual tabs
+  // carried a prior-month column, which we drop here so e.g. the September
+  // report doesn't show an August column.)
+  const snapIdx = y * 12 + (m - 1);
+  const columns = [...colMap.values()]
+    .filter((c) => c.stayYear * 12 + (c.stayMonth - 1) >= snapIdx)
+    .sort((a, b) => a.stayYear - b.stayYear || a.stayMonth - b.stayMonth);
 
   // Rows (by snapshot date) + per-column series (for the summary rows).
   const rowMap = new Map<string, Map<string, PickupCell>>();
