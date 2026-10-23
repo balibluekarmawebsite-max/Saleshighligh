@@ -371,6 +371,19 @@ Read the value back when you need it for the scheduler:
 The reporting week runs Fri→Thu, so running Friday morning fills the week that
 just ended. **Bali is UTC+8**, so Friday 06:00 WITA = **Thursday 22:00 UTC**.
 
+**Easiest — the installer (does §9.1 + Option B for you).** One command finds
+the app dir from the running service, generates `CRON_SECRET` if it's missing
+(then restarts the app), writes the service (secret inlined, chmod 600) + timer,
+enables the Friday 06:00 WITA timer, and warns if `ADS_API_KEY` is unset:
+
+```bash
+sudo bash deploy/install-weekly-sync.sh
+```
+
+It prints the next scheduled run and a one-liner to test immediately. Prefer it
+over the manual options below; they're kept for reference and for non-systemd
+hosts.
+
 **Option A — crontab.** If the VM's clock is set to `Asia/Makassar`
 (`timedatectl set-timezone Asia/Makassar`), schedule it in local time:
 

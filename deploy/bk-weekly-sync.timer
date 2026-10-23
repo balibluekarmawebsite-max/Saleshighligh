@@ -1,0 +1,11 @@
+[Unit]
+Description=Run BK weekly auto-sync every Friday 06:00 Bali time
+
+[Timer]
+# Fri→Thu reporting week, so Friday morning fills the week that just ended.
+OnCalendar=Fri *-*-* 06:00:00 Asia/Makassar
+# Catch up a run the box missed while powered off.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

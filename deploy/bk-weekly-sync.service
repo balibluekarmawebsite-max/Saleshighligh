@@ -1,0 +1,21 @@
+# systemd oneshot that triggers the weekly auto-sync (Metricool + ads/ROAS, and
+# queues the Sections B/C scrape jobs) for the current reporting week.
+#
+# Prefer the installer, which fills in the secret + the app path for you:
+#   sudo bash deploy/install-weekly-sync.sh
+#
+# Manual install: replace YOUR_CRON_SECRET with the app's CRON_SECRET
+# (grep CRON_SECRET /path/to/.env), then:
+#   sudo cp deploy/bk-weekly-sync.service deploy/bk-weekly-sync.timer /etc/systemd/system/
+#   sudo chmod 600 /etc/systemd/system/bk-weekly-sync.service   # it holds the secret
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bk-weekly-sync.timer
+#   systemctl list-timers bk-weekly-sync
+
+[Unit]
+Description=BK weekly Metricool + ads/ROAS auto-sync
+After=network.target bk-dashboard.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" http://127.0.0.1:3000/api/cron/weekly-sync
