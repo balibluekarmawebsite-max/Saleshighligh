@@ -222,16 +222,13 @@ exactly as it was.
     (`week_ending = current_week_ending()`), with VHP's Month set to the current
     month, per property. On demand, set VHP's Month selector to a past month to
     backfill it (January = the whole year).
-  - **Occupancy Pickup** (Daily Report): **daily** — the
-    `Yearly Forecast Of Room Occupancy` export you already run each morning for
-    Section B is *also* POSTed, as-is, to **`/api/daily/pickup`** with
-    `snapshotDate = yesterday`, per property (see §12). **Plus** a **second
-    daily POST per property** with the *next year's* Yearly Occupancy export and
-    `year=<next year>`, so the Daily Report can show occupancy a year ahead (see
-    §12 "Two pulls for a year-ahead view"). So, per property per day: one POST
-    to `/api/import` (section=B, weekly, current year) and **two** to
-    `/api/daily/pickup` (this year + next year). Run it once a day so each day
-    becomes a row in the occupancy movement grid.
+  - **Occupancy Pickup** (Daily Report): **daily** — generate the
+    `Yearly Forecast Of Room Occupancy` export with VHP's **Month selector set
+    to the current month** (so the file is a 12-month forward window, e.g. Oct
+    2026 → Sep 2027) and POST it, as-is, to **`/api/daily/pickup`** with
+    `snapshotDate = yesterday`, per property (see §12). This is a **separate
+    generation from Section B** (which uses the report month for actuals). Run
+    it once a day so each day becomes a row in the occupancy movement grid.
   - **Cancellation** (Daily Report): daily, POST the cancellations export to
     `/api/daily/cancellation` (see §11).
   - Section **C** (reservation by agent): once per reporting week (e.g. Friday
@@ -305,9 +302,9 @@ def push(path, property_code, section, week_ending, source):
   - [ ] Section B: set VHP's **Month** selector to the target month — current
         month to refresh, any past month to backfill (January = whole year).
   - [ ] Section B files contain **actuals only** (no budget / last year).
-  - [ ] Occupancy Pickup (daily): POST the current-year Yearly Occupancy to
-        `/api/daily/pickup`, **and** a second POST of **next year's** Yearly
-        Occupancy with `year=<next year>` and the same `snapshotDate` (§12).
+  - [ ] Occupancy Pickup (daily): generate the Yearly Occupancy with VHP's
+        **Month selector = the current month** (a 12-month forward window) and
+        POST it to `/api/daily/pickup` (§12). Separate generation from Section B.
 - [ ] Log every response; retry only on 429/5xx with backoff.
 - [ ] Alert on 401 (token), 409 (locked week), 422 (unreadable file), 501 (AI off).
 
@@ -386,8 +383,10 @@ day gives **occupancy on hand**, **pickup per day** and **pace vs last year**
 Authorization: Bearer <IMPORT_API_TOKEN>
 property=BKDU
 snapshotDate=2026-10-20           (optional; defaults to yesterday, WITA)
-year=2027                         (optional; the calendar year the CSV covers —
-                                   set it ONLY on the next-year pull, see below)
+year=2026                         (optional; the year the 12-month window STARTS
+                                   in — defaults to the snapshotDate's year, which
+                                   is correct for a normal current-month pull, so
+                                   you normally OMIT this)
 source=vhp:pickup                 (optional, for logs)
 file=@yearly-occupancy.csv
 ```
@@ -405,50 +404,46 @@ file=@yearly-occupancy.csv
   must be a real calendar date (`yyyy-mm-dd`); an impossible date like
   `2026-02-29` is rejected with a `400` rather than silently rolled over.
 - **Idempotent per snapshot date + year:** re-posting replaces only that
-  snapshot date's rows **for the year(s) in the file**, so a re-run or a
-  back-fill of a past date is safe, and the two yearly pulls below don't
-  overwrite each other.
+  snapshot date's rows for the year(s) in the file, so a re-run or a back-fill
+  of a past date is safe.
 - Every stay-month in the file is kept (unlike Section B, which keeps only the
-  report year). But the VHP *Yearly Forecast Of Room Occupancy* export is **one
-  calendar year** (Jan–Dec of the year selected in VHP), so a single pull only
-  fills that year's months — see "Two pulls for a year-ahead view" below.
+  report year), with the correct roll-over into next year.
 
-### Two pulls for a year-ahead view (daily report)
+### Generate it with the month selector = current month (year-ahead window)
 
-The Daily Report shows occupancy **a year ahead** of the selected month (an
-October 2026 view should run into late 2027). Because each Yearly Occupancy
-export is a single calendar year, cover that window with **two POSTs per
-property per day** — this is a **separate request from the weekly Section B
-pull**, which stays exactly as it is:
+The Daily Report shows occupancy **a year ahead** of the snapshot month (an
+October 2026 view runs Oct 2026 → Sep 2027). The VHP *Yearly Forecast Of Room
+Occupancy* export is a **12-month window that starts at the month you select**,
+so generate the **daily pickup** file with VHP's **Month selector set to the
+CURRENT month** — e.g. in October select October, and the file covers
+Oct 2026 → Sep 2027 in one pull. The dashboard rolls the later columns into the
+next year automatically (anchored on the snapshot year), so **no `year` field is
+needed**.
 
-1. **This year** — the same export + file you already send, **no `year` field**.
-   Stored under the current year.
-2. **Next year** — run the *same* Yearly Occupancy export in VHP with the year
-   selector set to **next year**, and POST that file with **`year=<next year>`**
-   (e.g. `year=2027`), using the **same `snapshotDate`** as pull 1.
-
-The two pushes are stored side by side (each replaces only its own year's rows
-for that snapshot date), so they never clash, and the weekly Section B feed is
-untouched — it keeps using the current-year pull only.
+This is a **separate generation from the weekly Section B pull**: Section B
+wants the current calendar year's actuals (Month selector = the report month per
+§8), whereas the daily pickup wants the forward window (Month selector = the
+current month). Same VHP report, two files generated with different Month
+settings.
 
 ```bash
-# pull 2 — next year, same snapshot date, with year=2027
+# daily pickup — Month selector set to the CURRENT month (October)
 curl -sS -X POST "https://<dashboard-host>/api/daily/pickup" \
   -H "Authorization: Bearer <IMPORT_API_TOKEN>" \
   -F "property=BKDU" \
   -F "snapshotDate=2026-10-22" \
-  -F "year=2027" \
-  -F "file=@yearly-occupancy-2027.csv"
+  -F "file=@yearly-occupancy-oct.csv"
 ```
 
-Once next year's file is in, the Daily grid fills the forward months into that
-year automatically — no further change needed.
+Each day, set the Month selector to that day's month (November's pulls select
+November → Nov 2026 → Oct 2027, and so on). The Daily grid then fills the
+year-ahead window automatically — no further change needed.
 
 **Success** → `200`:
 
 ```json
 { "ok": true, "property": "BKDU", "snapshotDate": "2026-10-20",
-  "stayMonths": ["2026-01", "2026-02", "...", "2026-12"],
+  "stayMonths": ["2026-10", "2026-11", "2026-12", "2027-01", "...", "2027-09"],
   "written": 12,
   "message": "Occupancy Pickup stored — 12 stay-month(s) as of 2026-10-20." }
 ```
