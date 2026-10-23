@@ -13,6 +13,7 @@ import { logAudit } from "@/lib/audit";
 import { isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
 import { prisma } from "@/lib/prisma";
 import { parsePickupForecast, type PickupSnapshotRow } from "@/lib/daily/parse-pickup";
+import { wrongPropertyError } from "@/lib/daily/property-guard";
 
 /**
  * Store an occupancy-pickup snapshot for a property, replacing every row for
@@ -118,6 +119,12 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     if (!rows || rows.length === 0) {
       return fail(422, "no occupancy rows found — not a recognised Yearly Occupancy forecast, or it was empty.");
     }
+
+    // Reject a file that was posted under the wrong property (e.g. the scraper
+    // swapped BKDS/BKDU files) before it overwrites the wrong report — the
+    // saleable-rooms inventory is the property fingerprint.
+    const mismatch = wrongPropertyError(property, rows);
+    if (mismatch) return fail(409, mismatch);
 
     const written = await applyPickupRows(prop.id, snapshotDate, rows);
     const stayMonths = rows.map((r) => `${r.stayYear}-${String(r.stayMonth).padStart(2, "0")}`);

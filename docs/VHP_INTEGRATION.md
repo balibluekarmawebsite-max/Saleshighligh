@@ -449,7 +449,9 @@ year-ahead window automatically — no further change needed.
 ```
 
 Errors mirror §7: `401` bad token, `400` missing property / bad `snapshotDate`,
-`422` the file isn't a recognised Yearly Occupancy forecast.
+`422` the file isn't a recognised Yearly Occupancy forecast, `409` the file was
+posted under the **wrong property** (its saleable-rooms inventory doesn't match
+`property` — e.g. a BKDU file sent as BKDS; fix the `property` code).
 
 ### Verify what landed
 
