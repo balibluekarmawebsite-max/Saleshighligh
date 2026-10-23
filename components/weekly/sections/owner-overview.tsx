@@ -8,6 +8,7 @@ import { AdsOverviewBody } from "@/components/weekly/ads-overview";
 import { rate, sharePercent } from "@/lib/weekly/calculations";
 import type { WeeklyAdsData } from "@/lib/weekly/ads-data";
 import { saveOwnerOverview } from "@/lib/weekly/editor-actions";
+import { aggregateChannels } from "@/lib/weekly/owner-channel-mix";
 import {
   CELL,
   SaveButton,
@@ -21,40 +22,25 @@ import {
   type Row,
 } from "@/components/weekly/sections/shared";
 
-/** Fixed owner-facing channels, in report order. */
-const CHANNELS = ["OTA", "Direct Booking (Website/Walk In/Group Retreat)", "Offline Travel Agents"] as const;
-type Channel = (typeof CHANNELS)[number];
-
 /**
- * Bucket a Section C booking agent / source into one of the three owner
- * channels. Keyword-based (OTA checked first), with Offline Travel Agents as the
- * catch-all — the owner can still rename/adjust after syncing.
+ * Aggregate Section C agent rows into the fixed owner channels (channels with
+ * data, in order), via the shared classifier. This is the same roll-up the
+ * server runs automatically after every Section C change — the button below
+ * just lets the editor trigger it on demand. Adapts the editor's string-celled
+ * Rows to/from the shared numeric helper.
  */
-function classifyChannel(agent: string): Channel {
-  const a = agent.toLowerCase();
-  const OTA = ["booking", "expedia", "agoda", "traveloka", "tiket", "trip.com", "trip ", "airbnb", "hotels.com", "ctrip", "klook", "mg holiday", "hostelworld", "pegipegi", "aladin", "ota"];
-  const DIRECT = ["website", "webs", "walk", "direct", "individual", "group retreat", "retreat", "fit"];
-  if (OTA.some((k) => a.includes(k))) return "OTA";
-  if (DIRECT.some((k) => a.includes(k))) return "Direct Booking (Website/Walk In/Group Retreat)";
-  return "Offline Travel Agents";
-}
-
-/** Aggregate Section C agent rows into the fixed channels (channels with data, in order). */
 function channelsFromSegments(segments: Row[]): Row[] {
-  const agg = new Map<Channel, { rn: number; rev: number }>();
-  for (const s of segments) {
-    const label = (s.label ?? "").trim();
-    if (!label) continue;
-    const ch = classifyChannel(label);
-    const cur = agg.get(ch) ?? { rn: 0, rev: 0 };
-    cur.rn += toNum(s.rnSold) ?? 0;
-    cur.rev += toNum(s.grossRevenue) ?? 0;
-    agg.set(ch, cur);
-  }
-  return CHANNELS.filter((ch) => agg.has(ch)).map((ch) => ({
-    label: ch,
-    rnSold: String(agg.get(ch)!.rn),
-    grossRevenue: String(agg.get(ch)!.rev),
+  const channels = aggregateChannels(
+    segments.map((s) => ({
+      label: s.label ?? "",
+      rnSold: toNum(s.rnSold) ?? null,
+      grossRevenue: toNum(s.grossRevenue) ?? null,
+    })),
+  );
+  return channels.map((c) => ({
+    label: c.label,
+    rnSold: String(c.rnSold),
+    grossRevenue: String(c.grossRevenue),
   }));
 }
 

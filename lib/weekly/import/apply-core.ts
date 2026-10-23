@@ -20,6 +20,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { getAiImportSection } from "@/lib/weekly/import/ai-sections";
+import { syncOwnerChannelMixIntoReport } from "@/lib/weekly/owner-channel-mix-sync";
 
 export type ImportRow = Record<string, string>;
 
@@ -282,6 +283,13 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
       },
     });
   });
+
+  // Section C drives the owner Channel Mix — regenerate it whenever agent
+  // production is (re)written, so the owner view auto-refreshes without the
+  // manual "Sync from Agent Production" step. Best-effort (never throws).
+  if (section.id === "segment" && written > 0) {
+    await syncOwnerChannelMixIntoReport(rid);
+  }
 
   return written;
 }

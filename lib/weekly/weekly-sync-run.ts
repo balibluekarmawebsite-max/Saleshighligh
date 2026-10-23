@@ -16,6 +16,7 @@ import { isLockedStatus } from "@/lib/weekly/editor-data";
 import { enqueueWeeklyScrapeJobs, isScrapeQueueConfigured } from "@/lib/weekly/jobs";
 import { getPropertyBlogId, isMetricoolConfigured } from "@/lib/weekly/metricool";
 import { syncMetricoolIntoReport, type MetricoolSyncResult } from "@/lib/weekly/metricool-sync";
+import { syncOwnerChannelMixIntoReport } from "@/lib/weekly/owner-channel-mix-sync";
 import { currentWeekId, weekMeta } from "@/lib/weekly/week";
 
 export interface WeeklyAutoSyncPropertyResult {
@@ -197,6 +198,12 @@ export async function syncReportSources(
   }
 
   await Promise.all(tasks); // inner try/catch means this never rejects
+
+  // Keep the owner Channel Mix in step with Section C whenever a report's data
+  // is prepared (create / Friday run). No-op when Section C is empty, so it
+  // never clobbers a carried-forward mix. Best-effort (never throws).
+  await syncOwnerChannelMixIntoReport(reportId);
+
   return out;
 }
 

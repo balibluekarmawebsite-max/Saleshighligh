@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { saveAnnualBudget, type AnnualBudgetInput } from "@/lib/weekly/annual-budget";
 import { saveAnnualLastYear, type AnnualLastYearInput } from "@/lib/weekly/annual-lastyear";
 import { isLockedStatus } from "@/lib/weekly/editor-data";
+import { syncOwnerChannelMixIntoReport } from "@/lib/weekly/owner-channel-mix-sync";
 import {
   type ParseIssue,
   type ParseResult,
@@ -443,6 +444,12 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
       if (annualBudgetSave) await saveAnnualBudget(report.propertyId, report.year, annualBudgetSave, tx);
       if (annualLastYearSave) await saveAnnualLastYear(report.propertyId, report.year, annualLastYearSave, tx);
     });
+  }
+
+  // Section C feeds the owner Channel Mix — regenerate it so the owner view
+  // auto-refreshes when agent production is imported (best-effort).
+  if (sectionId === "segment" && written > 0) {
+    await syncOwnerChannelMixIntoReport(rid);
   }
 
   await logAudit("weekly_import", `${property} ${week}`, { section: sectionId, rows: written });

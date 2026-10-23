@@ -17,6 +17,7 @@ import {
 import { saveAnnualBudget } from "@/lib/weekly/annual-budget";
 import { saveAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import { enqueueWeeklyScrapeJobs, isScrapeQueueConfigured } from "@/lib/weekly/jobs";
+import { syncOwnerChannelMixIntoReport } from "@/lib/weekly/owner-channel-mix-sync";
 import { carryForwardManualSections, syncReportSources } from "@/lib/weekly/weekly-sync-run";
 import { weekMeta } from "@/lib/weekly/week";
 
@@ -551,6 +552,10 @@ export async function saveSegments(
     await tx.weeklySegmentProduction.deleteMany({ where: { reportWeekId: guard.id } });
     if (data.length) await tx.weeklySegmentProduction.createMany({ data });
   });
+
+  // Section C feeds the owner Channel Mix — regenerate it so the owner view
+  // stays in step with agent production (best-effort; self-guards on empty).
+  if (data.length) await syncOwnerChannelMixIntoReport(guard.id);
 
   await logAudit("weekly_segments_save", `${property} ${week}`, { rows: data.length });
   revalidatePath(`/weekly/${property}/${week}/editor`);
