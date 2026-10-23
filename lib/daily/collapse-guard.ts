@@ -13,7 +13,13 @@
  * unit-testable. Deliberately conservative: a month only "collapses" when it
  * had real occupancy before AND the new reading fell to a small fraction of it
  * AND by a large absolute amount — and it takes SEVERAL such months to reject,
- * so a genuine single-month group cancellation never trips it.
+ * so a genuine one- or two-month cancellation (even a whole-villa booking that
+ * straddles a month boundary) never trips it; only a systemic wipe across many
+ * months (the signature of a broken/empty export) does.
+ *
+ * The caller can still override a rejection with `force` (e.g. a real
+ * disaster/renovation closure that genuinely craters the book), so the guard
+ * can never permanently block real data — see runPickupImport.
  */
 
 import { occupancyPct } from "@/lib/daily/calculations";
@@ -31,8 +37,13 @@ const MIN_PRIOR_OCC = 25;
 const COLLAPSE_RATIO = 0.25;
 /** …and must have dropped by at least this many occupancy points. */
 const MIN_DROP_POINTS = 20;
-/** Reject only when at least this many months collapse at once (≥2 = systemic). */
-const MIN_COLLAPSED_MONTHS = 2;
+/**
+ * Reject only when at least this many months collapse at once. An empty/broken
+ * export craters EVERY forward month, so 3 still catches it; a genuine one- or
+ * two-month cancellation (incl. a whole-villa booking straddling two months)
+ * falls below this and passes.
+ */
+const MIN_COLLAPSED_MONTHS = 3;
 
 const key = (r: { stayYear: number; stayMonth: number }) =>
   `${r.stayYear}-${String(r.stayMonth).padStart(2, "0")}`;

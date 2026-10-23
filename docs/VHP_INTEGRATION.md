@@ -387,6 +387,8 @@ year=2026                         (optional; the year the 12-month window STARTS
                                    in — defaults to the snapshotDate's year, which
                                    is correct for a normal current-month pull, so
                                    you normally OMIT this)
+force=1                           (optional; override the collapse guard when a
+                                   REAL multi-month crash must be stored — see 409)
 source=vhp:pickup                 (optional, for logs)
 file=@yearly-occupancy.csv
 ```
@@ -451,7 +453,9 @@ year-ahead window automatically — no further change needed.
 Errors mirror §7: `401` bad token, `400` missing property / bad `snapshotDate`,
 `422` the file isn't a recognised Yearly Occupancy forecast, `409` the file was
 posted under the **wrong property** (its saleable-rooms inventory doesn't match
-`property` — e.g. a BKDU file sent as BKDS; fix the `property` code).
+`property` — e.g. a BKDU file sent as BKDS; fix the `property` code) **or** its
+occupancy **collapsed** across several months vs the previous day (a
+broken/empty export — re-pull; or, if the crash is real, re-send with `force=1`).
 
 ### Verify what landed
 

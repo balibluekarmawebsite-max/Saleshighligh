@@ -10,12 +10,13 @@ const r = (stayMonth: number, roomNights: number, saleableRooms = 558): OccReadi
   saleableRooms,
 });
 
-// A healthy prior reading (Oct 82%, Nov 53%, Dec 48%).
-const healthyPrior: OccReading[] = [r(10, 458), r(11, 286, 540), r(12, 268)];
+// A healthy prior reading (Oct 82%, Nov 53%, Dec 48%, Jan 34%).
+const healthyPrior: OccReading[] = [r(10, 458), r(11, 286, 540), r(12, 268), r(1, 191, 558)];
 
 describe("occupancyCollapseError", () => {
   it("rejects an empty pull that craters a healthy prior (the real bug)", () => {
-    const empty: OccReading[] = [r(10, 6), r(11, 0, 540), r(12, 1)];
+    // An empty export zeroes every forward month at once → 4 collapses ≥ 3.
+    const empty: OccReading[] = [r(10, 6), r(11, 0, 540), r(12, 1), r(1, 0, 558)];
     const err = occupancyCollapseError(empty, healthyPrior);
     expect(err).toBeTruthy();
     expect(err).toContain("2026-10");
@@ -23,15 +24,21 @@ describe("occupancyCollapseError", () => {
   });
 
   it("passes normal day-to-day movement (occupancy ticks up)", () => {
-    const nextDay: OccReading[] = [r(10, 462), r(11, 290, 540), r(12, 271)];
+    const nextDay: OccReading[] = [r(10, 462), r(11, 290, 540), r(12, 271), r(1, 195, 558)];
     expect(occupancyCollapseError(nextDay, healthyPrior)).toBeNull();
   });
 
   it("passes a genuine single-month group cancellation", () => {
-    // Nov drops hard (a group leaves) but Oct/Dec hold — only 1 month, so it's
-    // real movement, not a broken export.
-    const oneCancel: OccReading[] = [r(10, 455), r(11, 120, 540), r(12, 266)];
+    // Nov drops hard (a group leaves) but the others hold — 1 month, not broken.
+    const oneCancel: OccReading[] = [r(10, 455), r(11, 120, 540), r(12, 266), r(1, 190, 558)];
     expect(occupancyCollapseError(oneCancel, healthyPrior)).toBeNull();
+  });
+
+  it("passes a two-month cancellation (whole-villa booking straddling a boundary)", () => {
+    // Nov + Dec both crater (one contract spanning the boundary cancels) but
+    // that's 2 months — below the systemic threshold, so it's allowed through.
+    const twoCancel: OccReading[] = [r(10, 455), r(11, 40, 540), r(12, 30), r(1, 190, 558)];
+    expect(occupancyCollapseError(twoCancel, healthyPrior)).toBeNull();
   });
 
   it("skips when there is no prior snapshot (first pull)", () => {

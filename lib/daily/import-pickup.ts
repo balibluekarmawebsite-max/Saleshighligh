@@ -68,6 +68,12 @@ export interface PickupImportInput {
   filename?: string;
   /** Free-text origin for the audit log, e.g. "vhp:pickup". */
   source?: string;
+  /**
+   * Override the collapse guard. A genuine multi-month collapse (a disaster or
+   * a planned closure that really craters the book) would otherwise be refused
+   * forever, so an explicit force push can always store real data as-is.
+   */
+  force?: boolean;
 }
 
 /** A sensible 4-digit stay year, or null. Guards against junk like "abcd" or 25. */
@@ -132,18 +138,22 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     // versus the most recent prior reading means the pull is bad. Compared
     // against the latest snapshot STRICTLY BEFORE this date, so a legitimate
     // same-date correction (re-pushing a good file over a bad one) still lands.
-    const priorDay = await prisma.dailyPickupSnapshot.findFirst({
-      where: { propertyId: prop.id, snapshotDate: { lt: isoToUtcDate(snapshotDate) } },
-      orderBy: { snapshotDate: "desc" },
-      select: { snapshotDate: true },
-    });
-    if (priorDay) {
-      const priorRows = await prisma.dailyPickupSnapshot.findMany({
-        where: { propertyId: prop.id, snapshotDate: priorDay.snapshotDate },
-        select: { stayYear: true, stayMonth: true, roomNights: true, saleableRooms: true },
+    // `force` bypasses this so a GENUINE collapse (disaster / closure) is never
+    // blocked forever.
+    if (!input.force) {
+      const priorDay = await prisma.dailyPickupSnapshot.findFirst({
+        where: { propertyId: prop.id, snapshotDate: { lt: isoToUtcDate(snapshotDate) } },
+        orderBy: { snapshotDate: "desc" },
+        select: { snapshotDate: true },
       });
-      const collapse = occupancyCollapseError(rows, priorRows);
-      if (collapse) return fail(409, collapse);
+      if (priorDay) {
+        const priorRows = await prisma.dailyPickupSnapshot.findMany({
+          where: { propertyId: prop.id, snapshotDate: priorDay.snapshotDate },
+          select: { stayYear: true, stayMonth: true, roomNights: true, saleableRooms: true },
+        });
+        const collapse = occupancyCollapseError(rows, priorRows);
+        if (collapse) return fail(409, `${collapse} (If this is real, re-send with force=1 to store it.)`);
+      }
     }
 
     const written = await applyPickupRows(prop.id, snapshotDate, rows);

@@ -90,6 +90,8 @@ export async function POST(req: NextRequest) {
   // Optional: the calendar year the forecast covers (for a next-year export).
   // Defaults to the snapshot date's year when absent.
   const year = form.get("year") ? String(form.get("year")) : undefined;
+  // Optional: override the collapse guard for a genuine multi-month collapse.
+  const force = /^(1|true|yes)$/i.test(String(form.get("force") ?? ""));
   const source = form.get("source") ? String(form.get("source")) : undefined;
   const text = form.get("text") ? String(form.get("text")) : undefined;
   const fileField = form.get("file");
@@ -111,7 +113,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: false, error: "a file (or text) is required." }, { status: 400 });
   }
 
-  const result = await runPickupImport({ property, snapshotDate, year, fileBuffer, text, filename, source });
+  const result = await runPickupImport({ property, snapshotDate, year, force, fileBuffer, text, filename, source });
   return Response.json(result.body, { status: result.status });
 }
 
