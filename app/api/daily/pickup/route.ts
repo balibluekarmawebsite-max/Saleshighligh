@@ -4,17 +4,36 @@ import { getPickupSummary } from "@/lib/daily/pickup-data";
 import { runPickupImport } from "@/lib/daily/import-pickup";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
-/** Shared-secret bearer check for this feed (same token as the import push). */
+/**
+ * Shared-secret bearer check for this feed (same token as the import push).
+ *
+ * Both sides are trimmed so a stray trailing newline/space in the .env value or
+ * the caller's header can't cause a spurious mismatch. On a 401 the response
+ * echoes only NON-SENSITIVE diagnostics about the caller's OWN request — the
+ * auth scheme and the length of the token they sent — so an empty `$TOKEN`
+ * (sentTokenLength 0) or a wrong-length value is obvious without ever leaking
+ * the server's secret.
+ */
 function checkToken(req: NextRequest): Response | null {
-  const token = process.env.IMPORT_API_TOKEN;
-  if (!token) {
+  const expected = (process.env.IMPORT_API_TOKEN ?? "").trim();
+  if (!expected) {
     return Response.json(
       { ok: false, error: "IMPORT_API_TOKEN is not set on the server — refusing to accept pushes." },
       { status: 503 },
     );
   }
-  if (req.headers.get("authorization") !== `Bearer ${token}`) {
-    return Response.json({ ok: false, error: "invalid token" }, { status: 401 });
+  const header = req.headers.get("authorization") ?? "";
+  const sent = (header.match(/^Bearer\s+(.*)$/i)?.[1] ?? "").trim();
+  if (sent !== expected) {
+    return Response.json(
+      {
+        ok: false,
+        error: "invalid token",
+        scheme: header ? (header.split(/\s+/)[0] || "none") : "none",
+        sentTokenLength: sent.length,
+      },
+      { status: 401 },
+    );
   }
   return null;
 }
