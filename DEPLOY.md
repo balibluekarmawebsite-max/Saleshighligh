@@ -628,3 +628,64 @@ self-gated by the token.
 property + report (B/C) + period; the job list shows queued → running → done /
 failed with the result. The data path is unchanged — the scraper still uploads
 through `/api/import`; the job endpoints are only status bookkeeping.
+
+---
+
+## 12. Daily Report email (automated, 07:00 WITA)
+
+Each morning the app emails every property's **Occupancy Pick-Up** summary
+(occupancy on hand, room sold, revenue, ADR, pickup for the current + next
+months) to a recipient list. It reads the same data the dashboard shows, so the
+figures always match, and it **no-ops** until SMTP + a recipient are set.
+
+### 12.1 Configure SMTP (your own domain / Google Workspace)
+
+Add to the app's `.env` (the one in the service's **WorkingDirectory**):
+
+```bash
+SMTP_HOST="smtp.gmail.com"      # or your domain's mail host
+SMTP_PORT="587"                 # 465 for SSL
+SMTP_USER="reports@bluekarmasecrets.com"
+SMTP_PASS="your-app-password"   # Gmail/Workspace: an App Password, not the login password
+DAILY_REPORT_FROM="reports@bluekarmasecrets.com"   # optional; defaults to SMTP_USER
+DAILY_REPORT_TO="gm@bluekarmasecrets.com,ota@bluekarmasecrets.com"   # comma-separated
+APP_URL="https://dashboard.bluekarmasecrets.com"   # for the link in the email
+```
+
+> **Gmail / Google Workspace:** create an **App Password** (Google Account →
+> Security → 2-Step Verification → App passwords) and use it as `SMTP_PASS`;
+> the normal password won't work. Then `sudo systemctl restart bk-dashboard`.
+
+Confirm the route is live: `curl -i http://127.0.0.1:3000/api/cron/daily-report`
+should return a JSON 503 ("CRON_SECRET is not set") on a build that has it.
+
+### 12.2 Schedule it (07:00 WITA, after the morning pulls)
+
+Easiest — the installer (reuses `CRON_SECRET` from §9, writes the service +
+timer, enables it, and warns if the SMTP env is missing):
+
+```bash
+sudo bash deploy/install-daily-report.sh
+```
+
+It fires `GET /api/cron/daily-report` every day at 07:00 Asia/Makassar. Adjust
+the time by editing `OnCalendar` in `/etc/systemd/system/bk-daily-report.timer`
+(keep it a bit after the scraper's morning pull so the email has fresh data),
+then `sudo systemctl daemon-reload`.
+
+### 12.3 Run it on demand / test
+
+```bash
+APP=$(systemctl show -p WorkingDirectory --value bk-dashboard)
+SECRET=$(grep '^CRON_SECRET=' "$APP/.env" | head -1 | cut -d= -f2- | tr -d '"'"'"' | tr -d '[:space:]')
+curl -sS -H "Authorization: Bearer $SECRET" http://127.0.0.1:3000/api/cron/daily-report
+```
+
+The JSON response says whether it sent, to whom, and how many properties were
+included (`{"ok":true,"sent":true,"to":[…],"properties":3,…}`), or
+`sent:false` with the reason when SMTP isn't configured yet. Each send is
+recorded in the **Activity log** (`/admin/activity`) as `daily_report_email`.
+
+> **WhatsApp** delivery (to a number) is planned as a follow-up — the same
+> scheduled job will post the summary to WhatsApp once the sending channel
+> (official Cloud API) is set up.

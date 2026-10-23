@@ -1,0 +1,20 @@
+# systemd oneshot that sends the Daily Occupancy Pick-Up email for the morning.
+#
+# Prefer the installer, which fills in the secret + the app path for you:
+#   sudo bash deploy/install-daily-report.sh
+#
+# Manual install: replace YOUR_CRON_SECRET with the app's CRON_SECRET
+# (grep CRON_SECRET /path/to/.env), then:
+#   sudo cp deploy/bk-daily-report.service deploy/bk-daily-report.timer /etc/systemd/system/
+#   sudo chmod 600 /etc/systemd/system/bk-daily-report.service   # it holds the secret
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bk-daily-report.timer
+#   systemctl list-timers bk-daily-report
+
+[Unit]
+Description=BK daily Occupancy Pick-Up email
+After=network.target bk-dashboard.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" http://127.0.0.1:3000/api/cron/daily-report
