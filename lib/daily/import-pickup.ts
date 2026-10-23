@@ -34,9 +34,17 @@ export async function applyPickupRows(
     saleableRooms: r.saleableRooms,
     revenue: r.revenue,
   }));
+  // Replace only the stay-years present in THIS upload. VHP's "Yearly Forecast"
+  // is one calendar year per export, so a property can push two files for the
+  // same snapshot date (e.g. this year + next year); scoping the delete to the
+  // incoming years keeps them from wiping each other. A single forward-window
+  // CSV that spans two years still replaces both, exactly as a full replace did.
+  const years = [...new Set(rows.map((r) => r.stayYear))];
 
   await prisma.$transaction(async (tx) => {
-    await tx.dailyPickupSnapshot.deleteMany({ where: { propertyId, snapshotDate: snap } });
+    await tx.dailyPickupSnapshot.deleteMany({
+      where: { propertyId, snapshotDate: snap, stayYear: { in: years } },
+    });
     await tx.dailyPickupSnapshot.createMany({ data });
   });
   return data.length;
@@ -46,11 +54,25 @@ export interface PickupImportInput {
   property: string;
   /** ISO yyyy-mm-dd the reading represents; defaults to yesterday (WITA). */
   snapshotDate?: string;
+  /**
+   * The calendar year the forecast covers. Defaults to the snapshot date's
+   * year. Set it when pushing a NEXT-year "Yearly Forecast" export (e.g.
+   * year=2027 while the snapshot is still being taken in 2026), so its Jan–Dec
+   * months are stored under 2027 rather than the snapshot year.
+   */
+  year?: string | number;
   fileBuffer?: Buffer | null;
   text?: string;
   filename?: string;
   /** Free-text origin for the audit log, e.g. "vhp:pickup". */
   source?: string;
+}
+
+/** A sensible 4-digit stay year, or null. Guards against junk like "abcd" or 25. */
+function parseReportYear(raw: string | number | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = Math.trunc(Number(raw));
+  return Number.isFinite(n) && n >= 2000 && n <= 2100 ? n : null;
 }
 
 export interface PickupImportResult {
@@ -88,7 +110,10 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
     if (!prop) return fail(400, `unknown property "${property}".`);
 
-    const reportYear = Number(snapshotDate.slice(0, 4));
+    // The year the CSV covers: an explicit `year` (for a next-year export) wins,
+    // otherwise the snapshot date's year. This is the anchor the parser rolls
+    // forward from, so a Jan–Dec 2027 file lands under 2027, not the pull year.
+    const reportYear = parseReportYear(input.year) ?? Number(snapshotDate.slice(0, 4));
     const rows = parsePickupForecast(text, reportYear);
     if (!rows || rows.length === 0) {
       return fail(422, "no occupancy rows found — not a recognised Yearly Occupancy forecast, or it was empty.");

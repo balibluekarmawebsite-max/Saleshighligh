@@ -54,6 +54,12 @@ const MAX_BODY_BYTES = 25 * 1024 * 1024;
  *   property=BKDU
  *   snapshotDate=2026-10-20   (optional; defaults to YESTERDAY in WITA — a
  *                              morning pull reflects yesterday's close)
+ *   year=2027                 (optional; the calendar year the forecast covers.
+ *                              Defaults to the snapshot year. Set it when
+ *                              pushing NEXT year's Yearly Forecast so Jan–Dec
+ *                              land under 2027, not the pull year. Push this
+ *                              year and next year as two uploads for the same
+ *                              snapshotDate; they don't overwrite each other.)
  *   source=vhp:pickup         (optional, for logs)
  *   file=@yearly-occupancy.csv
  *
@@ -81,6 +87,9 @@ export async function POST(req: NextRequest) {
 
   const property = String(form.get("property") ?? "");
   const snapshotDate = form.get("snapshotDate") ? String(form.get("snapshotDate")) : undefined;
+  // Optional: the calendar year the forecast covers (for a next-year export).
+  // Defaults to the snapshot date's year when absent.
+  const year = form.get("year") ? String(form.get("year")) : undefined;
   const source = form.get("source") ? String(form.get("source")) : undefined;
   const text = form.get("text") ? String(form.get("text")) : undefined;
   const fileField = form.get("file");
@@ -102,7 +111,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: false, error: "a file (or text) is required." }, { status: 400 });
   }
 
-  const result = await runPickupImport({ property, snapshotDate, fileBuffer, text, filename, source });
+  const result = await runPickupImport({ property, snapshotDate, year, fileBuffer, text, filename, source });
   return Response.json(result.body, { status: result.status });
 }
 
