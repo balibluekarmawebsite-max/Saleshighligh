@@ -30,7 +30,7 @@ export const SOCIAL_METRIC_ROWS: { key: string; label: string }[] = [
 ];
 
 /** Platforms offered in the Section H selector. */
-export const SOCIAL_PLATFORMS = ["Instagram", "Facebook", "TikTok", "YouTube"] as const;
+export const SOCIAL_PLATFORMS = ["Instagram", "Facebook"] as const;
 
 /** Section J — fixed Action Plan department sub-categories, in report order.
  *  Each is its own independently-saved sub-section in the editor (a different

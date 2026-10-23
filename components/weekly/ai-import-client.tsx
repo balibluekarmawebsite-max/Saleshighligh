@@ -287,7 +287,7 @@ function SectionPanel({
                   onChange={(e) => setPlatform(e.target.value)}
                   className="h-9 rounded-md border border-border bg-card px-2 text-sm"
                 >
-                  {["Instagram", "Facebook", "TikTok", "YouTube"].map((p) => (
+                  {["Instagram", "Facebook"].map((p) => (
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>

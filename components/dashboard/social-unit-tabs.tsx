@@ -63,8 +63,6 @@ function UnitPanel({ unit }: { unit: SocialUnitData }) {
   const byPlatform = (p: string) => unit.platforms.find((x) => x.platform === p);
   const ig = byPlatform("INSTAGRAM");
   const fb = byPlatform("FACEBOOK");
-  const tt = byPlatform("TIKTOK");
-  const yt = byPlatform("YOUTUBE");
 
   return (
     <div className="space-y-6">
@@ -83,14 +81,6 @@ function UnitPanel({ unit }: { unit: SocialUnitData }) {
         <div className="grid gap-4 sm:grid-cols-2">
           {ig && <PlatformCard card={ig} />}
           {fb && <PlatformCard card={fb} />}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-foreground">TikTok &amp; YouTube</h4>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {tt && <PlatformCard card={tt} />}
-          {yt && <PlatformCard card={yt} />}
         </div>
       </div>
     </div>
