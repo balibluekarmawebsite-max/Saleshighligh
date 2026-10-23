@@ -229,6 +229,7 @@ const int = (v: unknown): number | null => {
 // NOTE: not exported — a "use server" module may only export async functions,
 // so this stays a module-private const (used by saveSection below).
 const COPYABLE_SECTIONS = new Set<string>([
+  "sales",
   "graphic_design",
   "marketing",
   "ecommerce",

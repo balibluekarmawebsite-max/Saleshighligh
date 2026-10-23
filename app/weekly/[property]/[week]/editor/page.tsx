@@ -209,6 +209,7 @@ export default async function WeeklyEditorPage({
           property={p} week={w} locked={readOnly} sectionId="sales"
           title="G · Sales Activity" subtitle="Add each activity with its date and notes."
           subjectLabel="Subject" addLabel="Add activity" initial={data.sales}
+          copyTargets={copyTargets}
         />,
       ),
     },
