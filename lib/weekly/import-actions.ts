@@ -395,7 +395,10 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
           break;
         }
         case "channel": {
-          await tx.weeklyChannelRn.deleteMany({ where: { reportWeekId: rid } });
+          // Replace only the year(s) being imported, so carried-forward rows for
+          // other years aren't wiped (matches the per-year save/apply paths).
+          const importedYears = [...new Set(parsed.rows.map((row) => num(row.year) ?? 0))];
+          await tx.weeklyChannelRn.deleteMany({ where: { reportWeekId: rid, year: { in: importedYears } } });
           const r = await tx.weeklyChannelRn.createMany({
             data: parsed.rows.map((row, i) => ({
               reportWeekId: rid,

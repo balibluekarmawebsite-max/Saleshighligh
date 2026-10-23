@@ -61,6 +61,90 @@ export interface ReportSyncOutcome {
 }
 
 /**
+ * Carry the manually-entered grids forward from the most recent PRIOR report of
+ * the same property, so a new week opens with the previous week's data already
+ * in place and the team only updates the latest month (instead of re-typing a
+ * year of history). Covers the three per-week manual sections:
+ *   - Owner Overview "Repeater Guest" (WeeklyOwnerRepeater)
+ *   - Owner Overview "Channel Mix" (WeeklyOwnerChannelMix)
+ *   - Sections E/F "Channel Inside" room nights (WeeklyChannelRn)
+ *
+ * Idempotent and non-destructive: a section is only seeded when the NEW report
+ * currently has zero rows in it, so re-runs and reports with existing manual
+ * data are never clobbered. Best-effort — never throws, so it can't block
+ * report creation. No schema change (these stay per-week snapshots).
+ */
+export async function carryForwardManualSections(
+  newReportId: string,
+  propertyId: string,
+  newStartDate: Date,
+): Promise<void> {
+  try {
+    const prior = await prisma.weeklyReport.findFirst({
+      where: { propertyId, startDate: { lt: newStartDate } },
+      orderBy: { startDate: "desc" },
+      include: {
+        ownerRepeaters: { orderBy: { sortOrder: "asc" } },
+        ownerChannelMix: { orderBy: { sortOrder: "asc" } },
+        channelRns: { orderBy: [{ year: "asc" }, { sortOrder: "asc" }] },
+      },
+    });
+    if (!prior) return; // first-ever report for this property
+
+    const [repCount, mixCount, chanCount] = await Promise.all([
+      prisma.weeklyOwnerRepeater.count({ where: { reportWeekId: newReportId } }),
+      prisma.weeklyOwnerChannelMix.count({ where: { reportWeekId: newReportId } }),
+      prisma.weeklyChannelRn.count({ where: { reportWeekId: newReportId } }),
+    ]);
+
+    const writes: Promise<unknown>[] = [];
+    if (repCount === 0 && prior.ownerRepeaters.length > 0) {
+      writes.push(
+        prisma.weeklyOwnerRepeater.createMany({
+          data: prior.ownerRepeaters.map((r) => ({
+            reportWeekId: newReportId,
+            label: r.label,
+            roomNights: r.roomNights,
+            revenue: r.revenue,
+            sortOrder: r.sortOrder,
+          })),
+        }),
+      );
+    }
+    if (mixCount === 0 && prior.ownerChannelMix.length > 0) {
+      writes.push(
+        prisma.weeklyOwnerChannelMix.createMany({
+          data: prior.ownerChannelMix.map((r) => ({
+            reportWeekId: newReportId,
+            label: r.label,
+            rnSold: r.rnSold,
+            grossRevenue: r.grossRevenue,
+            sortOrder: r.sortOrder,
+          })),
+        }),
+      );
+    }
+    if (chanCount === 0 && prior.channelRns.length > 0) {
+      writes.push(
+        prisma.weeklyChannelRn.createMany({
+          data: prior.channelRns.map((r) => ({
+            reportWeekId: newReportId,
+            year: r.year,
+            sourceLabel: r.sourceLabel,
+            jan: r.jan, feb: r.feb, mar: r.mar, apr: r.apr, may: r.may, jun: r.jun,
+            jul: r.jul, aug: r.aug, sep: r.sep, oct: r.oct, nov: r.nov, dec: r.dec,
+            sortOrder: r.sortOrder,
+          })),
+        }),
+      );
+    }
+    await Promise.all(writes);
+  } catch {
+    // best-effort: carry-forward must never block report creation
+  }
+}
+
+/**
  * Best-effort pull of Metricool + ads into a single report, run in parallel.
  * Never throws: each source is independently guarded, so one failing (or a
  * missing brand / unset key) never aborts the other or the caller. Shared by
@@ -163,6 +247,9 @@ export async function runWeeklyAutoSync(opts: { week?: string } = {}): Promise<W
           select: { id: true, status: true },
         });
         r.created = true;
+        // Seed the manual grids from the previous week so the team only updates
+        // the latest month (best-effort; never blocks the sync).
+        await carryForwardManualSections(report.id, prop.id, meta.startDate);
       }
 
       if (isLockedStatus(report.status)) {

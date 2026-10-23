@@ -17,7 +17,7 @@ import {
 import { saveAnnualBudget } from "@/lib/weekly/annual-budget";
 import { saveAnnualLastYear } from "@/lib/weekly/annual-lastyear";
 import { enqueueWeeklyScrapeJobs, isScrapeQueueConfigured } from "@/lib/weekly/jobs";
-import { syncReportSources } from "@/lib/weekly/weekly-sync-run";
+import { carryForwardManualSections, syncReportSources } from "@/lib/weekly/weekly-sync-run";
 import { weekMeta } from "@/lib/weekly/week";
 
 export interface ActionResult {
@@ -763,6 +763,11 @@ export async function createWeek(formData: FormData): Promise<void> {
       select: { id: true },
     });
     await logAudit("weekly_create", `${property} ${week}`, {});
+
+    // Carry the manual grids (Repeater Guest, Channel Mix, Channel Inside)
+    // forward from the previous week so the team only updates the latest month.
+    // Best-effort and non-destructive (only seeds empty sections).
+    await carryForwardManualSections(created.id, prop.id, meta.startDate);
 
     // Pre-fill the fresh report with this week's ads + social, exactly like the
     // Friday auto-sync — so the ROAS / Social blocks are populated the moment
