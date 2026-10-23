@@ -10,6 +10,7 @@
  */
 
 import { logAudit } from "@/lib/audit";
+import { occupancyCollapseError } from "@/lib/daily/collapse-guard";
 import { isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
 import { prisma } from "@/lib/prisma";
 import { parsePickupForecast, type PickupSnapshotRow } from "@/lib/daily/parse-pickup";
@@ -125,6 +126,25 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     // saleable-rooms inventory is the property fingerprint.
     const mismatch = wrongPropertyError(property, rows);
     if (mismatch) return fail(409, mismatch);
+
+    // Reject a broken / empty export before it overwrites good data: occupancy
+    // on hand can't realistically crater day-over-day, so a systemic collapse
+    // versus the most recent prior reading means the pull is bad. Compared
+    // against the latest snapshot STRICTLY BEFORE this date, so a legitimate
+    // same-date correction (re-pushing a good file over a bad one) still lands.
+    const priorDay = await prisma.dailyPickupSnapshot.findFirst({
+      where: { propertyId: prop.id, snapshotDate: { lt: isoToUtcDate(snapshotDate) } },
+      orderBy: { snapshotDate: "desc" },
+      select: { snapshotDate: true },
+    });
+    if (priorDay) {
+      const priorRows = await prisma.dailyPickupSnapshot.findMany({
+        where: { propertyId: prop.id, snapshotDate: priorDay.snapshotDate },
+        select: { stayYear: true, stayMonth: true, roomNights: true, saleableRooms: true },
+      });
+      const collapse = occupancyCollapseError(rows, priorRows);
+      if (collapse) return fail(409, collapse);
+    }
 
     const written = await applyPickupRows(prop.id, snapshotDate, rows);
     const stayMonths = rows.map((r) => `${r.stayYear}-${String(r.stayMonth).padStart(2, "0")}`);
