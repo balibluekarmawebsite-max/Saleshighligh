@@ -12,6 +12,21 @@ export const isoToUtcDate = (iso: string): Date => new Date(`${iso}T00:00:00.000
 /** Today as ISO `yyyy-mm-dd` (UTC). */
 export const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
+/** WITA (Bali — UTC+8, no DST) offset in ms. All properties are in WITA. */
+const WITA_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/** The WITA calendar date `dayOffset` days from `nowMs`, as `yyyy-mm-dd`. */
+export function witaDateIso(nowMs: number, dayOffset = 0): string {
+  return new Date(nowMs + WITA_OFFSET_MS + dayOffset * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Yesterday's date in WITA — the last fully-closed day for a Bali property. An
+ * occupancy reading pulled this morning reflects the books as of yesterday's
+ * close, so this is the snapshot date the daily report should record.
+ */
+export const yesterdayWitaIso = (): string => witaDateIso(Date.now(), -1);
+
 /**
  * True only for a REAL calendar date in `yyyy-mm-dd` form. The regex alone isn't
  * enough: `new Date("2026-02-29T…")` doesn't throw — it silently rolls over to

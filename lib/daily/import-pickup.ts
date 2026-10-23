@@ -10,7 +10,7 @@
  */
 
 import { logAudit } from "@/lib/audit";
-import { isoToUtcDate, isValidIsoDate, todayIso } from "@/lib/daily/date";
+import { isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
 import { prisma } from "@/lib/prisma";
 import { parsePickupForecast, type PickupSnapshotRow } from "@/lib/daily/parse-pickup";
 
@@ -44,7 +44,7 @@ export async function applyPickupRows(
 
 export interface PickupImportInput {
   property: string;
-  /** ISO yyyy-mm-dd the reading was taken; defaults to today (UTC). */
+  /** ISO yyyy-mm-dd the reading represents; defaults to yesterday (WITA). */
   snapshotDate?: string;
   fileBuffer?: Buffer | null;
   text?: string;
@@ -68,7 +68,9 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     const property = input.property.trim().toUpperCase();
     if (!property) return fail(400, "property is required.");
 
-    const snapshotDate = (input.snapshotDate ?? "").trim() || todayIso();
+    // Default to YESTERDAY (WITA): a pull this morning reflects the books as of
+    // yesterday's close. The scraper can still send an explicit snapshotDate.
+    const snapshotDate = (input.snapshotDate ?? "").trim() || yesterdayWitaIso();
     if (!isValidIsoDate(snapshotDate)) {
       return fail(400, "snapshotDate must be a real calendar date in yyyy-mm-dd form.");
     }

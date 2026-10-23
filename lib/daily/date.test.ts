@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidIsoDate } from "@/lib/daily/date";
+import { isValidIsoDate, witaDateIso } from "@/lib/daily/date";
+
+describe("witaDateIso (Bali UTC+8)", () => {
+  it("rolls to the WITA calendar day, which is ahead of UTC", () => {
+    // Oct 22 23:00 UTC = Oct 23 07:00 WITA.
+    const t = Date.UTC(2026, 9, 22, 23, 0, 0);
+    expect(witaDateIso(t, 0)).toBe("2026-10-23"); // today, WITA
+    expect(witaDateIso(t, -1)).toBe("2026-10-22"); // yesterday, WITA
+  });
+
+  it("gives yesterday even late in the WITA day", () => {
+    // Oct 23 15:00 UTC = Oct 23 23:00 WITA — still Oct 23 locally.
+    const t = Date.UTC(2026, 9, 23, 15, 0, 0);
+    expect(witaDateIso(t, 0)).toBe("2026-10-23");
+    expect(witaDateIso(t, -1)).toBe("2026-10-22");
+  });
+});
 
 describe("isValidIsoDate (snapshotDate guard)", () => {
   it("accepts real calendar dates", () => {

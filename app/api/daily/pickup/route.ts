@@ -33,7 +33,8 @@ const MAX_BODY_BYTES = 25 * 1024 * 1024;
  * once a day as multipart/form-data:
  *   Authorization: Bearer <IMPORT_API_TOKEN>
  *   property=BKDU
- *   snapshotDate=2026-10-20   (optional; defaults to today UTC)
+ *   snapshotDate=2026-10-20   (optional; defaults to YESTERDAY in WITA — a
+ *                              morning pull reflects yesterday's close)
  *   source=vhp:pickup         (optional, for logs)
  *   file=@yearly-occupancy.csv
  *
