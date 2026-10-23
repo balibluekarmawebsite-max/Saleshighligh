@@ -220,6 +220,118 @@ const int = (v: unknown): number | null => {
 };
 
 /** Replace all rows for one Department Inputs section. (useFormState signature.) */
+/**
+ * Editor sections whose content is often identical across all three units, so
+ * the editor can fill one and copy it to the others (see the "Copy to units"
+ * control). Deliberately excludes property-specific sections (Sales Activity,
+ * Social metrics, Action Plans).
+ */
+export const COPYABLE_SECTIONS = new Set<string>([
+  "graphic_design",
+  "marketing",
+  "ecommerce",
+  "sm_marketing",
+  "marketing_outsider",
+  "digital_marketing",
+  "trainings",
+]);
+
+/**
+ * Replace-all write of ONE editor section's rows into a report, inside a
+ * transaction. Returns how many rows were written. This is the single write
+ * path for every section the Department/Section editors save, so saving a
+ * section and copying it to another unit stay byte-for-byte identical.
+ */
+async function applyWeeklySectionRows(
+  tx: Prisma.TransactionClient,
+  rid: string,
+  sectionId: string,
+  rows: Record<string, string>[],
+): Promise<number> {
+  switch (sectionId) {
+    case "sales":
+    case "ecommerce":
+    case "sm_marketing":
+    case "marketing":
+    case "marketing_outsider":
+    case "digital_marketing":
+    case "graphic_design": {
+      await tx.weeklyActivity.deleteMany({ where: { reportWeekId: rid, department: sectionId } });
+      const data = rows
+        .filter((r) => str(r.title))
+        .map((r, i) => ({
+          reportWeekId: rid,
+          department: sectionId,
+          dateLabel: str(r.dateLabel),
+          title: str(r.title),
+          notes: str(r.notes),
+          sortOrder: i,
+        }));
+      if (data.length) await tx.weeklyActivity.createMany({ data });
+      return data.length;
+    }
+    case "social": {
+      await tx.weeklySocialMetric.deleteMany({ where: { reportWeekId: rid } });
+      const data = rows
+        .filter((r) => str(r.metricKey))
+        .map((r, i) => ({
+          reportWeekId: rid,
+          platform: str(r.platform) ?? "Instagram",
+          metricKey: str(r.metricKey) as string,
+          lastWeek: int(r.lastWeek),
+          thisWeek: int(r.thisWeek),
+          sortOrder: i,
+        }));
+      if (data.length) await tx.weeklySocialMetric.createMany({ data });
+      return data.length;
+    }
+    case "trainings": {
+      await tx.weeklyTraining.deleteMany({ where: { reportWeekId: rid } });
+      const data = rows
+        .filter((r) => str(r.topic))
+        .map((r, i) => ({
+          reportWeekId: rid,
+          dateLabel: str(r.dateLabel),
+          topic: str(r.topic) as string,
+          duration: str(r.duration),
+          trainer: str(r.trainer),
+          participants: str(r.participants),
+          sortOrder: i,
+        }));
+      if (data.length) await tx.weeklyTraining.createMany({ data });
+      return data.length;
+    }
+    case "action_plans": {
+      const data = rows
+        .filter((r) => str(r.plan))
+        .map((r, i) => ({
+          reportWeekId: rid,
+          category: str(r.category),
+          plan: str(r.plan) as string,
+          startLabel: str(r.startLabel),
+          deadlineLabel: str(r.deadlineLabel),
+          remark: str(r.remark),
+          sortOrder: i,
+        }));
+      // Replace only the categories present in this submission, so a save
+      // here (the Department Inputs page) never wipes a category that was
+      // entered through the per-category editor — matching saveActionPlanCategory.
+      const cats = Array.from(new Set(data.map((d) => d.category)));
+      const nonNull = cats.filter((c): c is string => c != null);
+      const orClauses: Prisma.WeeklyActionPlanWhereInput[] = [];
+      if (nonNull.length > 0) orClauses.push({ category: { in: nonNull } });
+      if (cats.includes(null)) orClauses.push({ category: null });
+      if (orClauses.length > 0) {
+        await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid, OR: orClauses } });
+      }
+      if (data.length) await tx.weeklyActionPlan.createMany({ data });
+      return data.length;
+    }
+    default:
+      throw new Error(`Unknown section: ${sectionId}`);
+  }
+}
+
 export async function saveSection(
   _prev: ActionResult | null,
   formData: FormData,
@@ -246,93 +358,55 @@ export async function saveSection(
   }
 
   const rid = report.id;
+  let written = 0;
   await prisma.$transaction(async (tx) => {
-    switch (sectionId) {
-      case "sales":
-      case "ecommerce":
-      case "sm_marketing":
-      case "marketing":
-      case "marketing_outsider":
-      case "digital_marketing":
-      case "graphic_design": {
-        await tx.weeklyActivity.deleteMany({ where: { reportWeekId: rid, department: sectionId } });
-        const data = rows
-          .filter((r) => str(r.title))
-          .map((r, i) => ({
-            reportWeekId: rid,
-            department: sectionId,
-            dateLabel: str(r.dateLabel),
-            title: str(r.title),
-            notes: str(r.notes),
-            sortOrder: i,
-          }));
-        if (data.length) await tx.weeklyActivity.createMany({ data });
-        break;
-      }
-      case "social": {
-        await tx.weeklySocialMetric.deleteMany({ where: { reportWeekId: rid } });
-        const data = rows
-          .filter((r) => str(r.metricKey))
-          .map((r, i) => ({
-            reportWeekId: rid,
-            platform: str(r.platform) ?? "Instagram",
-            metricKey: str(r.metricKey) as string,
-            lastWeek: int(r.lastWeek),
-            thisWeek: int(r.thisWeek),
-            sortOrder: i,
-          }));
-        if (data.length) await tx.weeklySocialMetric.createMany({ data });
-        break;
-      }
-      case "trainings": {
-        await tx.weeklyTraining.deleteMany({ where: { reportWeekId: rid } });
-        const data = rows
-          .filter((r) => str(r.topic))
-          .map((r, i) => ({
-            reportWeekId: rid,
-            dateLabel: str(r.dateLabel),
-            topic: str(r.topic) as string,
-            duration: str(r.duration),
-            trainer: str(r.trainer),
-            participants: str(r.participants),
-            sortOrder: i,
-          }));
-        if (data.length) await tx.weeklyTraining.createMany({ data });
-        break;
-      }
-      case "action_plans": {
-        const data = rows
-          .filter((r) => str(r.plan))
-          .map((r, i) => ({
-            reportWeekId: rid,
-            category: str(r.category),
-            plan: str(r.plan) as string,
-            startLabel: str(r.startLabel),
-            deadlineLabel: str(r.deadlineLabel),
-            remark: str(r.remark),
-            sortOrder: i,
-          }));
-        // Replace only the categories present in this submission, so a save
-        // here (the Department Inputs page) never wipes a category that was
-        // entered through the per-category editor — matching saveActionPlanCategory.
-        const cats = Array.from(new Set(data.map((d) => d.category)));
-        const nonNull = cats.filter((c): c is string => c != null);
-        const orClauses: Prisma.WeeklyActionPlanWhereInput[] = [];
-        if (nonNull.length > 0) orClauses.push({ category: { in: nonNull } });
-        if (cats.includes(null)) orClauses.push({ category: null });
-        if (orClauses.length > 0) {
-          await tx.weeklyActionPlan.deleteMany({ where: { reportWeekId: rid, OR: orClauses } });
-        }
-        if (data.length) await tx.weeklyActionPlan.createMany({ data });
-        break;
-      }
-      default:
-        throw new Error(`Unknown section: ${sectionId}`);
-    }
+    written = await applyWeeklySectionRows(tx, rid, sectionId, rows);
   });
 
   await logAudit("weekly_section_save", `${property} ${week}`, { section: sectionId });
   revalidatePath(`/weekly/${property}/${week}/departments`);
+
+  // "Copy to other units": when the editor asks (intent=copy), replicate the
+  // just-saved rows into the SAME section + week of the selected sibling
+  // properties — for sections whose content is the group-wide (identical across
+  // units). Each target is independently auth-checked and skipped (never
+  // failed) when it can't receive the copy, so one blocked unit doesn't abort
+  // the others.
+  if (COPYABLE_SECTIONS.has(sectionId) && String(formData.get("intent") ?? "") === "copy") {
+    const targets = [...new Set(formData.getAll("targets").map((t) => String(t).toUpperCase()))]
+      .filter((c) => c && c !== property);
+    if (targets.length === 0) {
+      return { ok: true, message: "Saved. Pick at least one unit to copy to." };
+    }
+    if (written === 0) {
+      return { ok: true, message: "Saved. Nothing to copy — add at least one row first." };
+    }
+
+    const copied: string[] = [];
+    const skipped: string[] = [];
+    for (const code of targets) {
+      if (!canEditProperty(user, code)) { skipped.push(`${code} (no access)`); continue; }
+      const tgt = await findReport(code, week);
+      if (!tgt) { skipped.push(`${code} (no report yet)`); continue; }
+      if (isLockedStatus(tgt.status)) { skipped.push(`${code} (locked)`); continue; }
+      try {
+        await prisma.$transaction((tx) => applyWeeklySectionRows(tx, tgt.id, sectionId, rows));
+      } catch {
+        skipped.push(`${code} (error)`);
+        continue;
+      }
+      await logAudit("weekly_section_copy", `${property}→${code} ${week}`, { section: sectionId, rows: written });
+      revalidatePath(`/weekly/${code}/${week}/departments`);
+      revalidatePath(`/weekly/${code}/${week}/editor`);
+      copied.push(code);
+    }
+
+    let message = "Saved.";
+    if (copied.length) message += ` Copied to ${copied.join(", ")}.`;
+    if (skipped.length) message += ` Skipped ${skipped.join(", ")}.`;
+    return { ok: true, message };
+  }
+
   return { ok: true, message: "Saved." };
 }
 

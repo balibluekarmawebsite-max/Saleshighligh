@@ -15,6 +15,7 @@ import { SectionImport } from "@/components/weekly/section-import";
 import { SocialSection } from "@/components/weekly/sections/social-section";
 import { TrainingTable } from "@/components/weekly/sections/training-table";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
+import { PROPERTIES } from "@/lib/constants";
 import { weeklyHref } from "@/lib/nav";
 import { getWeeklyAds } from "@/lib/weekly/ads-data";
 import {
@@ -110,6 +111,13 @@ export default async function WeeklyEditorPage({
   const { week } = data;
   const locked = week.locked;
   const readOnly = locked || !canEdit;
+  // Units the editor can copy a group-wide section into (the other properties
+  // they have edit access to). Empty when they can't edit this property.
+  const copyTargets = canEdit
+    ? PROPERTIES.filter(
+        (pr) => pr.code.toUpperCase() !== p.toUpperCase() && canEditProperty(user, pr.code),
+      ).map((pr) => ({ code: pr.code, name: pr.name }))
+    : [];
   const screenshots = await getWeeklyScreenshots(p, w);
   const ads = await getWeeklyAds(p, w);
   const metricoolConfigured = isMetricoolConfigured();
@@ -212,6 +220,7 @@ export default async function WeeklyEditorPage({
           property={p} week={w} locked={readOnly} sectionId="ecommerce"
           title="G2 · E-commerce Activities" subtitle="Add each activity with its date and notes."
           subjectLabel="Task" addLabel="Add activity" initial={data.ecommerce}
+          copyTargets={copyTargets}
         />,
       ),
     },
@@ -237,12 +246,13 @@ export default async function WeeklyEditorPage({
           propertyName={week.propertyName}
           thisWeekLabel={weekLabel(w)}
           lastWeekLabel={weekLabel(shiftWeekId(w, -1))}
+          copyTargets={copyTargets}
         />
       ),
     },
     {
       key: "I", code: "I", label: "Training", done: data.completion.I,
-      node: withImport("training", <TrainingTable property={p} week={w} locked={readOnly} initial={data.trainings} />),
+      node: withImport("training", <TrainingTable property={p} week={w} locked={readOnly} initial={data.trainings} copyTargets={copyTargets} />),
     },
     {
       key: "J", code: "J", label: "Action Plan", done: data.completion.J,

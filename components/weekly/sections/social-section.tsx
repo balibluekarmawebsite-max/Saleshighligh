@@ -1,6 +1,7 @@
 "use client";
 
 import { ActivitiesCards } from "@/components/weekly/sections/activities-cards";
+import type { CopyTarget } from "@/components/weekly/sections/copy-to-units";
 import { GraphicDesignTable } from "@/components/weekly/sections/graphic-design-table";
 import { MetricoolSyncPanel } from "@/components/weekly/sections/metricool-sync-panel";
 import { SocialGrid } from "@/components/weekly/sections/social-grid";
@@ -24,6 +25,7 @@ export function SocialSection({
   propertyName,
   thisWeekLabel,
   lastWeekLabel,
+  copyTargets,
 }: {
   property: string;
   week: string;
@@ -38,6 +40,8 @@ export function SocialSection({
   propertyName?: string;
   thisWeekLabel?: string;
   lastWeekLabel?: string;
+  /** Other units the graphic-design + marketing-activity sub-sections copy to. */
+  copyTargets?: CopyTarget[];
 }) {
   return (
     <div className="space-y-6">
@@ -60,7 +64,13 @@ export function SocialSection({
         lastWeekLabel={lastWeekLabel}
       />
       <SocialNarrative property={property} week={week} locked={locked} blocks={socialNarrative} />
-      <GraphicDesignTable property={property} week={week} locked={locked} initial={graphicDesign} />
+      <GraphicDesignTable
+        property={property}
+        week={week}
+        locked={locked}
+        initial={graphicDesign}
+        copyTargets={copyTargets}
+      />
       {SM_ACTIVITY_SECTIONS.map((s) => (
         <ActivitiesCards
           key={s.id}
@@ -73,6 +83,7 @@ export function SocialSection({
           subjectLabel={s.subjectLabel}
           addLabel={s.addLabel}
           initial={activityRows[s.id] ?? []}
+          copyTargets={copyTargets}
         />
       ))}
     </div>

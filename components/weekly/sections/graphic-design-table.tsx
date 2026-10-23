@@ -4,6 +4,7 @@ import { useFormState } from "react-dom";
 import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { CopyToUnits, type CopyTarget } from "@/components/weekly/sections/copy-to-units";
 import { saveSection } from "@/lib/weekly/editor-actions";
 import {
   CELL,
@@ -22,11 +23,14 @@ export function GraphicDesignTable({
   week,
   locked,
   initial,
+  copyTargets,
 }: {
   property: string;
   week: string;
   locked: boolean;
   initial: Row[];
+  /** Other units this section can be copied to; omit to hide the Copy control. */
+  copyTargets?: CopyTarget[];
 }) {
   const { rows, update, add, remove } = useRows(initial);
   const [state, formAction] = useFormState(saveSection, null);
@@ -108,6 +112,10 @@ export function GraphicDesignTable({
               <Plus /> Add task
             </Button>
           </div>
+        )}
+
+        {copyTargets && (
+          <CopyToUnits targets={copyTargets} sectionLabel="Graphic Design Report" locked={locked} />
         )}
       </form>
     </SectionCardShell>

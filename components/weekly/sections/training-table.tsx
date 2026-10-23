@@ -5,6 +5,7 @@ import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AiTextActions } from "@/components/weekly/ai-text-actions";
+import { CopyToUnits, type CopyTarget } from "@/components/weekly/sections/copy-to-units";
 import { saveSection } from "@/lib/weekly/editor-actions";
 import {
   CELL,
@@ -20,11 +21,14 @@ export function TrainingTable({
   week,
   locked,
   initial,
+  copyTargets,
 }: {
   property: string;
   week: string;
   locked: boolean;
   initial: Record<string, string>[];
+  /** Other units this section can be copied to; omit to hide the Copy control. */
+  copyTargets?: CopyTarget[];
 }) {
   const { rows, update, add, remove } = useRows(initial);
   const [state, formAction] = useFormState(saveSection, null);
@@ -149,6 +153,10 @@ export function TrainingTable({
               <Plus /> Add training
             </Button>
           </div>
+        )}
+
+        {copyTargets && (
+          <CopyToUnits targets={copyTargets} sectionLabel="Training" locked={locked} />
         )}
       </form>
     </SectionCardShell>
