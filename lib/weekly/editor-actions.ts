@@ -385,20 +385,26 @@ export async function saveSection(
     const copied: string[] = [];
     const skipped: string[] = [];
     for (const code of targets) {
-      if (!canEditProperty(user, code)) { skipped.push(`${code} (no access)`); continue; }
-      const tgt = await findReport(code, week);
-      if (!tgt) { skipped.push(`${code} (no report yet)`); continue; }
-      if (isLockedStatus(tgt.status)) { skipped.push(`${code} (locked)`); continue; }
+      // The whole per-target body is guarded, so an infrastructure error (e.g.
+      // findReport hitting a transient DB blip) on one unit only skips that
+      // unit — it never aborts the remaining targets or the already-saved
+      // source. Business skips (no access / no report / locked) short-circuit
+      // the same way.
       try {
+        if (!canEditProperty(user, code)) { skipped.push(`${code} (no access)`); continue; }
+        const tgt = await findReport(code, week);
+        if (!tgt) { skipped.push(`${code} (no report yet)`); continue; }
+        if (isLockedStatus(tgt.status)) { skipped.push(`${code} (locked)`); continue; }
         await prisma.$transaction((tx) => applyWeeklySectionRows(tx, tgt.id, sectionId, rows));
+        copied.push(code);
+        await logAudit("weekly_section_copy", `${property}→${code} ${week}`, { section: sectionId, rows: written }).catch(() => {});
+        revalidatePath(`/weekly/${code}/${week}/departments`);
+        revalidatePath(`/weekly/${code}/${week}/editor`);
       } catch {
-        skipped.push(`${code} (error)`);
-        continue;
+        // A throw after the write committed (copied already recorded) is
+        // swallowed here; the copy still happened, so don't double-report it.
+        if (!copied.includes(code)) skipped.push(`${code} (error)`);
       }
-      await logAudit("weekly_section_copy", `${property}→${code} ${week}`, { section: sectionId, rows: written });
-      revalidatePath(`/weekly/${code}/${week}/departments`);
-      revalidatePath(`/weekly/${code}/${week}/editor`);
-      copied.push(code);
     }
 
     let message = "Saved.";

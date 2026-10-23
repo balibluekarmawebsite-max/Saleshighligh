@@ -156,7 +156,7 @@ export function TrainingTable({
         )}
 
         {copyTargets && (
-          <CopyToUnits targets={copyTargets} sectionLabel="Training" locked={locked} />
+          <CopyToUnits targets={copyTargets} sectionLabel="Training" locked={locked} state={state} />
         )}
       </form>
     </SectionCardShell>

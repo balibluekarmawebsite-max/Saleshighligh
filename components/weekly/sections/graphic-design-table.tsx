@@ -115,7 +115,7 @@ export function GraphicDesignTable({
         )}
 
         {copyTargets && (
-          <CopyToUnits targets={copyTargets} sectionLabel="Graphic Design Report" locked={locked} />
+          <CopyToUnits targets={copyTargets} sectionLabel="Graphic Design Report" locked={locked} state={state} />
         )}
       </form>
     </SectionCardShell>

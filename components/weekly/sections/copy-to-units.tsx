@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
-import { Copy, Loader2 } from "lucide-react";
+import { Check, Copy, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { ActionResult } from "@/lib/weekly/editor-actions";
 
 export interface CopyTarget {
   code: string;
@@ -23,15 +24,23 @@ export function CopyToUnits({
   targets,
   sectionLabel,
   locked,
+  state,
 }: {
   targets: CopyTarget[];
   sectionLabel: string;
   locked: boolean;
+  /** Shared save/copy result from the parent form; a copy outcome is echoed here. */
+  state?: ActionResult | null;
 }) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const { pending } = useFormStatus();
 
   if (locked || targets.length === 0) return null;
+
+  // Echo the result next to this control (not just at the far-away Save button)
+  // whenever it's a copy outcome — so a silently-skipped unit is seen right
+  // where the user clicked Copy. A plain "Saved." stays at the Save button only.
+  const copyResult = state?.message && /\b(copied|skipped|copy|unit)\b/i.test(state.message) ? state : null;
 
   const toggle = (code: string) =>
     setPicked((s) => {
@@ -86,6 +95,19 @@ export function CopyToUnits({
           {pending ? <Loader2 className="animate-spin" /> : <Copy />} Copy to selected
         </Button>
       </div>
+
+      {copyResult && (
+        <p
+          className={
+            copyResult.ok
+              ? "mt-2 flex items-start gap-1 text-xs text-variance-positive"
+              : "mt-2 text-xs text-variance-negative"
+          }
+        >
+          {copyResult.ok && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <span>{copyResult.message}</span>
+        </p>
+      )}
     </div>
   );
 }

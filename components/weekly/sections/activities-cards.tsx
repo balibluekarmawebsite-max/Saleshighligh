@@ -134,7 +134,7 @@ export function ActivitiesCards({
         )}
 
         {copyTargets && (
-          <CopyToUnits targets={copyTargets} sectionLabel={title} locked={locked} />
+          <CopyToUnits targets={copyTargets} sectionLabel={title} locked={locked} state={state} />
         )}
       </form>
     </SectionCardShell>
