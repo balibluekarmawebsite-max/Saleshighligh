@@ -226,7 +226,9 @@ const int = (v: unknown): number | null => {
  * control). Deliberately excludes property-specific sections (Sales Activity,
  * Social metrics, Action Plans).
  */
-export const COPYABLE_SECTIONS = new Set<string>([
+// NOTE: not exported — a "use server" module may only export async functions,
+// so this stays a module-private const (used by saveSection below).
+const COPYABLE_SECTIONS = new Set<string>([
   "graphic_design",
   "marketing",
   "ecommerce",
