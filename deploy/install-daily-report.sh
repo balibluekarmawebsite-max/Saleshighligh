@@ -23,7 +23,7 @@ if ! grep -q '^CRON_SECRET=' "$ENV"; then
   systemctl restart bk-dashboard
   sleep 2
 fi
-SECRET=$(grep '^CRON_SECRET=' "$ENV" | head -1 | cut -d= -f2- | tr -d '"'"'"' | tr -d "[:space:]")
+SECRET=$(grep '^CRON_SECRET=' "$ENV" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]')
 [ -n "$SECRET" ] || { echo "ERROR: CRON_SECRET is empty in $ENV." >&2; exit 1; }
 
 # Warn (don't fail) when the email isn't configured yet.

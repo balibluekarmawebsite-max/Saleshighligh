@@ -24,11 +24,11 @@ if ! grep -q '^CRON_SECRET=' "$ENV"; then
   systemctl restart bk-dashboard
   sleep 2
 fi
-SECRET=$(grep '^CRON_SECRET=' "$ENV" | head -1 | cut -d= -f2- | tr -d '"'"'"' | tr -d "[:space:]")
+SECRET=$(grep '^CRON_SECRET=' "$ENV" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]')
 [ -n "$SECRET" ] || { echo "ERROR: CRON_SECRET is empty in $ENV." >&2; exit 1; }
 
 # Warn (don't fail) if ads key is missing — ads/ROAS can't sync without it.
-ADS=$(grep '^ADS_API_KEY=' "$ENV" | head -1 | cut -d= -f2- | tr -d '"'"'"' | tr -d "[:space:]" || true)
+ADS=$(grep '^ADS_API_KEY=' "$ENV" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]' || true)
 [ -n "$ADS" ] || echo "WARNING: ADS_API_KEY is not set in $ENV — ROAS/Digital Ads will stay empty until it is."
 
 # Write the units (secret inlined; service kept root-only).

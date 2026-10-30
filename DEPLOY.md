@@ -677,7 +677,7 @@ then `sudo systemctl daemon-reload`.
 
 ```bash
 APP=$(systemctl show -p WorkingDirectory --value bk-dashboard)
-SECRET=$(grep '^CRON_SECRET=' "$APP/.env" | head -1 | cut -d= -f2- | tr -d '"'"'"' | tr -d '[:space:]')
+SECRET=$(grep '^CRON_SECRET=' "$APP/.env" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]')
 curl -sS -H "Authorization: Bearer $SECRET" http://127.0.0.1:3000/api/cron/daily-report
 ```
 
