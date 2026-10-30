@@ -155,6 +155,16 @@ async function propertyDetail(code: string, name: string, propertyId: string): P
   return { code, name, roomCount, refDate, pickupTotal, cancelTotal, onHand, pickupOtaOffline, pickupDirect, cancelByAgent, flow };
 }
 
+/** The detailed block for ONE property (for the dashboard sections). */
+export async function getPropertyDetail(code: string): Promise<PropertyDetail | null> {
+  const row = await prisma.property.findUnique({
+    where: { code: code.trim().toUpperCase() },
+    select: { id: true, code: true, name: true },
+  });
+  if (!row) return null;
+  return propertyDetail(row.code, row.name, row.id);
+}
+
 export interface DailyDetailData {
   properties: PropertyDetail[];
   refDate: string | null;

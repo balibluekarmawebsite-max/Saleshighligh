@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 
 import { SectionCard } from "@/components/dashboard/section-card";
 import { PickupGrid } from "@/components/daily/pickup-grid";
+import { ReservationDetail } from "@/components/daily/reservation-detail";
+import { getPropertyDetail } from "@/lib/daily/daily-detail-data";
 import { getPickupReport } from "@/lib/daily/pickup-report-data";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function PickupPage({ params }: { params: { property: string; month: string } }) {
   const report = await getPickupReport(params.property, params.month);
   if (!report) notFound();
+  const detail = await getPropertyDetail(params.property);
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
@@ -28,6 +31,8 @@ export default async function PickupPage({ params }: { params: { property: strin
       >
         <PickupGrid report={report} />
       </SectionCard>
+
+      {detail && <ReservationDetail detail={detail} />}
     </div>
   );
 }
