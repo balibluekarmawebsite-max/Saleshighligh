@@ -478,3 +478,97 @@ curl -H "Authorization: Bearer <IMPORT_API_TOKEN>" \
 
 Each successful push is also recorded in the dashboard **Activity log**
 (`/admin/activity`) as `daily_pickup_import`.
+
+---
+
+## 13. Reservation + Room Departure feeds (daily email detail)
+
+Two JSON feeds power the detailed daily email (pickup-by-agent, cancellation,
+on-hand, arrivals/departures). Unlike the CSV feeds, these take **structured
+JSON** — the scraper reads the VHP page and posts clean numbers, so there's no
+export format to match. Both are gated by `IMPORT_API_TOKEN` and excluded from
+the login middleware.
+
+### 13.1 Reservation — `POST /api/daily/reservation`
+
+Source: VHP **https://e1-vhp.com/fr/reservation**. Gives two things:
+**new-reservation pickup by agent** (for "Yesterday pick up booking details")
+and **arrivals by stay date**.
+
+```
+Authorization: Bearer <IMPORT_API_TOKEN>
+Content-Type: application/json
+{
+  "property": "BKV",
+  "date": "2026-10-29",            // business day the bookings were ENTERED (optional; defaults to yesterday WITA)
+  "pickups": [                      // NEW reservations entered on `date`, one row per agent/source
+    { "agent": "Booking.com", "roomNights": 16, "reservations": 6 },
+    { "agent": "G2 Travel",   "roomNights": 5,  "reservations": 2 },
+    { "agent": "Direct",      "roomNights": 0,  "reservations": 0 }
+  ],
+  "arrivals": [                     // guests ARRIVING on each stay date (room count)
+    { "date": "2026-10-29", "rooms": 2 },   // previous day
+    { "date": "2026-10-30", "rooms": 7 },   // today
+    { "date": "2026-10-31", "rooms": 5 }    // tomorrow
+  ]
+}
+```
+
+- **`pickups`** — one row per booking agent/source, with the room nights (and
+  optional reservation count) that agent booked ON `date`. Send the agent name
+  as VHP shows it (`Booking.com`, `Expedia`, `G2 Travel`, `Bali Authentique`,
+  `Direct`, `Walk In`, …); the dashboard classifies OTA / Offline / Direct
+  itself, so don't pre-group. Posting a `date` **replaces** that day's pickup
+  rows (idempotent).
+- **`arrivals`** — room count arriving on each stay date. Send at least the
+  previous day, today and tomorrow relative to the report. Each date is
+  upserted; it never touches departures.
+- Response: `{ "ok": true, "pickupAgents": n, "pickupRoomNights": n, "arrivalsWritten": n }`.
+
+### 13.2 Room Departure — `POST /api/daily/departure`
+
+Source: VHP **https://e1-vhp.com/to/telephone-operator**. Gives **departures by
+stay date**.
+
+```
+Authorization: Bearer <IMPORT_API_TOKEN>
+Content-Type: application/json
+{
+  "property": "BKV",
+  "departures": [
+    { "date": "2026-10-29", "rooms": 3 },   // previous day
+    { "date": "2026-10-30", "rooms": 7 },   // today
+    { "date": "2026-10-31", "rooms": 4 }    // tomorrow
+  ]
+}
+```
+
+- **`departures`** — room count departing on each stay date. Upserts only the
+  departure column, so it coexists with the arrivals the Reservation feed wrote
+  for the same dates.
+- Response: `{ "ok": true, "departuresWritten": n }`.
+
+### 13.3 What the scraper runs each morning (per property)
+
+Same schedule as the pickup/cancellation pulls (once a day, before the 07:00
+WITA email):
+
+| Pull | Endpoint | Sends |
+|---|---|---|
+| Yearly Occupancy (Month = current) | `/api/daily/pickup` | occupancy on hand (§12 of this doc / the pickup feed) |
+| Cancellations | `/api/daily/cancellation` | cancelled lines (agent, dates, RN) |
+| **Reservation** | **`/api/daily/reservation`** | **pickup-by-agent + arrivals** |
+| **Room Departure** | **`/api/daily/departure`** | **departures** |
+
+`reservations` is optional everywhere; `roomNights` / `rooms` are required
+integers. Verify a push with `GET /api/daily/reservation?property=BKV` (returns
+the stored pickups + arrival/departure days).
+
+### 13.4 Note for the scraper agent
+
+- Keep agent names raw and consistent per property (the dashboard matches
+  cancellations to pickups by the same agent label, and classifies the channel).
+- `date` on the Reservation feed is the day bookings were **entered** (the
+  report's "yesterday"), not a stay date. `arrivals`/`departures` dates ARE stay
+  dates. Send previous-day / today / tomorrow at minimum.
+- All three feeds are idempotent per day, so a re-run is always safe.

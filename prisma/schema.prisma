@@ -160,6 +160,8 @@ model Property {
   dailyRoomRevenue        DailyRoomRevenue[]
   dailySegmentPerformance DailySegmentPerformance[]
   dailyBreakEven          DailyBreakEven[]
+  dailyReservationPickups DailyReservationPickup[]
+  dailyArrivalDepartures  DailyArrivalDeparture[]
 
   @@map("properties")
 }
@@ -1340,6 +1342,49 @@ model DailyPickupSnapshot {
   @@unique([propertyId, snapshotDate, stayYear, stayMonth])
   @@index([propertyId, stayYear, stayMonth])
   @@map("daily_pickup_snapshots")
+}
+
+/// NEW-reservation pickup for a business day, grouped by booking agent/source —
+/// the "Yesterday pick up booking details" in the daily email (Booking.com 16 RN,
+/// G2 Travel 5 RN, Direct 0 RN, …). Fed by the Reservation scrape. The OTA /
+/// Offline / Direct channel split is DERIVED from the agent name
+/// (lib/weekly/owner-channel-mix classifyChannel), never stored. Re-posting a
+/// pickupDate replaces that day's rows (idempotent at the day grain).
+model DailyReservationPickup {
+  id           String   @id @default(cuid())
+  propertyId   String
+  pickupDate   DateTime @db.Date
+  agent        String
+  roomNights   Int
+  reservations Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, pickupDate, agent])
+  @@index([propertyId, pickupDate])
+  @@map("daily_reservation_pickups")
+}
+
+/// Arrivals and departures per STAY date — the Previous Day / Today / Tomorrow
+/// "Arrival / Departure" room counts in the daily email. Arrivals come from the
+/// Reservation scrape, departures from the Room Departure scrape; each feed
+/// upserts its own column for a date, so the two land independently.
+model DailyArrivalDeparture {
+  id             String   @id @default(cuid())
+  propertyId     String
+  stayDate       DateTime @db.Date
+  arrivalRooms   Int?
+  departureRooms Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, stayDate])
+  @@index([propertyId, stayDate])
+  @@map("daily_arrival_departures")
 }
 
 /// The NEW "Cancellation Report" VHP pull — one RAW row per cancelled reservation
