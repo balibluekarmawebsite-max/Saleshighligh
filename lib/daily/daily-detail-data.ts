@@ -78,28 +78,30 @@ async function latestOnHand(propertyId: string, count = 3): Promise<OnHandMonth[
 async function propertyDetail(code: string, name: string, propertyId: string): Promise<PropertyDetail> {
   const roomCount = PROPERTY_BY_CODE[code as PropertyCode]?.roomCount ?? 0;
 
-  // Reference day D = the latest pickup date, else the latest snapshot date.
-  const latestPickup = await prisma.dailyReservationPickup.findFirst({
+  // Report day (D = "yesterday") = the latest occupancy snapshot date — the
+  // feeds date it as yesterday's close. Cancellation and the Previous Day /
+  // Today / Tomorrow flow all anchor on D, so the flow dates [D, D+1, D+2] line
+  // up with the scraper's arrival/departure dates (yesterday/today/tomorrow).
+  const snap = await prisma.dailyPickupSnapshot.findFirst({
+    where: { propertyId },
+    orderBy: { snapshotDate: "desc" },
+    select: { snapshotDate: true },
+  });
+  let refDate: string | null = snap ? isoOf(snap.snapshotDate) : null;
+
+  // Pickup by agent = the LATEST reservation run's rows (the scraper dates them
+  // by run day, one ahead of D), split Direct vs OTA/Offline. Decoupled from D.
+  const pickupOtaOffline: AgentRN[] = [];
+  const pickupDirect: AgentRN[] = [];
+  const latestPk = await prisma.dailyReservationPickup.findFirst({
     where: { propertyId },
     orderBy: { pickupDate: "desc" },
     select: { pickupDate: true },
   });
-  let refDate: string | null = latestPickup ? isoOf(latestPickup.pickupDate) : null;
-  if (!refDate) {
-    const snap = await prisma.dailyPickupSnapshot.findFirst({
-      where: { propertyId },
-      orderBy: { snapshotDate: "desc" },
-      select: { snapshotDate: true },
-    });
-    refDate = snap ? isoOf(snap.snapshotDate) : null;
-  }
-
-  // Pickup by agent for D, split into Direct vs OTA/Offline.
-  const pickupOtaOffline: AgentRN[] = [];
-  const pickupDirect: AgentRN[] = [];
-  if (refDate) {
+  if (latestPk) {
+    if (!refDate) refDate = isoOf(latestPk.pickupDate); // no occupancy yet → fall back
     const pk = await prisma.dailyReservationPickup.findMany({
-      where: { propertyId, pickupDate: toUtc(refDate) },
+      where: { propertyId, pickupDate: latestPk.pickupDate },
       orderBy: { roomNights: "desc" },
       select: { agent: true, roomNights: true },
     });

@@ -60,9 +60,11 @@ export async function POST(req: NextRequest) {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!b.property) return Response.json({ ok: false, error: "property is required." }, { status: 400 });
 
+  // The scraper sends `snapshotDate` (the run date); `date` is accepted as an alias.
+  const runDate = b.snapshotDate ?? b.date;
   const result = await runReservationImport({
     property: String(b.property),
-    date: b.date ? String(b.date) : undefined,
+    date: runDate ? String(runDate) : undefined,
     pickups: Array.isArray(b.pickups) ? (b.pickups as never[]) : [],
     arrivals: Array.isArray(b.arrivals) ? (b.arrivals as never[]) : [],
     source: b.source ? String(b.source) : undefined,

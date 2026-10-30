@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { runDepartureImport } from "@/lib/daily/import-flow";
+import { prisma } from "@/lib/prisma";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
 /** Shared-secret bearer check (same token as the other daily feeds). */
@@ -56,11 +57,34 @@ export async function POST(req: NextRequest) {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!b.property) return Response.json({ ok: false, error: "property is required." }, { status: 400 });
 
+  const runDate = b.snapshotDate ?? b.date;
   const result = await runDepartureImport({
     property: String(b.property),
-    date: b.date ? String(b.date) : undefined,
+    date: runDate ? String(runDate) : undefined,
     departures: Array.isArray(b.departures) ? (b.departures as never[]) : [],
     source: b.source ? String(b.source) : undefined,
   });
   return Response.json(result.body, { status: result.status });
+}
+
+/** Verify what landed: GET ?property=BKV (recent arrival/departure days). */
+export async function GET(req: NextRequest) {
+  const authError = checkToken(req);
+  if (authError) return authError;
+  const code = (new URL(req.url).searchParams.get("property") ?? "").trim().toUpperCase();
+  if (!code) return Response.json({ ok: false, error: "property query param is required." }, { status: 400 });
+  const prop = await prisma.property.findUnique({ where: { code }, select: { id: true } });
+  if (!prop) return Response.json({ ok: false, error: `unknown property "${code}".` }, { status: 400 });
+
+  const rows = await prisma.dailyArrivalDeparture.findMany({
+    where: { propertyId: prop.id },
+    orderBy: { stayDate: "desc" },
+    take: 30,
+    select: { stayDate: true, arrivalRooms: true, departureRooms: true },
+  });
+  return Response.json({
+    ok: true,
+    property: code,
+    arrivalDepartures: rows.map((r) => ({ ...r, stayDate: r.stayDate.toISOString().slice(0, 10) })),
+  });
 }

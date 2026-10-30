@@ -500,7 +500,7 @@ Authorization: Bearer <IMPORT_API_TOKEN>
 Content-Type: application/json
 {
   "property": "BKV",
-  "date": "2026-10-29",            // business day the bookings were ENTERED (optional; defaults to yesterday WITA)
+  "snapshotDate": "2026-10-30",    // the date the scraper RAN (optional; `date` is accepted as an alias). Arrivals cover snapshotDate-1 / 0 / +1.
   "pickups": [                      // NEW reservations entered on `date`, one row per agent/source
     { "agent": "Booking.com", "roomNights": 16, "reservations": 6 },
     { "agent": "G2 Travel",   "roomNights": 5,  "reservations": 2 },
@@ -561,14 +561,25 @@ WITA email):
 | **Room Departure** | **`/api/daily/departure`** | **departures** |
 
 `reservations` is optional everywhere; `roomNights` / `rooms` are required
-integers. Verify a push with `GET /api/daily/reservation?property=BKV` (returns
-the stored pickups + arrival/departure days).
+integers. Verify a push with `GET /api/daily/reservation?property=BKV` or
+`GET /api/daily/departure?property=BKV` (returns the stored rows).
 
 ### 13.4 Note for the scraper agent
 
+- `snapshotDate` is the **run date** (the dashboard also accepts `date` as an
+  alias). The dashboard anchors the email on the previous day (the occupancy
+  "as of" day), and the `arrivals`/`departures` dates — yesterday / today /
+  tomorrow = snapshotDate-1 / 0 / +1 — line up with its Previous Day / Today /
+  Tomorrow. So always send those three stay dates.
 - Keep agent names raw and consistent per property (the dashboard matches
-  cancellations to pickups by the same agent label, and classifies the channel).
-- `date` on the Reservation feed is the day bookings were **entered** (the
-  report's "yesterday"), not a stay date. `arrivals`/`departures` dates ARE stay
-  dates. Send previous-day / today / tomorrow at minimum.
-- All three feeds are idempotent per day, so a re-run is always safe.
+  cancellations to pickups by the same agent label, and classifies OTA /
+  Offline / Direct from it).
+- **Pickup scope:** the report's "Yesterday pick up" means room nights **booked
+  yesterday** (by creation/booking date) — the hospitality pickup metric, which
+  matches the occupancy grid's day-over-day increase. If the Reservation page
+  can group by *creation date = yesterday*, prefer that; the 3-day arrival-window
+  aggregate is a usable proxy but is a different number. Either way the dashboard
+  stores what you send.
+- All feeds are idempotent per day (re-posting a `snapshotDate` replaces that
+  day's pickup rows and re-upserts the arrival/departure dates), so a re-run is
+  always safe.
