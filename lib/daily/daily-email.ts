@@ -5,8 +5,8 @@
  */
 
 import { logAudit } from "@/lib/audit";
-import { buildDailyEmailData } from "@/lib/daily/daily-email-data";
-import { renderDailyEmail } from "@/lib/daily/daily-email-render";
+import { buildDailyDetailData } from "@/lib/daily/daily-detail-data";
+import { renderDailyDetailEmail } from "@/lib/daily/daily-detail-render";
 import { dailyReportRecipients, isEmailConfigured, sendMail } from "@/lib/daily/mailer";
 
 export interface DailyReportResult {
@@ -30,8 +30,8 @@ export async function sendDailyReport(): Promise<DailyReportResult> {
     return { sent: false, reason: "email not configured — set SMTP_* and DAILY_REPORT_TO" };
   }
 
-  const data = await buildDailyEmailData();
-  const { subject, html, text } = renderDailyEmail(data, { dashboardUrl: dashboardLink() });
+  const data = await buildDailyDetailData();
+  const { subject, html, text } = renderDailyDetailEmail(data, { dashboardUrl: dashboardLink() });
   const to = dailyReportRecipients();
 
   await sendMail({ to, subject, html, text });
