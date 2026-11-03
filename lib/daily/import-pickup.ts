@@ -11,7 +11,7 @@
 
 import { logAudit } from "@/lib/audit";
 import { occupancyCollapseError } from "@/lib/daily/collapse-guard";
-import { isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
+import { clampDailyDateIso, isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
 import { prisma } from "@/lib/prisma";
 import { parsePickupForecast, type PickupSnapshotRow } from "@/lib/daily/parse-pickup";
 import { wrongPropertyError } from "@/lib/daily/property-guard";
@@ -24,6 +24,12 @@ export async function applyPickupRows(
   propertyId: string,
   snapshotDate: string,
   rows: PickupSnapshotRow[],
+  /**
+   * Also delete any snapshot dated AFTER this reading for the property — used on
+   * a live daily push (snapshotDate = yesterday) to clear a stray future/today
+   * snapshot that an earlier mis-stamped push left behind. Off for backfills.
+   */
+  pruneFuture = false,
 ): Promise<number> {
   if (rows.length === 0) return 0;
   const snap = isoToUtcDate(snapshotDate);
@@ -47,6 +53,13 @@ export async function applyPickupRows(
     await tx.dailyPickupSnapshot.deleteMany({
       where: { propertyId, snapshotDate: snap, stayYear: { in: years } },
     });
+    if (pruneFuture) {
+      // No legitimate reading is dated later than the latest daily pull; remove
+      // any stray future/today-dated rows (gt — same-date rows are preserved).
+      await tx.dailyPickupSnapshot.deleteMany({
+        where: { propertyId, snapshotDate: { gt: snap } },
+      });
+    }
     await tx.dailyPickupSnapshot.createMany({ data });
   });
   return data.length;
@@ -100,10 +113,18 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
 
     // Default to YESTERDAY (WITA): a pull this morning reflects the books as of
     // yesterday's close. The scraper can still send an explicit snapshotDate.
-    const snapshotDate = (input.snapshotDate ?? "").trim() || yesterdayWitaIso();
-    if (!isValidIsoDate(snapshotDate)) {
+    const rawDate = (input.snapshotDate ?? "").trim() || yesterdayWitaIso();
+    if (!isValidIsoDate(rawDate)) {
       return fail(400, "snapshotDate must be a real calendar date in yyyy-mm-dd form.");
     }
+    // Normalise the date: a daily reading can't be later than yesterday, so if
+    // the scraper stamped today's run date (or any future date) store it under
+    // yesterday — which is what a morning pull actually represents. This keeps
+    // the report anchored on the last closed day regardless of the scraper's
+    // date discipline. A live push (date = yesterday) also prunes any stray
+    // future/today snapshot a previous mis-stamped push left behind.
+    const snapshotDate = clampDailyDateIso(rawDate);
+    const pruneFuture = snapshotDate === yesterdayWitaIso();
 
     let text = input.text ?? "";
     if (!text && input.fileBuffer) {
@@ -156,7 +177,7 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
       }
     }
 
-    const written = await applyPickupRows(prop.id, snapshotDate, rows);
+    const written = await applyPickupRows(prop.id, snapshotDate, rows, pruneFuture);
     const stayMonths = rows.map((r) => `${r.stayYear}-${String(r.stayMonth).padStart(2, "0")}`);
 
     await logAudit("daily_pickup_import", property, {

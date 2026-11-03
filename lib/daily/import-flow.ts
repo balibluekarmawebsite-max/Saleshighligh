@@ -11,7 +11,7 @@
  */
 
 import { logAudit } from "@/lib/audit";
-import { isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
+import { clampDailyDateIso, isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
 import { aggregatePickups, type RawPickupLine } from "@/lib/daily/pickup-aggregate";
 import { prisma } from "@/lib/prisma";
 
@@ -88,9 +88,13 @@ export async function runReservationImport(input: ReservationImportInput): Promi
     const prop = await resolveProperty(input.property);
     if (!prop) return fail(400, `unknown property "${str(input.property)}".`);
 
-    const date = str(input.date) || yesterdayWitaIso();
-    if (!isValidIsoDate(date)) return fail(400, "date must be a real calendar date in yyyy-mm-dd form.");
+    const rawDate = str(input.date) || yesterdayWitaIso();
+    if (!isValidIsoDate(rawDate)) return fail(400, "date must be a real calendar date in yyyy-mm-dd form.");
+    // Normalise like the occupancy feed: pickup for "today" (or a future date)
+    // really means yesterday's new reservations, so store it under yesterday.
+    const date = clampDailyDateIso(rawDate);
     const pickupDate = isoToUtcDate(date);
+    const pruneFuturePickup = date === yesterdayWitaIso();
 
     // Prefer raw reservation lines: aggregate by agent and drop same-day
     // book-and-cancel reservations (a wash — not counted, per the daily report
@@ -132,6 +136,13 @@ export async function runReservationImport(input: ReservationImportInput): Promi
     if (rows.length > 0) {
       await prisma.$transaction(async (tx) => {
         await tx.dailyReservationPickup.deleteMany({ where: { propertyId: prop.id, pickupDate } });
+        if (pruneFuturePickup) {
+          // Clear any stray future/today pickup rows a previous mis-stamped push
+          // left behind (gt — same-date rows are replaced above, not here).
+          await tx.dailyReservationPickup.deleteMany({
+            where: { propertyId: prop.id, pickupDate: { gt: pickupDate } },
+          });
+        }
         await tx.dailyReservationPickup.createMany({
           data: rows.map((p) => ({
             propertyId: prop.id,

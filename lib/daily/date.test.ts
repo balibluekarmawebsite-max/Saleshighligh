@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidIsoDate, witaDateIso } from "@/lib/daily/date";
+import { clampDailyDateIso, isValidIsoDate, witaDateIso } from "@/lib/daily/date";
 
 describe("witaDateIso (Bali UTC+8)", () => {
   it("rolls to the WITA calendar day, which is ahead of UTC", () => {
@@ -44,5 +44,26 @@ describe("isValidIsoDate (snapshotDate guard)", () => {
     expect(isValidIsoDate("2026-10-20T00:00:00Z")).toBe(false);
     expect(isValidIsoDate("2026-1-1")).toBe(false); // not zero-padded
     expect(isValidIsoDate("not-a-date")).toBe(false);
+  });
+});
+
+describe("clampDailyDateIso (a daily reading is never later than yesterday)", () => {
+  // Nov 3 07:00 WITA (= Nov 2 23:00 UTC): "today" WITA is Nov 3, yesterday Nov 2.
+  const nov3morningWita = Date.UTC(2026, 10, 2, 23, 0, 0);
+
+  it("pulls today's run date back to yesterday", () => {
+    expect(clampDailyDateIso("2026-11-03", nov3morningWita)).toBe("2026-11-02");
+  });
+
+  it("pulls any future date back to yesterday", () => {
+    expect(clampDailyDateIso("2026-11-10", nov3morningWita)).toBe("2026-11-02");
+  });
+
+  it("leaves yesterday unchanged", () => {
+    expect(clampDailyDateIso("2026-11-02", nov3morningWita)).toBe("2026-11-02");
+  });
+
+  it("leaves a past date (backfill) unchanged", () => {
+    expect(clampDailyDateIso("2026-10-15", nov3morningWita)).toBe("2026-10-15");
   });
 });

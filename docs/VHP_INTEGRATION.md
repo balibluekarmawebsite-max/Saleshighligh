@@ -578,10 +578,14 @@ integers. Verify a push with `GET /api/daily/reservation?property=BKV` or
 ### 13.4 Note for the scraper agent
 
 - `snapshotDate` is the **run date** (the dashboard also accepts `date` as an
-  alias). The dashboard anchors the email on the previous day (the occupancy
-  "as of" day), and the `arrivals`/`departures` dates — yesterday / today /
-  tomorrow = snapshotDate-1 / 0 / +1 — line up with its Previous Day / Today /
-  Tomorrow. So always send those three stay dates.
+  alias). **The dashboard normalises it:** a daily pull stamped for **today — or
+  any future date — is stored under yesterday (WITA)**, because a morning pull
+  reflects yesterday's close. So you can stamp today's date, stamp yesterday, or
+  omit it entirely; the report always anchors on the last closed day. A live
+  push also clears any stray future/today-dated rows a previous mis-stamp left
+  behind. (Backfills with an explicit **past** date are untouched.) The
+  `arrivals`/`departures` dates — yesterday / today / tomorrow — are absolute
+  stay dates and are **not** normalised, so always send those three.
 - Keep agent names raw and consistent per property (the dashboard matches
   cancellations to pickups by the same agent label, and classifies OTA /
   Offline / Direct from it).

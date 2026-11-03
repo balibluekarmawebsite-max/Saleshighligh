@@ -28,6 +28,19 @@ export function witaDateIso(nowMs: number, dayOffset = 0): string {
 export const yesterdayWitaIso = (): string => witaDateIso(Date.now(), -1);
 
 /**
+ * Clamp a daily-feed date to at most yesterday (WITA). A daily reading can't be
+ * dated later than yesterday — a morning pull reflects yesterday's close, and
+ * today isn't a complete day yet. So if a feed is stamped with today's run date
+ * (or any future date), it is treated as yesterday, which is what it actually
+ * represents. Past dates (backfills) are returned unchanged. `nowMs` is
+ * injectable for testing. `iso` must already be a valid `yyyy-mm-dd`.
+ */
+export function clampDailyDateIso(iso: string, nowMs: number = Date.now()): string {
+  const yesterday = witaDateIso(nowMs, -1);
+  return iso > yesterday ? yesterday : iso;
+}
+
+/**
  * True only for a REAL calendar date in `yyyy-mm-dd` form. The regex alone isn't
  * enough: `new Date("2026-02-29T…")` doesn't throw — it silently rolls over to
  * 2026-03-01 (2026 isn't a leap year). Storing a snapshot under the rolled-over
