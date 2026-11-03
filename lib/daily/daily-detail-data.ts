@@ -89,8 +89,10 @@ async function propertyDetail(code: string, name: string, propertyId: string): P
   });
   let refDate: string | null = snap ? isoOf(snap.snapshotDate) : null;
 
-  // Pickup by agent = the LATEST reservation run's rows (the scraper dates them
-  // by run day, one ahead of D), split Direct vs OTA/Offline. Decoupled from D.
+  // Pickup by agent = the LATEST reservation run's rows, split Direct vs
+  // OTA/Offline. The reservation feed now clamps its pickup date to yesterday
+  // too (lib/daily/import-flow), so the latest pickupDate equals D (refDate) —
+  // both feeds anchor on yesterday.
   const pickupOtaOffline: AgentRN[] = [];
   const pickupDirect: AgentRN[] = [];
   const latestPk = await prisma.dailyReservationPickup.findFirst({

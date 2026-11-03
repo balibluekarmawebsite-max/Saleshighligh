@@ -66,4 +66,12 @@ describe("clampDailyDateIso (a daily reading is never later than yesterday)", ()
   it("leaves a past date (backfill) unchanged", () => {
     expect(clampDailyDateIso("2026-10-15", nov3morningWita)).toBe("2026-10-15");
   });
+
+  it("clamps a New-Year's-Day pull back into the previous year", () => {
+    // 1 Jan 2027 07:00 WITA (= 31 Dec 2026 23:00 UTC): today Jan 1, yesterday Dec 31.
+    const jan1morningWita = Date.UTC(2026, 11, 31, 23, 0, 0);
+    expect(clampDailyDateIso("2027-01-01", jan1morningWita)).toBe("2026-12-31");
+    // The reportYear anchor must come from the raw pull date (2027), not this
+    // clamped storage date (2026) — covered in import-pickup.
+  });
 });

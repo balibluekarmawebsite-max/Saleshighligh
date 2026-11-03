@@ -11,7 +11,7 @@
  */
 
 import { logAudit } from "@/lib/audit";
-import { clampDailyDateIso, isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
+import { clampDailyDateIso, isoToUtcDate, isValidIsoDate, witaDateIso } from "@/lib/daily/date";
 import { aggregatePickups, type RawPickupLine } from "@/lib/daily/pickup-aggregate";
 import { prisma } from "@/lib/prisma";
 
@@ -88,13 +88,15 @@ export async function runReservationImport(input: ReservationImportInput): Promi
     const prop = await resolveProperty(input.property);
     if (!prop) return fail(400, `unknown property "${str(input.property)}".`);
 
-    const rawDate = str(input.date) || yesterdayWitaIso();
+    // One clock read drives both the clamp and the prune decision.
+    const nowMs = Date.now();
+    const rawDate = str(input.date) || witaDateIso(nowMs, -1);
     if (!isValidIsoDate(rawDate)) return fail(400, "date must be a real calendar date in yyyy-mm-dd form.");
     // Normalise like the occupancy feed: pickup for "today" (or a future date)
     // really means yesterday's new reservations, so store it under yesterday.
-    const date = clampDailyDateIso(rawDate);
+    const date = clampDailyDateIso(rawDate, nowMs);
     const pickupDate = isoToUtcDate(date);
-    const pruneFuturePickup = date === yesterdayWitaIso();
+    const pruneFuturePickup = date === witaDateIso(nowMs, -1);
 
     // Prefer raw reservation lines: aggregate by agent and drop same-day
     // book-and-cancel reservations (a wash — not counted, per the daily report
@@ -152,6 +154,16 @@ export async function runReservationImport(input: ReservationImportInput): Promi
             reservations: p.reservations,
           })),
         });
+      });
+    } else if (pruneFuturePickup) {
+      // No pickup rows to store (arrivals-only, or every line a same-day wash),
+      // but a live push dated yesterday can still safely clear a stray
+      // future/today pickup row a mis-stamped push left behind — so the detail
+      // view never surfaces pickup a day ahead of the occupancy anchor. The
+      // current day's real rows are untouched (gt only), so a suspect zero pull
+      // still can't wipe good data.
+      await prisma.dailyReservationPickup.deleteMany({
+        where: { propertyId: prop.id, pickupDate: { gt: pickupDate } },
       });
     }
 

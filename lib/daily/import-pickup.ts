@@ -11,7 +11,7 @@
 
 import { logAudit } from "@/lib/audit";
 import { occupancyCollapseError } from "@/lib/daily/collapse-guard";
-import { clampDailyDateIso, isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
+import { clampDailyDateIso, isoToUtcDate, isValidIsoDate, witaDateIso } from "@/lib/daily/date";
 import { prisma } from "@/lib/prisma";
 import { parsePickupForecast, type PickupSnapshotRow } from "@/lib/daily/parse-pickup";
 import { wrongPropertyError } from "@/lib/daily/property-guard";
@@ -113,7 +113,10 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
 
     // Default to YESTERDAY (WITA): a pull this morning reflects the books as of
     // yesterday's close. The scraper can still send an explicit snapshotDate.
-    const rawDate = (input.snapshotDate ?? "").trim() || yesterdayWitaIso();
+    // One clock read drives both the clamp and the prune decision so they can't
+    // disagree across a WITA-midnight tick.
+    const nowMs = Date.now();
+    const rawDate = (input.snapshotDate ?? "").trim() || witaDateIso(nowMs, -1);
     if (!isValidIsoDate(rawDate)) {
       return fail(400, "snapshotDate must be a real calendar date in yyyy-mm-dd form.");
     }
@@ -123,8 +126,8 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     // the report anchored on the last closed day regardless of the scraper's
     // date discipline. A live push (date = yesterday) also prunes any stray
     // future/today snapshot a previous mis-stamped push left behind.
-    const snapshotDate = clampDailyDateIso(rawDate);
-    const pruneFuture = snapshotDate === yesterdayWitaIso();
+    const snapshotDate = clampDailyDateIso(rawDate, nowMs);
+    const pruneFuture = snapshotDate === witaDateIso(nowMs, -1);
 
     let text = input.text ?? "";
     if (!text && input.fileBuffer) {
@@ -140,9 +143,11 @@ export async function runPickupImport(input: PickupImportInput): Promise<PickupI
     if (!prop) return fail(400, `unknown property "${property}".`);
 
     // The year the CSV covers: an explicit `year` (for a next-year export) wins,
-    // otherwise the snapshot date's year. This is the anchor the parser rolls
-    // forward from, so a Jan–Dec 2027 file lands under 2027, not the pull year.
-    const reportYear = parseReportYear(input.year) ?? Number(snapshotDate.slice(0, 4));
+    // otherwise the RAW pull date's year (NOT the clamped storage date — on a
+    // 1-Jan pull the clamp pulls storage back to 31 Dec, but the forecast window
+    // still starts in the new year, so anchoring on rawDate keeps Jan–Dec under
+    // the right year). This is the anchor the parser rolls forward from.
+    const reportYear = parseReportYear(input.year) ?? Number(rawDate.slice(0, 4));
     const rows = parsePickupForecast(text, reportYear);
     if (!rows || rows.length === 0) {
       return fail(422, "no occupancy rows found — not a recognised Yearly Occupancy forecast, or it was empty.");
