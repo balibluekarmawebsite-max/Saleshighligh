@@ -12,6 +12,7 @@
 
 import { logAudit } from "@/lib/audit";
 import { isoToUtcDate, isValidIsoDate, yesterdayWitaIso } from "@/lib/daily/date";
+import { aggregatePickups, type RawPickupLine } from "@/lib/daily/pickup-aggregate";
 import { prisma } from "@/lib/prisma";
 
 const str = (v: unknown): string => String(v ?? "").trim();
@@ -71,6 +72,12 @@ export interface ReservationImportInput {
   /** Business day the new reservations were entered; defaults to yesterday WITA. */
   date?: string;
   pickups?: AgentPickup[];
+  /**
+   * Raw "Reservation By Creation Date" line items (preferred). When present the
+   * dashboard aggregates them by agent and EXCLUDES same-day book-and-cancel
+   * reservations, so `pickups` is ignored. Falls back to `pickups` when absent.
+   */
+  pickupLines?: RawPickupLine[];
   arrivals?: DayRooms[];
   source?: string;
 }
@@ -85,7 +92,22 @@ export async function runReservationImport(input: ReservationImportInput): Promi
     if (!isValidIsoDate(date)) return fail(400, "date must be a real calendar date in yyyy-mm-dd form.");
     const pickupDate = isoToUtcDate(date);
 
-    const pickups = (Array.isArray(input.pickups) ? input.pickups : [])
+    // Prefer raw reservation lines: aggregate by agent and drop same-day
+    // book-and-cancel reservations (a wash — not counted, per the daily report
+    // rule). Fall back to the pre-aggregated `pickups` for backward compat.
+    let excludedSameDay = 0;
+    let excludedSameDayRoomNights = 0;
+    let sourcePickups: AgentPickup[];
+    if (Array.isArray(input.pickupLines) && input.pickupLines.length > 0) {
+      const agg = aggregatePickups(input.pickupLines);
+      excludedSameDay = agg.excludedLines;
+      excludedSameDayRoomNights = agg.excludedRoomNights;
+      sourcePickups = agg.pickups;
+    } else {
+      sourcePickups = Array.isArray(input.pickups) ? input.pickups : [];
+    }
+
+    const pickups = sourcePickups
       .map((p) => ({ agent: str(p.agent), roomNights: int(p.roomNights), reservations: int(p.reservations) }))
       .filter((p): p is { agent: string; roomNights: number; reservations: number | null } =>
         p.agent !== "" && p.roomNights != null && p.roomNights >= 0);
@@ -116,9 +138,12 @@ export async function runReservationImport(input: ReservationImportInput): Promi
       date,
       pickups: rows.length,
       arrivals: arrivalsWritten,
+      excludedSameDay,
+      excludedSameDayRoomNights,
       source: input.source ?? null,
     }).catch(() => {});
 
+    const washNote = excludedSameDay > 0 ? ` (excluded ${excludedSameDay} same-day cancel, ${excludedSameDayRoomNights} RN)` : "";
     return {
       status: 200,
       body: {
@@ -127,8 +152,10 @@ export async function runReservationImport(input: ReservationImportInput): Promi
         date,
         pickupAgents: rows.length,
         pickupRoomNights: rows.reduce((s, p) => s + p.roomNights, 0),
+        excludedSameDay,
+        excludedSameDayRoomNights,
         arrivalsWritten,
-        message: `Reservation feed stored — ${rows.length} agent(s), ${arrivalsWritten} arrival day(s).`,
+        message: `Reservation feed stored — ${rows.length} agent(s), ${arrivalsWritten} arrival day(s)${washNote}.`,
       },
     };
   } catch (e) {

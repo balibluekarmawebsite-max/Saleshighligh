@@ -501,10 +501,10 @@ Content-Type: application/json
 {
   "property": "BKV",
   "snapshotDate": "2026-10-30",    // the date the scraper RAN (optional; `date` is accepted as an alias). Arrivals cover snapshotDate-1 / 0 / +1.
-  "pickups": [                      // NEW reservations entered on `date`, one row per agent/source
-    { "agent": "Booking.com", "roomNights": 16, "reservations": 6 },
-    { "agent": "G2 Travel",   "roomNights": 5,  "reservations": 2 },
-    { "agent": "Direct",      "roomNights": 0,  "reservations": 0 }
+  "pickupLines": [                  // PREFERRED — one raw row per reservation CREATED on `date`
+    { "reservationName": "Booking.com", "night": 2, "roomQuantity": 1, "createdDate": "2026-10-30" },
+    { "reservationName": "Booking.com", "night": 3, "roomQuantity": 1, "createdDate": "2026-10-30", "cancelDate": "2026-10-30" },  // same-day cancel → NOT counted
+    { "reservationName": "G2 Travel",   "night": 5, "roomQuantity": 1, "createdDate": "2026-10-30" }
   ],
   "arrivals": [                     // guests ARRIVING on each stay date (room count)
     { "date": "2026-10-29", "rooms": 2 },   // previous day
@@ -514,16 +514,27 @@ Content-Type: application/json
 }
 ```
 
-- **`pickups`** — one row per booking agent/source, with the room nights (and
-  optional reservation count) that agent booked ON `date`. Send the agent name
-  as VHP shows it (`Booking.com`, `Expedia`, `G2 Travel`, `Bali Authentique`,
-  `Direct`, `Walk In`, …); the dashboard classifies OTA / Offline / Direct
-  itself, so don't pre-group. Posting a `date` **replaces** that day's pickup
-  rows (idempotent).
+- **`pickupLines`** (preferred) — one **raw row per reservation created on
+  `date`**, straight from the "Reservation By Creation Date" report: send
+  `reservationName` (the agent/source, as VHP shows it), `night`, `roomQuantity`,
+  the booking's `createdDate`, and — only if it was cancelled — its `cancelDate`.
+  The dashboard aggregates by agent (room nights = Night × Room Quantity) and
+  **excludes same-day book-and-cancel reservations** (where `createdDate ===
+  cancelDate`) — a wash that is not counted. A reservation cancelled on a *later*
+  day still counts as pickup for the day it was created. Don't pre-group and
+  don't pre-filter cancels; the dashboard does both. (If you genuinely can't send
+  dates, set `"sameDayCancelled": true` on the washed rows instead.)
+- **`pickups`** (legacy fallback) — pre-aggregated, one row per agent
+  (`{ agent, roomNights, reservations }`). Used only when `pickupLines` is
+  absent. **Same-day cancels can't be excluded from pre-aggregated totals**, so
+  prefer `pickupLines`; if you must send `pickups`, drop same-day cancels before
+  summing.
+- Either way, posting a `date` **replaces** that day's pickup rows (idempotent);
+  the dashboard classifies OTA / Offline / Direct from the agent name.
 - **`arrivals`** — room count arriving on each stay date. Send at least the
   previous day, today and tomorrow relative to the report. Each date is
   upserted; it never touches departures.
-- Response: `{ "ok": true, "pickupAgents": n, "pickupRoomNights": n, "arrivalsWritten": n }`.
+- Response: `{ "ok": true, "pickupAgents": n, "pickupRoomNights": n, "excludedSameDay": n, "excludedSameDayRoomNights": n, "arrivalsWritten": n }`.
 
 ### 13.2 Room Departure — `POST /api/daily/departure`
 
@@ -576,10 +587,10 @@ integers. Verify a push with `GET /api/daily/reservation?property=BKV` or
   Offline / Direct from it).
 - **Pickup scope:** the report's "Yesterday pick up" means room nights **booked
   yesterday** (by creation/booking date) — the hospitality pickup metric, which
-  matches the occupancy grid's day-over-day increase. If the Reservation page
-  can group by *creation date = yesterday*, prefer that; the 3-day arrival-window
-  aggregate is a usable proxy but is a different number. Either way the dashboard
-  stores what you send.
+  matches the occupancy grid's day-over-day increase. Pull the Reservation page
+  **filtered to creation date = yesterday** and send each line in `pickupLines`
+  (see §13.1); the dashboard excludes same-day book-and-cancel reservations. The
+  3-day arrival-window aggregate is a different number — don't use it for pickup.
 - All feeds are idempotent per day (re-posting a `snapshotDate` replaces that
   day's pickup rows and re-upserts the arrival/departure dates), so a re-run is
   always safe.

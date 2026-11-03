@@ -32,7 +32,11 @@ export const maxDuration = 120;
  *   {
  *     "property": "BKV",
  *     "date": "2026-10-29",          // business day the bookings were entered (optional; defaults to yesterday WITA)
- *     "pickups": [                     // NEW reservations entered on `date`, by agent
+ *     "pickupLines": [                 // PREFERRED: one raw row per reservation created on `date`.
+ *       { "reservationName": "Booking.com", "night": 2, "roomQuantity": 1, "createdDate": "2026-10-29" },
+ *       { "reservationName": "Booking.com", "night": 3, "roomQuantity": 1, "createdDate": "2026-10-29", "cancelDate": "2026-10-29" }  // same-day cancel → excluded
+ *     ],
+ *     "pickups": [                     // LEGACY fallback: pre-aggregated by agent (no same-day-cancel exclusion possible)
  *       { "agent": "Booking.com", "roomNights": 16, "reservations": 6 },
  *       { "agent": "G2 Travel",   "roomNights": 5,  "reservations": 2 }
  *     ],
@@ -43,8 +47,11 @@ export const maxDuration = 120;
  *     ]
  *   }
  *
- * Idempotent: `date`'s pickup rows are replaced; each arrival date is upserted.
- * Excluded from the auth middleware so the token request isn't redirected to /login.
+ * When `pickupLines` is present the dashboard aggregates by agent and EXCLUDES
+ * same-day book-and-cancel reservations (createdDate === cancelDate); `pickups`
+ * is used only as a fallback. Idempotent: `date`'s pickup rows are replaced; each
+ * arrival date is upserted. Excluded from the auth middleware so the token
+ * request isn't redirected to /login.
  */
 export async function POST(req: NextRequest) {
   const authError = checkToken(req);
@@ -66,6 +73,7 @@ export async function POST(req: NextRequest) {
     property: String(b.property),
     date: runDate ? String(runDate) : undefined,
     pickups: Array.isArray(b.pickups) ? (b.pickups as never[]) : [],
+    pickupLines: Array.isArray(b.pickupLines) ? (b.pickupLines as never[]) : [],
     arrivals: Array.isArray(b.arrivals) ? (b.arrivals as never[]) : [],
     source: b.source ? String(b.source) : undefined,
   });
