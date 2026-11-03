@@ -11,6 +11,11 @@
  * (lib/daily/calculations.ts `isSameDayCancellation`). A reservation cancelled
  * on a LATER day still counts as pickup for the day it was created (it becomes a
  * cancellation on that later day's report).
+ *
+ * The scraper is an unvalidated JSON source, so every field is coerced
+ * defensively: a malformed line (null, non-object, non-string name/date,
+ * negative or implausibly large counts) is skipped, never thrown on — one bad
+ * row must not fail the whole feed.
  */
 
 import { isSameDayCancellation } from "@/lib/daily/calculations";
@@ -42,18 +47,40 @@ export interface PickupAggregateResult {
   /** Lines dropped as same-day book-and-cancel (surfaced in the import response). */
   excludedLines: number;
   excludedRoomNights: number;
+  /** Lines dropped as malformed / out-of-range (no agent, bad type, absurd RN). */
+  skippedLines: number;
 }
 
-const toInt = (v: unknown): number => {
+/**
+ * A single reservation line can't realistically exceed this many room nights
+ * (longest stay × largest group is a few thousand). A larger value is a corrupt
+ * or misparsed number (e.g. an IDR amount read into a count) that would also
+ * overflow the Postgres 32-bit `Int` column, so the line is skipped.
+ */
+const MAX_LINE_ROOM_NIGHTS = 100_000;
+
+/** Night count: coerce anything to a non-negative integer (junk → 0). */
+const toNights = (v: unknown): number => {
   const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[,\s]/g, ""));
-  return Number.isFinite(n) ? Math.trunc(n) : 0;
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0;
 };
 
-const iso = (s: string | null | undefined): string => (s ?? "").trim().slice(0, 10);
+/**
+ * Room quantity: absent/blank → 1 (the VHP default), unparseable junk → 1, an
+ * explicit number → that value clamped to ≥ 0 (so an explicit 0 stays 0, and a
+ * negative never subtracts).
+ */
+const toQty = (v: unknown): number => {
+  if (v == null || String(v).trim() === "") return 1;
+  const n = Number(String(v).replace(/[,\s]/g, ""));
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 1;
+};
+
+const iso = (s: unknown): string => String(s ?? "").trim().slice(0, 10);
 
 /** Agent label: part before the first comma, asterisks stripped, ws collapsed. */
-function normAgent(s: string | null | undefined): string {
-  return (s ?? "")
+function normAgent(s: unknown): string {
+  return String(s ?? "")
     .split(",")[0]!
     .replace(/\*/g, "")
     .replace(/\s+/g, " ")
@@ -67,9 +94,9 @@ function normAgent(s: string | null | undefined): string {
  * dates. A line cancelled on a LATER day is NOT same-day and still counts.
  */
 export function isSameDayCancelledLine(line: RawPickupLine): boolean {
-  if (line.sameDayCancelled === true) return true;
-  const createdDate = iso(line.createdDate);
-  const cancelDate = iso(line.cancelDate);
+  if (line?.sameDayCancelled === true) return true;
+  const createdDate = iso(line?.createdDate);
+  const cancelDate = iso(line?.cancelDate);
   if (!createdDate || !cancelDate) return false;
   return isSameDayCancellation({ createdDate, cancelDate });
 }
@@ -77,27 +104,43 @@ export function isSameDayCancelledLine(line: RawPickupLine): boolean {
 /**
  * Aggregate raw reservation lines into pickup-by-agent rows, EXCLUDING same-day
  * book-and-cancel lines. Room nights = Night × Room Quantity (Quantity defaults
- * to 1 when absent). Rows are summed by normalised agent and sorted by room
- * nights, descending.
+ * to 1 when absent). Malformed / out-of-range lines are skipped (never thrown
+ * on). Rows are summed by normalised agent and sorted by room nights, desc.
  */
 export function aggregatePickups(lines: RawPickupLine[]): PickupAggregateResult {
   const agg = new Map<string, { agent: string; rn: number; count: number }>();
   let excludedLines = 0;
   let excludedRoomNights = 0;
+  let skippedLines = 0;
 
-  for (const line of lines) {
-    const nights = toInt(line.night);
-    const qty = toInt(line.roomQuantity) || 1;
-    const rn = nights * qty;
+  for (const line of Array.isArray(lines) ? lines : []) {
+    // Defensive: a null / non-object element (e.g. a scraper placeholder for a
+    // row it failed to parse) is dropped, not fatal.
+    if (!line || typeof line !== "object") {
+      skippedLines += 1;
+      continue;
+    }
 
+    const rn = toNights(line.night) * toQty(line.roomQuantity);
+
+    // Same-day book-and-cancel: a wash — not counted.
     if (isSameDayCancelledLine(line)) {
       excludedLines += 1;
       excludedRoomNights += rn;
       continue;
     }
 
-    const agent = normAgent(line.reservationName ?? line.agent);
-    if (!agent) continue;
+    // Corrupt / misparsed magnitude that would overflow the Int column.
+    if (rn > MAX_LINE_ROOM_NIGHTS) {
+      skippedLines += 1;
+      continue;
+    }
+
+    const agent = normAgent(line.reservationName || line.agent);
+    if (!agent) {
+      skippedLines += 1;
+      continue;
+    }
 
     const key = agent.toLowerCase();
     const cur = agg.get(key) ?? { agent, rn: 0, count: 0 };
@@ -110,5 +153,5 @@ export function aggregatePickups(lines: RawPickupLine[]): PickupAggregateResult 
     .map((v) => ({ agent: v.agent, roomNights: v.rn, reservations: v.count }))
     .sort((a, b) => b.roomNights - a.roomNights);
 
-  return { pickups, excludedLines, excludedRoomNights };
+  return { pickups, excludedLines, excludedRoomNights, skippedLines };
 }

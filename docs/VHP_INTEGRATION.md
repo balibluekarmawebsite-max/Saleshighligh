@@ -534,7 +534,7 @@ Content-Type: application/json
 - **`arrivals`** — room count arriving on each stay date. Send at least the
   previous day, today and tomorrow relative to the report. Each date is
   upserted; it never touches departures.
-- Response: `{ "ok": true, "pickupAgents": n, "pickupRoomNights": n, "excludedSameDay": n, "excludedSameDayRoomNights": n, "arrivalsWritten": n }`.
+- Response: `{ "ok": true, "pickupAgents": n, "pickupRoomNights": n, "excludedSameDay": n, "excludedSameDayRoomNights": n, "skippedInvalid": n, "arrivalsWritten": n }`. `skippedInvalid` counts malformed lines that were dropped (bad/missing fields); a steady non-zero there means the scraper payload needs a look. A pull that nets to zero pickup keeps the day's existing rows rather than wiping them.
 
 ### 13.2 Room Departure — `POST /api/daily/departure`
 

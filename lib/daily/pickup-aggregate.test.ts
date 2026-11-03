@@ -87,6 +87,60 @@ describe("aggregatePickups", () => {
   });
 
   it("returns empty results for empty input", () => {
-    expect(aggregatePickups([])).toEqual({ pickups: [], excludedLines: 0, excludedRoomNights: 0 });
+    expect(aggregatePickups([])).toEqual({ pickups: [], excludedLines: 0, excludedRoomNights: 0, skippedLines: 0 });
+  });
+
+  // --- Robustness: a bad row is skipped, never fatal (the feed is unvalidated) ---
+
+  it("skips null / non-object entries instead of throwing", () => {
+    const lines = [
+      null,
+      undefined,
+      "oops",
+      { reservationName: "Booking.com", night: 2, roomQuantity: 1, createdDate: "2026-11-02" },
+    ] as unknown as Parameters<typeof aggregatePickups>[0];
+    const r = aggregatePickups(lines);
+    expect(r.pickups).toEqual([{ agent: "Booking.com", roomNights: 2, reservations: 1 }]);
+    expect(r.skippedLines).toBe(3);
+  });
+
+  it("coerces a non-string agent / date instead of throwing", () => {
+    const lines = [
+      { reservationName: 123 as unknown as string, night: 2, roomQuantity: 1, createdDate: "2026-11-02" },
+      { reservationName: "Expedia", night: 1, roomQuantity: 1, createdDate: 20261102 as unknown as string },
+    ];
+    // Neither throws; the numeric name becomes "123", the numeric date is just not a wash.
+    const r = aggregatePickups(lines);
+    expect(r.pickups).toContainEqual({ agent: "123", roomNights: 2, reservations: 1 });
+    expect(r.pickups).toContainEqual({ agent: "Expedia", roomNights: 1, reservations: 1 });
+  });
+
+  it("falls back to the agent alias when reservationName is blank", () => {
+    const r = aggregatePickups([
+      { reservationName: "", agent: "Booking.com", night: 2, roomQuantity: 1, createdDate: "2026-11-02" },
+    ]);
+    expect(r.pickups).toEqual([{ agent: "Booking.com", roomNights: 2, reservations: 1 }]);
+  });
+
+  it("clamps negative counts and honours an explicit roomQuantity of 0", () => {
+    const neg = aggregatePickups([
+      { reservationName: "Booking.com", night: 5, roomQuantity: 1, createdDate: "2026-11-02" },
+      { reservationName: "Booking.com", night: -3, roomQuantity: 1, createdDate: "2026-11-02" }, // can't subtract
+    ]);
+    expect(neg.pickups).toEqual([{ agent: "Booking.com", roomNights: 5, reservations: 2 }]);
+
+    const zeroQty = aggregatePickups([
+      { reservationName: "Agoda", night: 2, roomQuantity: 0, createdDate: "2026-11-02" }, // explicit 0 -> 0 RN
+    ]);
+    expect(zeroQty.pickups).toEqual([{ agent: "Agoda", roomNights: 0, reservations: 1 }]);
+  });
+
+  it("skips an absurd room-night magnitude (Int-overflow / misparse guard)", () => {
+    const r = aggregatePickups([
+      { reservationName: "Agoda", night: 100_000, roomQuantity: 100_000, createdDate: "2026-11-02" },
+      { reservationName: "Booking.com", night: 2, roomQuantity: 1, createdDate: "2026-11-02" },
+    ]);
+    expect(r.pickups).toEqual([{ agent: "Booking.com", roomNights: 2, reservations: 1 }]);
+    expect(r.skippedLines).toBe(1);
   });
 });

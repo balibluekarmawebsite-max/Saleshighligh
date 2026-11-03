@@ -97,14 +97,19 @@ export async function runReservationImport(input: ReservationImportInput): Promi
     // rule). Fall back to the pre-aggregated `pickups` for backward compat.
     let excludedSameDay = 0;
     let excludedSameDayRoomNights = 0;
+    let skippedInvalid = 0;
+    let suppliedPickupInput = false;
     let sourcePickups: AgentPickup[];
     if (Array.isArray(input.pickupLines) && input.pickupLines.length > 0) {
+      suppliedPickupInput = true;
       const agg = aggregatePickups(input.pickupLines);
       excludedSameDay = agg.excludedLines;
       excludedSameDayRoomNights = agg.excludedRoomNights;
+      skippedInvalid = agg.skippedLines;
       sourcePickups = agg.pickups;
     } else {
       sourcePickups = Array.isArray(input.pickups) ? input.pickups : [];
+      suppliedPickupInput = sourcePickups.length > 0;
     }
 
     const pickups = sourcePickups
@@ -117,9 +122,16 @@ export async function runReservationImport(input: ReservationImportInput): Promi
     for (const p of pickups) byAgent.set(p.agent.toLowerCase(), p);
     const rows = [...byAgent.values()];
 
-    await prisma.$transaction(async (tx) => {
-      await tx.dailyReservationPickup.deleteMany({ where: { propertyId: prop.id, pickupDate } });
-      if (rows.length) {
+    // Only replace the day's pickup rows when there is something to store.
+    // Guard against wiping good data on a suspect pull: an arrivals-only push
+    // (no pickup input), or a broken/partial re-pull that aggregated to zero
+    // (e.g. every line excluded as a same-day cancel), must NOT delete the real
+    // pickup already recorded for the day. This mirrors the broken-pull guard
+    // the sibling occupancy-snapshot feed has.
+    const keptExistingPickup = suppliedPickupInput && rows.length === 0;
+    if (rows.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.dailyReservationPickup.deleteMany({ where: { propertyId: prop.id, pickupDate } });
         await tx.dailyReservationPickup.createMany({
           data: rows.map((p) => ({
             propertyId: prop.id,
@@ -129,8 +141,8 @@ export async function runReservationImport(input: ReservationImportInput): Promi
             reservations: p.reservations,
           })),
         });
-      }
-    });
+      });
+    }
 
     const arrivalsWritten = await upsertFlow(prop.id, Array.isArray(input.arrivals) ? input.arrivals : [], "arrivalRooms");
 
@@ -140,10 +152,17 @@ export async function runReservationImport(input: ReservationImportInput): Promi
       arrivals: arrivalsWritten,
       excludedSameDay,
       excludedSameDayRoomNights,
+      skippedInvalid,
+      keptExistingPickup,
       source: input.source ?? null,
     }).catch(() => {});
 
-    const washNote = excludedSameDay > 0 ? ` (excluded ${excludedSameDay} same-day cancel, ${excludedSameDayRoomNights} RN)` : "";
+    const notes = [
+      excludedSameDay > 0 ? `excluded ${excludedSameDay} same-day cancel (${excludedSameDayRoomNights} RN)` : "",
+      skippedInvalid > 0 ? `skipped ${skippedInvalid} invalid line(s)` : "",
+      keptExistingPickup ? "no net pickup — kept existing rows" : "",
+    ].filter(Boolean);
+    const note = notes.length ? ` (${notes.join("; ")})` : "";
     return {
       status: 200,
       body: {
@@ -154,8 +173,9 @@ export async function runReservationImport(input: ReservationImportInput): Promi
         pickupRoomNights: rows.reduce((s, p) => s + p.roomNights, 0),
         excludedSameDay,
         excludedSameDayRoomNights,
+        skippedInvalid,
         arrivalsWritten,
-        message: `Reservation feed stored — ${rows.length} agent(s), ${arrivalsWritten} arrival day(s)${washNote}.`,
+        message: `Reservation feed stored — ${rows.length} agent(s), ${arrivalsWritten} arrival day(s)${note}.`,
       },
     };
   } catch (e) {
