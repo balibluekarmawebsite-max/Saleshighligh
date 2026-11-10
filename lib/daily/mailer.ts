@@ -24,15 +24,16 @@ export function fromAddress(): string {
   return (process.env.DAILY_REPORT_FROM?.trim() || process.env.SMTP_USER || "").trim();
 }
 
-/** True only when SMTP + at least one recipient are configured. */
+/** True when the SMTP transport is fully configured (independent of recipients). */
+export function isSmtpConfigured(): boolean {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && fromAddress());
+}
+
+/** True when SMTP + at least one env recipient are configured. (Recipients can
+ * also come from the DB — see lib/daily/recipients — so the send path checks
+ * `isSmtpConfigured()` plus the merged recipient list instead of this.) */
 export function isEmailConfigured(): boolean {
-  return Boolean(
-    process.env.SMTP_HOST &&
-      process.env.SMTP_USER &&
-      process.env.SMTP_PASS &&
-      fromAddress() &&
-      dailyReportRecipients().length > 0,
-  );
+  return isSmtpConfigured() && dailyReportRecipients().length > 0;
 }
 
 function transport() {

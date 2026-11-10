@@ -8,7 +8,8 @@ import { logAudit } from "@/lib/audit";
 import { buildDailyDetailData } from "@/lib/daily/daily-detail-data";
 import { renderDailyDetailEmail } from "@/lib/daily/daily-detail-render";
 import { buildAllWorkbooks } from "@/lib/daily/daily-xlsx";
-import { dailyReportRecipients, isEmailConfigured, sendMail, type MailAttachment } from "@/lib/daily/mailer";
+import { isSmtpConfigured, sendMail, type MailAttachment } from "@/lib/daily/mailer";
+import { getDailyRecipientEmails } from "@/lib/daily/recipients";
 
 export interface DailyReportResult {
   sent: boolean;
@@ -29,14 +30,16 @@ function dashboardLink(): string | undefined {
 export async function sendDailyReport(): Promise<DailyReportResult> {
   const startedMs = Date.now();
 
-  if (!isEmailConfigured()) {
-    const reason = "email not configured — set SMTP_* and DAILY_REPORT_TO";
+  const to = await getDailyRecipientEmails();
+  if (!isSmtpConfigured() || to.length === 0) {
+    const reason = !isSmtpConfigured()
+      ? "SMTP not configured — set SMTP_* in .env"
+      : "no recipients — add one in Email Delivery (or set DAILY_REPORT_TO)";
     // Record the skip too, so the monitor shows the job ran but email is off.
     await logAudit("daily_report_email", "(skipped)", { status: "skipped", reason }).catch(() => {});
     return { sent: false, reason };
   }
 
-  const to = dailyReportRecipients();
   try {
     const data = await buildDailyDetailData();
     const { subject, html, text } = renderDailyDetailEmail(data, { dashboardUrl: dashboardLink() });

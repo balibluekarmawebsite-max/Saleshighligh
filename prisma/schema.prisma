@@ -1473,3 +1473,13 @@ model DailyBreakEven {
   @@unique([propertyId, year, month])
   @@map("daily_break_even")
 }
+
+/// Extra Daily Report email recipients, managed from /admin/daily-email. Merged
+/// with the DAILY_REPORT_TO env list when the daily email is sent.
+model DailyReportRecipient {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  @@map("daily_report_recipients")
+}

@@ -8,7 +8,8 @@
 import { unstable_noStore as noStore } from "next/cache";
 
 import { witaDateIso } from "@/lib/daily/date";
-import { dailyReportRecipients, fromAddress, isEmailConfigured } from "@/lib/daily/mailer";
+import { fromAddress, isSmtpConfigured } from "@/lib/daily/mailer";
+import { getRecipientRows, type RecipientRow } from "@/lib/daily/recipients";
 import { prisma } from "@/lib/prisma";
 
 export type DeliveryStatus = "sent" | "failed" | "skipped" | "unknown";
@@ -19,7 +20,7 @@ export interface EmailConfig {
   port: number;
   secure: boolean;
   from: string | null;
-  recipients: string[];
+  recipients: RecipientRow[];
   schedule: string;
   cronSecretSet: boolean;
 }
@@ -45,16 +46,16 @@ export interface EmailDeliveryStatus {
   todayWita: string;
 }
 
-function emailConfig(): EmailConfig {
+function emailConfig(recipients: RecipientRow[]): EmailConfig {
   const port = Number(process.env.SMTP_PORT ?? 587);
   const secure = /^(1|true|yes)$/i.test(process.env.SMTP_SECURE ?? "") || port === 465;
   return {
-    configured: isEmailConfigured(),
+    configured: isSmtpConfigured() && recipients.length > 0,
     host: process.env.SMTP_HOST?.trim() || null,
     port,
     secure,
     from: fromAddress() || null,
-    recipients: dailyReportRecipients(),
+    recipients,
     schedule: "Daily at 07:00 WITA",
     cronSecretSet: Boolean(process.env.CRON_SECRET),
   };
@@ -68,6 +69,7 @@ const asStrArr = (v: unknown): string[] =>
 /** Assemble config + delivery history for the admin email monitor. */
 export async function getEmailDeliveryStatus(limit = 60): Promise<EmailDeliveryStatus> {
   noStore();
+  const recipients = await getRecipientRows();
   const rows = await prisma.auditLog.findMany({
     where: { action: "daily_report_email" },
     orderBy: { createdAt: "desc" },
@@ -103,7 +105,7 @@ export async function getEmailDeliveryStatus(limit = 60): Promise<EmailDeliveryS
   const sentTodayWita = Boolean(lastSent && witaDateIso(new Date(lastSent.at).getTime(), 0) === todayWita);
 
   return {
-    config: emailConfig(),
+    config: emailConfig(recipients),
     history,
     lastSentAt: lastSent?.at ?? null,
     lastAttempt: history[0] ?? null,

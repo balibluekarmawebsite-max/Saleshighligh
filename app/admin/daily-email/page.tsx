@@ -1,3 +1,4 @@
+import { RecipientsManager } from "@/components/daily/recipients-manager";
 import { TestSendButton } from "@/components/daily/test-send-button";
 import { getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { getEmailDeliveryStatus, type DeliveryStatus, type EmailDeliveryRow } from "@/lib/daily/email-monitor";
@@ -91,14 +92,8 @@ export default async function DailyEmailMonitorPage() {
             <Row label="Cron secret" value={config.cronSecretSet ? "Set" : <span className="text-variance-negative">Missing</span>} />
           </div>
           <div className="mt-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recipients</p>
-            {config.recipients.length ? (
-              <ul className="mt-1 space-y-0.5 text-sm text-foreground">
-                {config.recipients.map((r) => <li key={r}>{r}</li>)}
-              </ul>
-            ) : (
-              <p className="mt-1 text-sm text-variance-negative">None set (DAILY_REPORT_TO is empty).</p>
-            )}
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Recipients</p>
+            <RecipientsManager recipients={config.recipients} canEdit={admin} />
           </div>
         </div>
 
@@ -115,7 +110,7 @@ export default async function DailyEmailMonitorPage() {
             ) : !config.configured ? (
               <p className="text-sm text-variance-negative">Configure SMTP + recipients first.</p>
             ) : (
-              <TestSendButton recipients={config.recipients} />
+              <TestSendButton recipients={config.recipients.map((r) => r.email)} />
             )}
           </div>
         </div>
