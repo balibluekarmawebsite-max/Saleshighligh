@@ -16,9 +16,16 @@ export interface RecipientRow {
   source: "db" | "env";
 }
 
-/** All recipients: DB (removable) first, then env-only (read-only), deduped. */
+/** All recipients: DB (removable) first, then env-only (read-only), deduped.
+ * If the table isn't there yet (migration not applied), falls back to env-only
+ * so the page and the send path keep working. */
 export async function getRecipientRows(): Promise<RecipientRow[]> {
-  const db = await prisma.dailyReportRecipient.findMany({ orderBy: { email: "asc" }, select: { id: true, email: true } });
+  let db: { id: string; email: string }[] = [];
+  try {
+    db = await prisma.dailyReportRecipient.findMany({ orderBy: { email: "asc" }, select: { id: true, email: true } });
+  } catch {
+    db = [];
+  }
   const seen = new Set(db.map((r) => r.email.toLowerCase()));
   const rows: RecipientRow[] = db.map((r) => ({ id: r.id, email: r.email, source: "db" }));
   for (const e of envRecipients()) {
