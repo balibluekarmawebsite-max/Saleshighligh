@@ -13,6 +13,7 @@ import {
   Megaphone,
   Settings,
   Share2,
+  Table2,
   TrendingUp,
   UtensilsCrossed,
   Wallet,
@@ -92,6 +93,7 @@ export const WEEKLY_NAV: DashNavItem[] = [
 
 export const DAILY_NAV: DashNavItem[] = [
   { label: "Occupancy Pick-Up", href: "pickup", icon: TrendingUp },
+  { label: "Raw Data (VHP)", href: "raw", icon: Table2 },
 ];
 
 export interface AdminNavItem {
