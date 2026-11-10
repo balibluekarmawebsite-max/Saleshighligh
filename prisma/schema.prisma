@@ -1383,6 +1383,10 @@ model DailyArrivalDeparture {
   stayDate       DateTime @db.Date
   arrivalRooms   Int?
   departureRooms Int?
+  /// "Expected room occupied" for this stay date (rooms sold that night) — the
+  /// VHP figure in the Yesterday/Today/Tomorrow email block. Optional; set by the
+  /// reservation feed's arrivals rows when the scraper sends it.
+  occupiedRooms  Int?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

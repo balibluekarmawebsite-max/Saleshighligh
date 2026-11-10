@@ -34,6 +34,8 @@ export interface FlowDay {
   heading: string; // "Previous Day Oct 29th, 2026" / "Today" / "Tomorrow"
   arrival: number | null;
   departure: number | null;
+  /** "Expected room occupied" for the day (null until the scraper sends it). */
+  occupied?: number | null;
 }
 export interface PropertyDetail {
   code: string;
@@ -145,13 +147,18 @@ async function propertyDetail(code: string, name: string, propertyId: string): P
     const days = [refDate, shiftIso(refDate, 1), shiftIso(refDate, 2)];
     const rows = await prisma.dailyArrivalDeparture.findMany({
       where: { propertyId, stayDate: { in: days.map(toUtc) } },
-      select: { stayDate: true, arrivalRooms: true, departureRooms: true },
+      select: { stayDate: true, arrivalRooms: true, departureRooms: true, occupiedRooms: true },
     });
     const byDate = new Map(rows.map((r) => [isoOf(r.stayDate), r]));
     const headings = [`Previous Day ${prettyLong(days[0]!)}`, "Today", "Tomorrow"];
     days.forEach((d, i) => {
       const r = byDate.get(d);
-      flow.push({ heading: headings[i]!, arrival: r?.arrivalRooms ?? null, departure: r?.departureRooms ?? null });
+      flow.push({
+        heading: headings[i]!,
+        arrival: r?.arrivalRooms ?? null,
+        departure: r?.departureRooms ?? null,
+        occupied: r?.occupiedRooms ?? null,
+      });
     });
   }
 

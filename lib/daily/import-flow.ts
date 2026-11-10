@@ -24,6 +24,8 @@ const int = (v: unknown): number | null => {
 export interface DayRooms {
   date: string; // yyyy-mm-dd
   rooms: number;
+  /** "Expected room occupied" for this stay date (optional). */
+  occupied?: number | null;
 }
 export interface AgentPickup {
   agent: string;
@@ -57,10 +59,14 @@ async function upsertFlow(
     const rooms = int(d.rooms);
     if (!isValidIsoDate(iso) || rooms == null || rooms < 0) continue;
     const stayDate = isoToUtcDate(iso);
+    // "Expected room occupied" rides along on the day row when present; only
+    // written when given, so it never nulls out a value the other feed set.
+    const occ = int(d.occupied);
+    const occFields = occ != null && occ >= 0 ? { occupiedRooms: occ } : {};
     await prisma.dailyArrivalDeparture.upsert({
       where: { propertyId_stayDate: { propertyId, stayDate } },
-      create: { propertyId, stayDate, [field]: rooms },
-      update: { [field]: rooms },
+      create: { propertyId, stayDate, [field]: rooms, ...occFields },
+      update: { [field]: rooms, ...occFields },
     });
     written += 1;
   }
