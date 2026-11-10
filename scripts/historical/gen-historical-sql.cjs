@@ -67,13 +67,11 @@ function parsePuSheet(ws, snapYear, snapMonth, roomCount) {
   }
   const snapDays = daysInMonth(snapYear, snapMonth);
   const out = [];
-  let maxDay = 0;
   for (let i = hdr + 1; i < aoa.length; i++) {
     const r = aoa[i];
     const day = r && typeof r[0] === "number" ? Math.trunc(r[0]) : null;
     if (day == null || day < 1 || day > 31) break; // footer / blank → stop
     if (day > snapDays) continue;
-    if (day > maxDay) maxDay = day;
     const sdate = `${snapYear}-${String(snapMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     for (const col of cols) {
       let v = r[col.c];
@@ -85,6 +83,11 @@ function parsePuSheet(ws, snapYear, snapMonth, roomCount) {
       out.push({ sdate, day, colC: col.c, stayYear: col.stayYear, stayMonth: col.stayMonth, roomNights, saleable, revenue: null });
     }
   }
+  // Latest snapshot day = the latest day that actually HAS data (a current-month
+  // sheet lists days 1-31 in the Date column but only fills the elapsed days, so
+  // the max day NUMBER would point at an empty row with no stored rows).
+  let maxDay = 0;
+  for (const r of out) if (r.day > maxDay) maxDay = r.day;
   // Attach revenue to the latest snapshot day's rows (the current on-hand value).
   for (const r of out) {
     if (r.day === maxDay && revByCol.has(r.colC)) r.revenue = revByCol.get(r.colC);

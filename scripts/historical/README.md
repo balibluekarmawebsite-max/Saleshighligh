@@ -27,15 +27,19 @@ Occupancy %, ADR, MoM etc. are derived by the app (`lib/daily/calculations.ts`),
 never stored — so loading `roomNights` + `saleableRooms` is enough for the grid
 and the "Occ on Hand / Room Sold" summary to render correctly.
 
+> **Note:** the generated `.sql.gz` is **not committed** — it contains the
+> business figures, which don't belong in git. It was already applied to
+> production once; regenerate it from the workbooks (below) if you need it again.
+
 ## How to load (on the VPS)
 
-Data-only — no rebuild or restart needed (the Daily pages read live):
+Data-only — no rebuild or restart needed (the Daily pages read live). Produce
+the SQL with the generator (next section), then:
 
 ```bash
-cd /home/bkdash/Saleshighligh
-git fetch origin claude/bk-sales-dashboard-report-xsw5me && git checkout claude/bk-sales-dashboard-report-xsw5me && git pull
 DB=$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
-gunzip -c scripts/historical/historical-daily-occupancy.sql.gz | psql "$DB"
+SCHEMA=$(printf '%s' "$DB" | grep -oE 'schema=[^&]+' | cut -d= -f2); SCHEMA=${SCHEMA:-public}; BASE=${DB%%\?*}
+gunzip -c historical-daily-occupancy.sql.gz | PGOPTIONS="-c search_path=$SCHEMA" psql "$BASE"
 ```
 
 Expect `INSERT 0 500` lines and a final `COMMIT`. It's **idempotent** — it
