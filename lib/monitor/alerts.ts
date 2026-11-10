@@ -13,7 +13,7 @@ import { DAILY_FEEDS } from "@/lib/monitor/feeds";
 import { diffNewGaps, isGap, parseGapKey } from "@/lib/monitor/health-logic";
 import { getScraperHealth, type ScraperHealth } from "@/lib/monitor/ingestion-health";
 import { enqueueDailyRescrape, isAutoRecoverEnabled, type RescrapeOutcome } from "@/lib/monitor/rescrape";
-import { getLatestCheckRunForDate, recordCheckRun } from "@/lib/monitor/runs";
+import { getAlertedGapKeysForDate, recordCheckRun } from "@/lib/monitor/runs";
 
 export interface ScraperCheckOutcome {
   ranAt: string;
@@ -171,9 +171,12 @@ export async function runScraperCheck(
   const health = await getScraperHealth(nowMs);
   const { todayWita, yesterdayWita, openGapKeys, criticalGapKeys } = health;
 
-  // New gaps vs the most recent prior run for the same WITA day → alert once.
-  const prior = await getLatestCheckRunForDate(todayWita);
-  const newGaps = diffNewGaps(openGapKeys, prior?.openGaps ?? []);
+  // A gap is alert-worthy until an alert for it has actually gone out today, so
+  // we de-dup against gaps already SUCCESSFULLY emailed (not merely observed):
+  // an early/manual run that recorded gaps without emailing doesn't suppress the
+  // real alert, and a failed send is retried on the next run.
+  const alreadyAlerted = await getAlertedGapKeysForDate(todayWita);
+  const newGaps = diffNewGaps(openGapKeys, alreadyAlerted);
 
   // Auto-recover: one daily re-pull per property that has a critical gap. The
   // re-pull targets yesterday (the day a morning pull reflects).

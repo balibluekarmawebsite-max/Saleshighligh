@@ -7,27 +7,37 @@
 
 import type { DailyFeedKey } from "@/lib/monitor/feeds";
 
-export type FeedStatus = "ok" | "stale" | "missing";
+export type FeedStatus = "ok" | "stale" | "missing" | "pending";
 
 /**
  * Classify one daily feed from the WITA date of its last successful push.
  *
  *   - "ok"      → a push landed today (WITA).
- *   - "stale"   → it pushed before, but not today (data didn't arrive this morning).
- *   - "missing" → it has never pushed.
+ *   - "pending" → nothing today yet, but we're still before the morning cutoff,
+ *                 so a no-show is "not arrived yet", NOT a failure. This is what
+ *                 keeps an early (or manual) check from treating every feed as a
+ *                 gap before the ~07:00 pulls land.
+ *   - "stale"   → past the cutoff, it pushed before but not today.
+ *   - "missing" → past the cutoff, it has never pushed.
  *
- * Both "stale" and "missing" are gaps (see `isGap`). A push dated *after* today
+ * Only "stale" and "missing" are gaps (see `isGap`). A push dated *after* today
  * (clock skew / manual backfill) still counts as covering today — we only ever
- * want "today or later".
+ * want "today or later". `expectedArrived` is "are we past the morning cutoff?"
+ * (true by default so the two-arg form keeps the simple semantics).
  */
-export function classifyDailyFeed(lastPushWitaDate: string | null, todayWita: string): FeedStatus {
-  if (!lastPushWitaDate) return "missing";
-  return lastPushWitaDate >= todayWita ? "ok" : "stale";
+export function classifyDailyFeed(
+  lastPushWitaDate: string | null,
+  todayWita: string,
+  expectedArrived = true,
+): FeedStatus {
+  if (lastPushWitaDate && lastPushWitaDate >= todayWita) return "ok";
+  if (!expectedArrived) return "pending";
+  return lastPushWitaDate ? "stale" : "missing";
 }
 
-/** A feed status that needs attention (no fresh push today). */
+/** A feed status that needs attention (no fresh push, and past the morning cutoff). */
 export function isGap(status: FeedStatus): boolean {
-  return status !== "ok";
+  return status === "stale" || status === "missing";
 }
 
 /** Stable key for one gap, used for de-duplication and re-scrape idempotency. */

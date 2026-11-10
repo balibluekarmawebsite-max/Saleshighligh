@@ -20,6 +20,11 @@ export function witaDateIso(nowMs: number, dayOffset = 0): string {
   return new Date(nowMs + WITA_OFFSET_MS + dayOffset * 86_400_000).toISOString().slice(0, 10);
 }
 
+/** The WITA wall-clock hour (0–23) at `nowMs`. */
+export function witaHour(nowMs: number): number {
+  return new Date(nowMs + WITA_OFFSET_MS).getUTCHours();
+}
+
 /**
  * Yesterday's date in WITA — the last fully-closed day for a Bali property. An
  * occupancy reading pulled this morning reflects the books as of yesterday's

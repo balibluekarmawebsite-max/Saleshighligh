@@ -98,6 +98,27 @@ export async function getLatestCheckRunForDate(dateWita: string): Promise<Scrape
   }
 }
 
+/**
+ * Gap keys that have ALREADY been successfully alerted on `dateWita` — the union
+ * of `newGaps` across today's runs where the email actually sent. The de-dup
+ * baseline: a gap is "new" (alert-worthy) until an alert for it has gone out, so
+ * a failed send is retried on the next run instead of being silently suppressed.
+ * Empty when the table is missing (so a gap still alerts).
+ */
+export async function getAlertedGapKeysForDate(dateWita: string): Promise<string[]> {
+  try {
+    const rows = await prisma.scraperCheckRun.findMany({
+      where: { dateWita, emailSent: true },
+      select: { newGaps: true },
+    });
+    const set = new Set<string>();
+    for (const r of rows) for (const k of asStrArr(r.newGaps)) set.add(k);
+    return [...set];
+  } catch {
+    return [];
+  }
+}
+
 export interface RecordRunInput {
   trigger: string;
   dateWita: string;

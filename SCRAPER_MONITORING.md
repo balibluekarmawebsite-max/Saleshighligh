@@ -28,8 +28,11 @@ property (BKDS / BKDU / BKV):
 queued VHP Section B/C scrape jobs — shown on the page from the last
 `weekly_auto_sync` run and the scrape-job queue.
 
-A feed is a **gap** when no successful push landed for today (WITA). Occupancy
-also shows a data-freshness line: the latest stored snapshot date vs. yesterday.
+A feed is a **gap** when no successful push landed for today (WITA) **and** we're
+past the morning cutoff (`SCRAPER_EXPECT_BY_HOUR`, default **08:00 WITA**). Before
+the cutoff a not-yet-arrived feed shows as **pending**, not a gap — so an early or
+manual check can't mistake "not pulled yet" for "failed". Occupancy also shows a
+data-freshness line: the latest stored snapshot date vs. yesterday.
 
 ---
 
@@ -39,8 +42,9 @@ also shows a data-freshness line: the latest stored snapshot date vs. yesterday.
 `bk-scraper-check.timer`), a couple of hours after the 07:00 pulls. Each run:
 
 1. Computes the health of every daily feed.
-2. Compares the open gaps to the previous run **of the same day**, so a gap is
-   emailed **once**, not on every re-check.
+2. Emails a gap **once per day** — it de-dups against gaps that were already
+   **successfully emailed** today, so a re-check doesn't nag, but a send that
+   **failed** (SMTP hiccup) is retried on the next run instead of being lost.
 3. When `SCRAPER_AUTO_RECOVER` is on, queues one daily re-pull per property that
    is missing a **critical** feed (see §4).
 4. Emails the Daily Report recipients (same SMTP + recipient list as the daily

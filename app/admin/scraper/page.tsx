@@ -17,6 +17,7 @@ function witaStamp(iso: string): string {
 
 const STATUS_META: Record<FeedStatus, { label: string; cls: string }> = {
   ok: { label: "OK", cls: "bg-variance-positive/10 text-variance-positive" },
+  pending: { label: "Pending", cls: "bg-secondary text-muted-foreground" },
   stale: { label: "Stale", cls: "bg-[hsl(var(--brand-gold))]/20 text-foreground" },
   missing: { label: "Missing", cls: "bg-variance-negative/10 text-variance-negative" },
 };
@@ -62,8 +63,10 @@ export default async function ScraperHealthPage() {
   const autoRecoverOn = /^(1|true|yes|on)$/i.test(process.env.SCRAPER_AUTO_RECOVER ?? "");
   const queueConfigured = h.weekly.configured.scrapeQueue;
 
-  const banner =
-    criticalGaps > 0
+  const cutoff = `${String(h.expectByHour).padStart(2, "0")}:00 WITA`;
+  const banner = !h.expectedArrived
+    ? { tone: "info", text: `Morning pulls aren't due yet (expected by ${cutoff}). Feeds not in yet show as “pending” and aren't flagged until then.` }
+    : criticalGaps > 0
       ? { tone: "bad", text: `${criticalGaps} critical feed${criticalGaps === 1 ? "" : "s"} did not arrive for ${h.todayWita}.` }
       : totalGaps > 0
         ? { tone: "warn", text: `${totalGaps} secondary feed${totalGaps === 1 ? "" : "s"} missing for ${h.todayWita}; critical feeds are OK.` }
@@ -74,7 +77,9 @@ export default async function ScraperHealthPage() {
       ? "border-variance-positive/30 bg-variance-positive/10 text-variance-positive"
       : banner.tone === "bad"
         ? "border-variance-negative/30 bg-variance-negative/10 text-variance-negative"
-        : "border-[hsl(var(--brand-gold))]/40 bg-[hsl(var(--brand-gold))]/10 text-foreground";
+        : banner.tone === "info"
+          ? "border-brand-teal/30 bg-brand-teal/5 text-foreground"
+          : "border-[hsl(var(--brand-gold))]/40 bg-[hsl(var(--brand-gold))]/10 text-foreground";
 
   const feedFor = (code: string, feedKey: string) =>
     h.dailyFeeds.find((d) => d.property === code && d.feed === feedKey) ?? null;
@@ -129,9 +134,10 @@ export default async function ScraperHealthPage() {
                           <>
                             <StatusChip status={fh.status} />
                             <div className="mt-1 text-xs text-muted-foreground">
-                              {fh.status === "ok" ? "arrived " : "last "}
-                              {fh.lastPushAgeLabel}
-                              {fh.lastRows != null ? ` · ${fh.lastRows} rows` : ""}
+                              {fh.status === "pending"
+                                ? "not due yet"
+                                : `${fh.status === "ok" ? "arrived" : "last"} ${fh.lastPushAgeLabel}`}
+                              {fh.status !== "pending" && fh.lastRows != null ? ` · ${fh.lastRows} rows` : ""}
                             </div>
                           </>
                         ) : (

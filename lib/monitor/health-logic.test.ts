@@ -27,10 +27,21 @@ describe("classifyDailyFeed", () => {
     expect(classifyDailyFeed(null, "2026-11-10")).toBe("missing");
   });
 
-  it("treats both stale and missing as gaps, ok as not", () => {
+  it("is pending (not a gap) before the morning cutoff when nothing arrived yet", () => {
+    // expectedArrived=false → too early to call a no-show a failure.
+    expect(classifyDailyFeed(null, "2026-11-10", false)).toBe("pending");
+    expect(classifyDailyFeed("2026-11-09", "2026-11-10", false)).toBe("pending");
+  });
+
+  it("is still ok before the cutoff once today's push has landed", () => {
+    expect(classifyDailyFeed("2026-11-10", "2026-11-10", false)).toBe("ok");
+  });
+
+  it("treats stale and missing as gaps; ok and pending are not", () => {
     expect(isGap(classifyDailyFeed(null, "2026-11-10"))).toBe(true);
     expect(isGap(classifyDailyFeed("2026-11-09", "2026-11-10"))).toBe(true);
     expect(isGap(classifyDailyFeed("2026-11-10", "2026-11-10"))).toBe(false);
+    expect(isGap(classifyDailyFeed(null, "2026-11-10", false))).toBe(false);
   });
 });
 

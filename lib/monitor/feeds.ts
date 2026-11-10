@@ -62,6 +62,22 @@ export const DAILY_FEEDS: DailyFeedDef[] = [
 /** All daily audit actions, for a single `action in (...)` query. */
 export const DAILY_FEED_ACTIONS: string[] = DAILY_FEEDS.map((f) => f.auditAction);
 
+/**
+ * The WITA hour by which the morning pulls are expected. Before this, a feed
+ * that hasn't arrived is "pending", not a gap — so an early/manual check can't
+ * mistake "not pulled yet" for "failed". The pulls land by ~07:00 and the
+ * scheduled check runs at 09:00, so 08:00 gives an hour of slack. Overridable
+ * with SCRAPER_EXPECT_BY_HOUR (0–23).
+ */
+export const DAILY_EXPECTED_BY_HOUR_DEFAULT = 8;
+
+/** The configured morning-cutoff hour (env override, clamped to 0–23). */
+export function dailyExpectedByHour(): number {
+  const raw = Number(process.env.SCRAPER_EXPECT_BY_HOUR);
+  if (!Number.isInteger(raw) || raw < 0 || raw > 23) return DAILY_EXPECTED_BY_HOUR_DEFAULT;
+  return raw;
+}
+
 /** Look up a feed definition by audit action. */
 export function feedByAction(action: string): DailyFeedDef | undefined {
   return DAILY_FEEDS.find((f) => f.auditAction === action);

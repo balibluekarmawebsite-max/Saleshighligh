@@ -15,7 +15,7 @@
 
 import { unstable_noStore as noStore } from "next/cache";
 
-import { witaDateIso } from "@/lib/daily/date";
+import { witaDateIso, witaHour } from "@/lib/daily/date";
 import {
   classifyDailyFeed,
   gapKey,
@@ -23,7 +23,7 @@ import {
   relativeAge,
   type FeedStatus,
 } from "@/lib/monitor/health-logic";
-import { DAILY_FEEDS, DAILY_FEED_ACTIONS, type DailyFeedKey } from "@/lib/monitor/feeds";
+import { DAILY_FEEDS, DAILY_FEED_ACTIONS, dailyExpectedByHour, type DailyFeedKey } from "@/lib/monitor/feeds";
 import { getRecentCheckRuns, type ScraperCheckRunView } from "@/lib/monitor/runs";
 import { prisma } from "@/lib/prisma";
 import { isAdsSyncConfigured } from "@/lib/weekly/ads-sync";
@@ -80,6 +80,10 @@ export interface PollerHealth {
 export interface ScraperHealth {
   todayWita: string;
   yesterdayWita: string;
+  /** True once we're past the morning cutoff, so a no-show counts as a gap. */
+  expectedArrived: boolean;
+  /** The WITA cutoff hour a morning pull is expected by. */
+  expectByHour: number;
   dailyFeeds: DailyFeedHealth[];
   freshness: PropertyDataFreshness[];
   /** All gaps (critical + secondary) as keys, deduped, for the alert + de-dup. */
@@ -141,6 +145,8 @@ export async function getScraperHealth(nowMs: number = Date.now()): Promise<Scra
   noStore();
   const todayWita = witaDateIso(nowMs, 0);
   const yesterdayWita = witaDateIso(nowMs, -1);
+  const expectByHour = dailyExpectedByHour();
+  const expectedArrived = witaHour(nowMs) >= expectByHour;
 
   const [props, auditRows, snapMax, weeklyRow, recentJobs, recentRuns] = await Promise.all([
     prisma.property.findMany({ select: { id: true, code: true, name: true }, orderBy: { code: "asc" } }),
@@ -185,7 +191,7 @@ export async function getScraperHealth(nowMs: number = Date.now()): Promise<Scra
       const lp = latestPush.get(`${p.code.toUpperCase()}|${feed.auditAction}`) ?? null;
       const lastPushMs = lp ? lp.at.getTime() : null;
       const lastPushWitaDate = lastPushMs != null ? witaDateIso(lastPushMs, 0) : null;
-      const status = classifyDailyFeed(lastPushWitaDate, todayWita);
+      const status = classifyDailyFeed(lastPushWitaDate, todayWita, expectedArrived);
       const key = gapKey(p.code, feed.key, todayWita);
       if (isGap(status)) {
         openGapKeys.push(key);
@@ -227,6 +233,8 @@ export async function getScraperHealth(nowMs: number = Date.now()): Promise<Scra
   return {
     todayWita,
     yesterdayWita,
+    expectedArrived,
+    expectByHour,
     dailyFeeds,
     freshness,
     openGapKeys,
