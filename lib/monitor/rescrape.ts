@@ -12,6 +12,7 @@
  */
 
 import { isoToUtcDate } from "@/lib/daily/date";
+import { isDailyFeedKey } from "@/lib/monitor/feeds";
 import { buildDailyRescrapeInput } from "@/lib/monitor/health-logic";
 import { prisma } from "@/lib/prisma";
 import { createScrapeJob, isScrapeQueueConfigured } from "@/lib/weekly/jobs";
@@ -31,18 +32,25 @@ export interface RescrapeOutcome {
 }
 
 /**
- * Queue a daily re-pull (ScrapeJob section "D") for one property + snapshot day.
- * Idempotent: if an unfinished "D" job for that property + date already exists,
- * it returns that job instead of stacking a duplicate. Never throws.
+ * Queue a daily re-pull (ScrapeJob section "D") for one property + snapshot day,
+ * optionally scoped to a single `feed` (null = the whole daily pull). Idempotent:
+ * if an unfinished "D" job for that exact property + date + feed already exists,
+ * it returns that job instead of stacking a duplicate — so re-pulling a stale
+ * feed twice, or across an auto + manual trigger, never piles up. Never throws.
  */
 export async function enqueueDailyRescrape(
   propertyCode: string,
   snapshotDateIso: string,
+  feed: string | null = null,
   requestedById: string | null = null,
 ): Promise<RescrapeOutcome> {
   const code = propertyCode.trim().toUpperCase();
-  const key = `${code}:daily:${snapshotDateIso}`;
+  const feedKey = feed ? feed.trim().toLowerCase() : null;
+  const key = `${code}:${feedKey ?? "daily"}:${snapshotDateIso}`;
 
+  if (feedKey && !isDailyFeedKey(feedKey)) {
+    return { key, jobId: null, skipped: `unknown feed "${feed}"` };
+  }
   if (!isScrapeQueueConfigured()) {
     return { key, jobId: null, skipped: "scrape queue not configured" };
   }
@@ -52,6 +60,7 @@ export async function enqueueDailyRescrape(
       where: {
         property: code,
         section: "D",
+        feed: feedKey,
         startDate: isoToUtcDate(snapshotDateIso),
         status: { in: ["queued", "running"] },
       },
@@ -59,7 +68,7 @@ export async function enqueueDailyRescrape(
     });
     if (existing) return { key, jobId: existing.id, skipped: "already queued" };
 
-    const input = buildDailyRescrapeInput(code, snapshotDateIso);
+    const input = buildDailyRescrapeInput(code, snapshotDateIso, feedKey);
     const res = await createScrapeJob({ ...input, requestedById });
     return res.ok ? { key, jobId: res.id } : { key, jobId: null, skipped: res.error };
   } catch (e) {

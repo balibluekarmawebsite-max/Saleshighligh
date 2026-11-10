@@ -77,12 +77,23 @@ describe("diffNewGaps", () => {
 });
 
 describe("buildDailyRescrapeInput", () => {
-  it("makes a one-day section-D job (start == end, upper-cased property)", () => {
+  it("makes a whole-pull section-D job (start == end, upper-cased property, feed null)", () => {
     expect(buildDailyRescrapeInput("bkdu", "2026-11-10")).toEqual({
       property: "BKDU",
       section: "D",
       start: "2026-11-10",
       end: "2026-11-10",
+      feed: null,
+    });
+  });
+
+  it("scopes to a single feed when given", () => {
+    expect(buildDailyRescrapeInput("bkdu", "2026-11-10", "departure")).toEqual({
+      property: "BKDU",
+      section: "D",
+      start: "2026-11-10",
+      end: "2026-11-10",
+      feed: "departure",
     });
   });
 });

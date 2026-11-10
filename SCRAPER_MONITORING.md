@@ -77,14 +77,20 @@ Auto-recovery reuses the existing on-demand scrape-job queue
 single VHP session that produces all four daily feeds, so **one** section-D job
 per property covers every missing daily feed.
 
+A re-pull can target **one feed** (e.g. just "Room Departure") or the **whole
+day** (all feeds). The dashboard sets a `feed` on the job; when the dashboard
+operator re-pulls a single stale cell, `feed` names that feed, and when they
+re-pull a whole property `feed` is `null`.
+
 When the dashboard queues one, the poller's **claim** response gains a job like:
 
 ```json
 {
   "job": {
     "id": "clx…",
-    "property": "BKDS",
+    "property": "BKDU",
     "section": "D",
+    "feed": "departure",
     "start": "2026-11-09",
     "end": "2026-11-09",
     "month": "2026-11",
@@ -93,18 +99,26 @@ When the dashboard queues one, the poller's **claim** response gains a job like:
 }
 ```
 
+**Feed → push endpoint** (POST with `Authorization: Bearer <IMPORT_API_TOKEN>`):
+
+| `feed` | VHP report | Push endpoint |
+| ------ | ---------- | ------------- |
+| `occupancy` | Yearly Forecast Of Room Occupancy | `POST /api/daily/pickup` |
+| `reservation` | Reservation by creation date (pickup + arrivals) | `POST /api/daily/reservation` |
+| `departure` | Telephone-operator Room Departure | `POST /api/daily/departure` |
+| `cancellation` | Cancellation Report | `POST /api/daily/cancellation` |
+| `null` | — (re-run all of the above) | all four |
+
 **What the office-PC poller must do for `section === "D"`:**
 
-1. Run the **daily** VHP pull for `property`, targeting snapshot date `start`
-   (= `end`; the day a morning pull reflects — yesterday).
-2. Upload to the **daily** endpoints with `snapshotDate=<start>` and
-   `Authorization: Bearer <IMPORT_API_TOKEN>`:
-   - `POST /api/daily/pickup` (Yearly Forecast Of Room Occupancy) — **remember
-     to exclude `Compliment` and `House Use` sources**, as agreed.
-   - `POST /api/daily/reservation`, `POST /api/daily/departure`,
-     `POST /api/daily/cancellation` (if your daily routine pushes these).
+1. Target snapshot date `start` (= `end`; the day a morning pull reflects —
+   yesterday).
+2. If `feed` is set, re-run **only that feed's** VHP report and POST it to the
+   matching endpoint above (for `occupancy`, **remember to exclude `Compliment`
+   and `House Use` sources**, as agreed). If `feed` is `null`, re-run the whole
+   daily pull and POST all four.
 3. Report the outcome: `POST /api/jobs/{id}/result` with
-   `{ "status": "done", "written": <rows>, "message": "daily re-pull" }` — or
+   `{ "status": "done", "written": <rows>, "message": "re-pull <feed>" }` — or
    `{ "status": "failed", "message": "<reason>" }`.
 
 > ⚠️ **Enable auto-recovery only after the poller understands section `"D"`.**
@@ -126,10 +140,10 @@ SCRAPER_AUTO_RECOVER=1
 ```bash
 git pull
 npm install
-npx prisma migrate deploy            # creates scraper_check_runs
+npx prisma migrate deploy            # scraper_check_runs + scrape_jobs.feed
 npm run build
 sudo systemctl restart bk-dashboard
-sudo bash deploy/install-scraper-check.sh   # 09:00 WITA timer
+sudo bash deploy/install-scraper-check.sh   # 09:00 WITA timer (first time only)
 ```
 
 Confirm the route is live: `curl -i http://127.0.0.1:3000/api/cron/scraper-check`

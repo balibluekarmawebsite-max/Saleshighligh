@@ -2,7 +2,7 @@ import { RescrapeButton, RunCheckButton } from "@/components/monitor/scraper-act
 import { getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { isSmtpConfigured } from "@/lib/daily/mailer";
 import { DAILY_FEEDS } from "@/lib/monitor/feeds";
-import type { FeedStatus } from "@/lib/monitor/health-logic";
+import { isGap, type FeedStatus } from "@/lib/monitor/health-logic";
 import { getScraperHealth } from "@/lib/monitor/ingestion-health";
 
 export const dynamic = "force-dynamic";
@@ -139,6 +139,11 @@ export default async function ScraperHealthPage() {
                                 : `${fh.status === "ok" ? "arrived" : "last"} ${fh.lastPushAgeLabel}`}
                               {fh.status !== "pending" && fh.lastRows != null ? ` · ${fh.lastRows} rows` : ""}
                             </div>
+                            {admin && queueConfigured && isGap(fh.status) ? (
+                              <div className="mt-1.5">
+                                <RescrapeButton property={code} feed={feed.key} compact />
+                              </div>
+                            ) : null}
                           </>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
@@ -171,7 +176,9 @@ export default async function ScraperHealthPage() {
 
         {admin && queueConfigured ? (
           <div className="mt-4 flex flex-wrap items-start gap-3 border-t border-border pt-4">
-            <span className="pt-1 text-xs font-medium text-muted-foreground">Request a daily re-pull:</span>
+            <span className="pt-1 text-xs font-medium text-muted-foreground">
+              Re-pull a stale feed with its “Re-pull” button above, or re-pull every feed for a property:
+            </span>
             {props.map((p) => (
               <RescrapeButton key={p} property={p} />
             ))}
@@ -290,7 +297,7 @@ export default async function ScraperHealthPage() {
                   <tr key={j.id} className="border-b border-border/60 align-top">
                     <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{witaStamp(j.requestedAt)}</td>
                     <td className="px-3 py-2 font-medium text-foreground">{j.property}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{j.section}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{j.section}{j.feed ? ` · ${j.feed}` : ""}</td>
                     <td className="px-3 py-2 text-muted-foreground">{j.period}</td>
                     <td className={`px-3 py-2 font-medium ${JOB_STATUS_CLS[j.status] ?? "text-muted-foreground"}`}>{j.status}</td>
                     <td className="px-3 py-2 text-muted-foreground">

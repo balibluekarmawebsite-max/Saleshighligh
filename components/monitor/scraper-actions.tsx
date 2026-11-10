@@ -35,10 +35,29 @@ export function RunCheckButton() {
   );
 }
 
-/** Admin button: queue a daily re-pull for one property. */
-export function RescrapeButton({ property }: { property: string }) {
+/**
+ * Admin button: queue a daily re-pull. With `feed` it re-pulls only that feed
+ * for the property; without it, the whole daily pull. `compact` is the in-cell
+ * variant.
+ */
+export function RescrapeButton({
+  property,
+  feed = null,
+  label,
+  compact = false,
+}: {
+  property: string;
+  feed?: string | null;
+  label?: string;
+  compact?: boolean;
+}) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<ActionResult | null>(null);
+
+  const text = label ?? (feed ? "Re-pull" : `Re-pull ${property}`);
+  const cls = compact
+    ? "rounded border border-brand-teal/60 px-1.5 py-0.5 text-[11px] font-medium text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-50"
+    : "rounded-md border border-brand-teal px-2.5 py-1 text-xs font-medium text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-50";
 
   return (
     <div className="inline-flex flex-col">
@@ -47,11 +66,11 @@ export function RescrapeButton({ property }: { property: string }) {
         disabled={pending}
         onClick={() => {
           setMsg(null);
-          start(async () => setMsg(await requestRescrapeAction(property)));
+          start(async () => setMsg(await requestRescrapeAction(property, feed)));
         }}
-        className="rounded-md border border-brand-teal px-2.5 py-1 text-xs font-medium text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-50"
+        className={cls}
       >
-        {pending ? "Queuing…" : `Re-pull ${property}`}
+        {pending ? "Queuing…" : text}
       </button>
       <Message msg={msg} />
     </div>

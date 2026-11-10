@@ -60,13 +60,15 @@ export function diffNewGaps(currentOpen: string[], priorOpen: string[]): string[
 
 /**
  * Input for a daily re-pull job (ScrapeJob section "D"). start == end is the one
- * snapshot day to re-pull; createScrapeJob derives the month from it.
+ * snapshot day to re-pull; createScrapeJob derives the month from it. `feed`
+ * targets a single daily feed (null = re-run the whole daily pull).
  */
 export function buildDailyRescrapeInput(
   propertyCode: string,
   dateIso: string,
-): { property: string; section: "D"; start: string; end: string } {
-  return { property: propertyCode.toUpperCase(), section: "D", start: dateIso, end: dateIso };
+  feed: string | null = null,
+): { property: string; section: "D"; start: string; end: string; feed: string | null } {
+  return { property: propertyCode.toUpperCase(), section: "D", start: dateIso, end: dateIso, feed };
 }
 
 /**

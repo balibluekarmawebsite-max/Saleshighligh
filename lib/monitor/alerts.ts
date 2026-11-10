@@ -169,7 +169,7 @@ export async function runScraperCheck(
   const autoRecover = opts.autoRecover ?? isAutoRecoverEnabled();
 
   const health = await getScraperHealth(nowMs);
-  const { todayWita, yesterdayWita, openGapKeys, criticalGapKeys } = health;
+  const { todayWita, yesterdayWita, openGapKeys } = health;
 
   // A gap is alert-worthy until an alert for it has actually gone out today, so
   // we de-dup against gaps already SUCCESSFULLY emailed (not merely observed):
@@ -178,19 +178,15 @@ export async function runScraperCheck(
   const alreadyAlerted = await getAlertedGapKeysForDate(todayWita);
   const newGaps = diffNewGaps(openGapKeys, alreadyAlerted);
 
-  // Auto-recover: one daily re-pull per property that has a critical gap. The
-  // re-pull targets yesterday (the day a morning pull reflects).
+  // Auto-recover: one targeted re-pull per missing feed (not the whole pull), so
+  // a single stale feed re-pulls just that feed. The re-pull targets yesterday
+  // (the day a morning pull reflects); enqueue is idempotent per property+feed.
   const recovered: RescrapeOutcome[] = [];
-  if (autoRecover && criticalGapKeys.length > 0) {
-    const codes = [
-      ...new Set(
-        criticalGapKeys
-          .map((k) => parseGapKey(k)?.property)
-          .filter((c): c is string => Boolean(c)),
-      ),
-    ];
-    for (const code of codes) {
-      recovered.push(await enqueueDailyRescrape(code, yesterdayWita));
+  if (autoRecover && openGapKeys.length > 0) {
+    for (const k of openGapKeys) {
+      const p = parseGapKey(k);
+      if (!p) continue;
+      recovered.push(await enqueueDailyRescrape(p.property, yesterdayWita, p.feed));
     }
   }
 

@@ -47,6 +47,8 @@ export interface ClaimedJob {
   id: string;
   property: string;
   section: string;
+  /** Section "D" only: the daily feed to re-pull (null = whole daily pull). */
+  feed: string | null;
   start: string | null;
   end: string | null;
   month: string | null;
@@ -57,6 +59,7 @@ interface ClaimRow {
   id: string;
   property: string;
   section: string;
+  feed: string | null;
   startDate: Date | null;
   endDate: Date | null;
   month: string | null;
@@ -87,7 +90,7 @@ export async function claimNextJob(worker: string): Promise<ClaimedJob | null> {
       FOR UPDATE SKIP LOCKED
       LIMIT 1
     )
-    RETURNING "id", "property", "section", "startDate", "endDate", "month", "weekEnding";
+    RETURNING "id", "property", "section", "feed", "startDate", "endDate", "month", "weekEnding";
   `;
   const r = rows[0];
   if (!r) return null;
@@ -95,6 +98,7 @@ export async function claimNextJob(worker: string): Promise<ClaimedJob | null> {
     id: r.id,
     property: r.property,
     section: r.section,
+    feed: r.feed ?? null,
     start: ymd(r.startDate),
     end: ymd(r.endDate),
     month: r.month ?? null,
@@ -144,6 +148,8 @@ export interface CreateJobInput {
   end?: string | null;
   month?: string | null;
   weekEnding?: string | null;
+  /** Section "D" only: the daily feed to re-pull (null = whole daily pull). */
+  feed?: string | null;
   requestedById?: string | null;
 }
 
@@ -188,6 +194,8 @@ export async function createScrapeJob(
   }
 
   const weekEnding = date(input.weekEnding);
+  // Feed only applies to a section-"D" daily re-pull; null = the whole pull.
+  const feed = section === "D" && input.feed ? input.feed.trim().toLowerCase() : null;
 
   const job = await prisma.scrapeJob.create({
     data: {
@@ -197,6 +205,7 @@ export async function createScrapeJob(
       endDate,
       month,
       weekEnding,
+      feed,
       requestedById: input.requestedById ?? null,
       status: "queued",
     },
@@ -262,6 +271,7 @@ export interface ScrapeJobView {
   id: string;
   property: string;
   section: string;
+  feed: string | null;
   period: string;
   status: string;
   message: string | null;
@@ -281,6 +291,7 @@ export async function getRecentScrapeJobs(limit = 30): Promise<ScrapeJobView[]> 
     id: j.id,
     property: j.property,
     section: j.section,
+    feed: j.feed ?? null,
     period:
       j.section === "D"
         ? ymd(j.startDate) ?? j.month ?? "?"

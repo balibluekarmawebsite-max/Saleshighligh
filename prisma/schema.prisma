@@ -1272,6 +1272,9 @@ model ScrapeJob {
   /// | "D" (daily re-pull — re-run the morning Daily Report VHP pull for one day,
   /// queued by the scraper-health check when a daily feed didn't arrive).
   section       String
+  /// Section "D" only: which daily feed to re-pull (occupancy | reservation |
+  /// departure | cancellation). Null = re-run the whole daily pull (all feeds).
+  feed          String?
   /// Section C/D — the date range the scraper sets in VHP. For "D" start == end
   /// is the single snapshot day to re-pull.
   startDate     DateTime? @db.Date

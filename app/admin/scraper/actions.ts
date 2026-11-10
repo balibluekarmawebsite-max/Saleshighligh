@@ -36,8 +36,14 @@ export async function runCheckNowAction(): Promise<ActionResult> {
   }
 }
 
-/** Admin-only: queue a daily re-pull for one property (targets yesterday WITA). */
-export async function requestRescrapeAction(propertyCode: string): Promise<ActionResult> {
+/**
+ * Admin-only: queue a daily re-pull for one property (targets yesterday WITA),
+ * optionally scoped to a single feed (null = re-pull all daily feeds).
+ */
+export async function requestRescrapeAction(
+  propertyCode: string,
+  feed?: string | null,
+): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!isAdmin(user)) return { ok: false, message: "Only admins can request a re-pull." };
 
@@ -45,13 +51,15 @@ export async function requestRescrapeAction(propertyCode: string): Promise<Actio
   const r = await enqueueDailyRescrape(
     propertyCode,
     date,
+    feed ?? null,
     user && user.id !== "system" ? user.id : null,
   );
   revalidatePath("/admin/scraper");
 
+  const label = feed ? `${propertyCode} · ${feed}` : `${propertyCode} (all feeds)`;
   if (r.jobId && r.skipped === "already queued") {
-    return { ok: true, message: `A re-pull for ${propertyCode} (${date}) is already queued.` };
+    return { ok: true, message: `A re-pull for ${label} (${date}) is already queued.` };
   }
-  if (r.jobId) return { ok: true, message: `Re-pull queued for ${propertyCode} (${date}).` };
+  if (r.jobId) return { ok: true, message: `Re-pull queued for ${label} (${date}).` };
   return { ok: false, message: r.skipped ? `Could not queue: ${r.skipped}.` : "Could not queue a re-pull." };
 }

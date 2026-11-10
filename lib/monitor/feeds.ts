@@ -18,6 +18,8 @@ export interface DailyFeedDef {
   label: string;
   /** Audit action logged on a successful push of this feed. */
   auditAction: string;
+  /** The push endpoint the scraper POSTs this feed to (for a targeted re-pull). */
+  endpoint: string;
   /**
    * Critical feeds drive the alert + auto-recover (the daily report is wrong
    * without them). Secondary feeds are recorded + shown but, on their own, only
@@ -33,6 +35,7 @@ export const DAILY_FEEDS: DailyFeedDef[] = [
     key: "occupancy",
     label: "Occupancy (Yearly Forecast)",
     auditAction: "daily_pickup_import",
+    endpoint: "/api/daily/pickup",
     critical: true,
     note: "Rooms on the books per stay month — the core of the daily report.",
   },
@@ -40,6 +43,7 @@ export const DAILY_FEEDS: DailyFeedDef[] = [
     key: "reservation",
     label: "Reservation (pickup + arrivals)",
     auditAction: "daily_reservation_import",
+    endpoint: "/api/daily/reservation",
     critical: true,
     note: "Yesterday's pick-up by agent and arrival room counts.",
   },
@@ -47,6 +51,7 @@ export const DAILY_FEEDS: DailyFeedDef[] = [
     key: "departure",
     label: "Room Departure",
     auditAction: "daily_departure_import",
+    endpoint: "/api/daily/departure",
     critical: false,
     note: "Departure room counts per stay date.",
   },
@@ -54,10 +59,24 @@ export const DAILY_FEEDS: DailyFeedDef[] = [
     key: "cancellation",
     label: "Cancellations",
     auditAction: "daily_cancellation_import",
+    endpoint: "/api/daily/cancellation",
     critical: false,
     note: "Cancelled reservation lines (used to net off same-day cancels).",
   },
 ];
+
+/** All daily feed keys, for validating a re-pull's feed. */
+export const DAILY_FEED_KEYS: DailyFeedKey[] = DAILY_FEEDS.map((f) => f.key);
+
+/** True when `key` is a known daily feed. */
+export function isDailyFeedKey(key: string): key is DailyFeedKey {
+  return (DAILY_FEED_KEYS as string[]).includes(key);
+}
+
+/** Look up a feed definition by key. */
+export function feedByKey(key: string): DailyFeedDef | undefined {
+  return DAILY_FEEDS.find((f) => f.key === key);
+}
 
 /** All daily audit actions, for a single `action in (...)` query. */
 export const DAILY_FEED_ACTIONS: string[] = DAILY_FEEDS.map((f) => f.auditAction);
