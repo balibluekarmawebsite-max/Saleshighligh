@@ -11,14 +11,17 @@ wrong) pushes.
   per snapshot date, one column per forward stay month, cell = occupancy on hand.
 - **Rows:** 23,381 — BKDS 7,853 · BKDU 7,764 · BKV 7,764, covering
   `2025-01-01 … 2026-11-09`.
-- **Per (snapshotDate, stayYear, stayMonth):** `roomNights` and `saleableRooms`.
+- **Per (snapshotDate, stayYear, stayMonth):** `roomNights`, `saleableRooms` and
+  (on the latest snapshot day of each month) `revenue`.
   - `saleableRooms = roomCount × days-in-month` (BKDS 18, BKDU 20, BKV 15).
     Out-of-order rooms are treated as 0 — verified: BKDS 2026-11-09 November
     comes out to 343 / 540 = **63.52 %**, matching the manual report.
   - `roomNights = round(occupancy_fraction × saleableRooms)`.
-- **`revenue` is left NULL** (occupancy history only). ADR / Revenue Nett in the
-  Daily Report summary will show "—" for historical months. Revenue can be added
-  later from the `ROOM REV` sheets / PU footers if needed.
+  - `revenue` = the sheet's **"Revenue Nett"** row (latest net revenue on hand
+    per stay month), stored on each month's **latest snapshot day** so the Daily
+    Report summary's Revenue Nett + derived ADR populate. Verified: BKDS Oct 2026
+    OCT = 834,065,399 / 473 rooms = ADR **1,763,352**, matching the file.
+    (ADR is derived `revenue ÷ roomNights`, never stored.)
 
 Occupancy %, ADR, MoM etc. are derived by the app (`lib/daily/calculations.ts`),
 never stored — so loading `roomNights` + `saleableRooms` is enough for the grid

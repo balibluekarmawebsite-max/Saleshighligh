@@ -49,13 +49,31 @@ function parsePuSheet(ws, snapYear, snapMonth, roomCount) {
     if (cols[k].stayMonth <= cols[k - 1].stayMonth) yr += 1;
     cols[k].stayYear = yr;
   }
+  // Latest-reading net revenue on hand per stay month: the first "revenue nett"
+  // row (present in every sheet; equals "current rev on hand" in 2026 sheets),
+  // aligned to the same stay-month columns. ADR is derived (revenue / room
+  // nights), so we only store revenue — on the latest snapshot day's rows.
+  let revRowIdx = -1;
+  for (let i = hdr + 1; i < aoa.length; i++) {
+    if (norm(aoa[i] && aoa[i][0]) === "revenue nett") { revRowIdx = i; break; }
+  }
+  const revByCol = new Map();
+  if (revRowIdx >= 0) {
+    const rr = aoa[revRowIdx];
+    for (const col of cols) {
+      const rv = rr[col.c];
+      if (typeof rv === "number" && Number.isFinite(rv) && rv > 0) revByCol.set(col.c, Math.round(rv));
+    }
+  }
   const snapDays = daysInMonth(snapYear, snapMonth);
   const out = [];
+  let maxDay = 0;
   for (let i = hdr + 1; i < aoa.length; i++) {
     const r = aoa[i];
     const day = r && typeof r[0] === "number" ? Math.trunc(r[0]) : null;
     if (day == null || day < 1 || day > 31) break; // footer / blank → stop
     if (day > snapDays) continue;
+    if (day > maxDay) maxDay = day;
     const sdate = `${snapYear}-${String(snapMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     for (const col of cols) {
       let v = r[col.c];
@@ -64,8 +82,14 @@ function parsePuSheet(ws, snapYear, snapMonth, roomCount) {
       if (v < 0) continue;
       const saleable = roomCount * daysInMonth(col.stayYear, col.stayMonth);
       const roomNights = Math.round(v * saleable);
-      out.push({ sdate, stayYear: col.stayYear, stayMonth: col.stayMonth, roomNights, saleable });
+      out.push({ sdate, day, colC: col.c, stayYear: col.stayYear, stayMonth: col.stayMonth, roomNights, saleable, revenue: null });
     }
+  }
+  // Attach revenue to the latest snapshot day's rows (the current on-hand value).
+  for (const r of out) {
+    if (r.day === maxDay && revByCol.has(r.colC)) r.revenue = revByCol.get(r.colC);
+    delete r.day;
+    delete r.colC;
   }
   return out;
 }
@@ -128,16 +152,17 @@ for (const code of Object.keys(parsed)) {
   const CHUNK = 500;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
-    sql += `INSERT INTO daily_pickup_snapshots ("id","propertyId","snapshotDate","stayYear","stayMonth","roomNights","saleableRooms","createdAt","updatedAt")\n`;
-    sql += `SELECT v.id, p.id, v.sdate::date, v.sy, v.sm, v.rn, v.sale, now(), now()\n`;
+    sql += `INSERT INTO daily_pickup_snapshots ("id","propertyId","snapshotDate","stayYear","stayMonth","roomNights","saleableRooms","revenue","createdAt","updatedAt")\n`;
+    sql += `SELECT v.id, p.id, v.sdate::date, v.sy, v.sm, v.rn, v.sale, v.rev::numeric, now(), now()\n`;
     sql += `FROM properties p CROSS JOIN (VALUES\n`;
     sql += chunk.map((r) => {
       const id = `hist-${code}-${r.sdate}-${r.stayYear}-${String(r.stayMonth).padStart(2,"0")}`;
-      return `  ('${esc(id)}','${r.sdate}',${r.stayYear},${r.stayMonth},${r.roomNights},${r.saleable})`;
+      const rev = r.revenue == null ? "NULL" : r.revenue;
+      return `  ('${esc(id)}','${r.sdate}',${r.stayYear},${r.stayMonth},${r.roomNights},${r.saleable},${rev})`;
     }).join(",\n");
-    sql += `\n) AS v(id, sdate, sy, sm, rn, sale)\nWHERE p.code = '${code}'\n`;
+    sql += `\n) AS v(id, sdate, sy, sm, rn, sale, rev)\nWHERE p.code = '${code}'\n`;
     sql += `ON CONFLICT ("propertyId","snapshotDate","stayYear","stayMonth")\n`;
-    sql += `DO UPDATE SET "roomNights" = EXCLUDED."roomNights", "saleableRooms" = EXCLUDED."saleableRooms", "revenue" = NULL, "updatedAt" = now();\n`;
+    sql += `DO UPDATE SET "roomNights" = EXCLUDED."roomNights", "saleableRooms" = EXCLUDED."saleableRooms", "revenue" = EXCLUDED."revenue", "updatedAt" = now();\n`;
   }
   sql += "\n";
   grand += rows.length;
