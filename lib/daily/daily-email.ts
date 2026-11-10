@@ -7,7 +7,8 @@
 import { logAudit } from "@/lib/audit";
 import { buildDailyDetailData } from "@/lib/daily/daily-detail-data";
 import { renderDailyDetailEmail } from "@/lib/daily/daily-detail-render";
-import { dailyReportRecipients, isEmailConfigured, sendMail } from "@/lib/daily/mailer";
+import { buildAllWorkbooks } from "@/lib/daily/daily-xlsx";
+import { dailyReportRecipients, isEmailConfigured, sendMail, type MailAttachment } from "@/lib/daily/mailer";
 
 export interface DailyReportResult {
   sent: boolean;
@@ -39,11 +40,24 @@ export async function sendDailyReport(): Promise<DailyReportResult> {
   try {
     const data = await buildDailyDetailData();
     const { subject, html, text } = renderDailyDetailEmail(data, { dashboardUrl: dashboardLink() });
-    const { messageId } = await sendMail({ to, subject, html, text });
+
+    // One Excel workbook per property (daily grid + month-tab history), attached.
+    // Best-effort: a workbook-generation hiccup must never block the text email,
+    // which is the primary deliverable.
+    let attachments: MailAttachment[] = [];
+    try {
+      const workbooks = await buildAllWorkbooks();
+      attachments = workbooks.map((w) => ({ filename: w.filename, content: w.buffer }));
+    } catch {
+      attachments = [];
+    }
+
+    const { messageId } = await sendMail({ to, subject, html, text, attachments });
     await logAudit("daily_report_email", subject, {
       status: "sent",
       to,
       properties: data.properties.length,
+      attachments: attachments.length,
       messageId,
       durationMs: Date.now() - startedMs,
     }).catch(() => {});

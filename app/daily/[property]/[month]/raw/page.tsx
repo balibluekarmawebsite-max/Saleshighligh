@@ -37,14 +37,22 @@ export default async function RawDataPage({ params }: { params: { property: stri
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground">Raw Data (VHP scraper)</h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          {data.property.name} · {data.monthLabel}. This is <span className="font-medium text-foreground">exactly what the
-          VHP scraper pushed</span>, before any dashboard calculation. Compare these numbers against your VHP export to
-          see where a figure differs — e.g. if <span className="font-medium text-foreground">Room Occupied</span> is
-          higher than your report, the scraper is likely still counting Compliment / House Use rooms.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">Raw Data (VHP scraper)</h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {data.property.name} · {data.monthLabel}. This is <span className="font-medium text-foreground">exactly what the
+            VHP scraper pushed</span>, before any dashboard calculation. Compare these numbers against your VHP export to
+            see where a figure differs — e.g. if <span className="font-medium text-foreground">Room Occupied</span> is
+            higher than your report, the scraper is likely still counting Compliment / House Use rooms.
+          </p>
+        </div>
+        <a
+          href={`/api/daily/export?property=${encodeURIComponent(data.property.code)}`}
+          className="shrink-0 rounded-md border border-brand-teal bg-brand-teal px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-teal/90"
+        >
+          Download Excel
+        </a>
       </div>
 
       {/* What arrived, and when */}

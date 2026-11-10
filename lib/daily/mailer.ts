@@ -46,12 +46,21 @@ function transport() {
   });
 }
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface SendMailInput {
   to: string[];
   subject: string;
   html: string;
   text: string;
+  attachments?: MailAttachment[];
 }
+
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 /** Send one mail via the configured SMTP. Throws on transport/auth failure. */
 export async function sendMail(input: SendMailInput): Promise<{ messageId: string }> {
@@ -61,6 +70,11 @@ export async function sendMail(input: SendMailInput): Promise<{ messageId: strin
     subject: input.subject,
     html: input.html,
     text: input.text,
+    attachments: input.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType ?? (a.filename.endsWith(".xlsx") ? XLSX_TYPE : undefined),
+    })),
   });
   return { messageId: info.messageId };
 }

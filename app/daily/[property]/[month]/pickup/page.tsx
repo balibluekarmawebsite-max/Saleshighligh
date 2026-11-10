@@ -15,14 +15,22 @@ export default async function PickupPage({ params }: { params: { property: strin
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground">Occupancy Pick-Up</h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          {report.property.name} · {report.monthLabel}. Occupancy on hand tracked day by day — each row is a
-          snapshot date, each column a stay month. The summary rows (Occ on Hand, Room Sold, ADR, Revenue) use
-          the <span className="font-medium text-foreground">latest</span> reading; Increasement % and Average
-          Pickup/day describe the movement.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">Occupancy Pick-Up</h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {report.property.name} · {report.monthLabel}. Occupancy on hand tracked day by day — each row is a
+            snapshot date, each column a stay month. The summary rows (Occ on Hand, Room Sold, ADR, Revenue) use
+            the <span className="font-medium text-foreground">latest</span> reading; Increasement % and Average
+            Pickup/day describe the movement.
+          </p>
+        </div>
+        <a
+          href={`/api/daily/export?property=${encodeURIComponent(report.property.code)}`}
+          className="shrink-0 rounded-md border border-brand-teal bg-brand-teal px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-teal/90"
+        >
+          Download Excel
+        </a>
       </div>
 
       <SectionCard
