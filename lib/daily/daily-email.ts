@@ -26,16 +26,38 @@ function dashboardLink(): string | undefined {
 }
 
 export async function sendDailyReport(): Promise<DailyReportResult> {
+  const startedMs = Date.now();
+
   if (!isEmailConfigured()) {
-    return { sent: false, reason: "email not configured — set SMTP_* and DAILY_REPORT_TO" };
+    const reason = "email not configured — set SMTP_* and DAILY_REPORT_TO";
+    // Record the skip too, so the monitor shows the job ran but email is off.
+    await logAudit("daily_report_email", "(skipped)", { status: "skipped", reason }).catch(() => {});
+    return { sent: false, reason };
   }
 
-  const data = await buildDailyDetailData();
-  const { subject, html, text } = renderDailyDetailEmail(data, { dashboardUrl: dashboardLink() });
   const to = dailyReportRecipients();
-
-  await sendMail({ to, subject, html, text });
-  await logAudit("daily_report_email", subject, { to, properties: data.properties.length }).catch(() => {});
-
-  return { sent: true, to, properties: data.properties.length, subject };
+  try {
+    const data = await buildDailyDetailData();
+    const { subject, html, text } = renderDailyDetailEmail(data, { dashboardUrl: dashboardLink() });
+    const { messageId } = await sendMail({ to, subject, html, text });
+    await logAudit("daily_report_email", subject, {
+      status: "sent",
+      to,
+      properties: data.properties.length,
+      messageId,
+      durationMs: Date.now() - startedMs,
+    }).catch(() => {});
+    return { sent: true, to, properties: data.properties.length, subject };
+  } catch (e) {
+    // Record the failure for the monitor, then re-throw so the cron route still
+    // surfaces a 500 (its non-200 is what any external alerting keys on).
+    const error = e instanceof Error ? e.message : "daily report email failed";
+    await logAudit("daily_report_email", "(failed)", {
+      status: "failed",
+      error,
+      to,
+      durationMs: Date.now() - startedMs,
+    }).catch(() => {});
+    throw e;
+  }
 }
