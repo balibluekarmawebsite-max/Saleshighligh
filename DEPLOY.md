@@ -113,8 +113,9 @@ automatically; the systemd service picks it up on restart. See
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | Google SSO (email/password works without it) |
 | `UPLOAD_DIR` / `UPLOAD_URL_BASE` | optional | Local image-upload dir + URL base (defaults: `public/uploads`, `/uploads`) |
 | `GROQ_API_KEY` | optional | Groq key for AI data-import extraction (required for the data-push API in §10) |
-| `CRON_SECRET` | optional | Shared secret for the weekly auto-sync endpoint (§9) |
+| `CRON_SECRET` | optional | Shared secret for the weekly auto-sync, daily-report + scraper-check cron endpoints (§9) |
 | `IMPORT_API_TOKEN` | optional | Shared secret for the VHP data-push API (§10). `openssl rand -base64 48` |
+| `SCRAPER_AUTO_RECOVER` | optional | `1` to let the scraper-health check queue a daily re-pull on a missing critical feed. Leave off until the poller handles section-D jobs — see `SCRAPER_MONITORING.md` |
 
 > **Auth rollout switch:** protection and role enforcement turn on **only when
 > `AUTH_SECRET` is set**. Without it the app stays open and every action runs as a

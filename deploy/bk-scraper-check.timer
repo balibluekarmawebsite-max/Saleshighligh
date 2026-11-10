@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the BK scraper-health check every morning (09:00 WITA)
+
+[Timer]
+# A couple of hours after the 07:00 scraper pulls + daily email, so a missing
+# feed is caught — and (when SCRAPER_AUTO_RECOVER is on) a re-pull is queued —
+# while the office PC is still awake.
+OnCalendar=*-*-* 09:00:00 Asia/Makassar
+# Catch up a run the box missed while powered off.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

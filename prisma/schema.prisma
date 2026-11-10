@@ -1268,12 +1268,15 @@ model ScrapeJob {
   id            String    @id @default(cuid())
   /// Property code: BKDS | BKDU | BKV.
   property      String
-  /// Report section: "B" (yearly forecast) | "C" (reservation by creation date).
+  /// Report section: "B" (yearly forecast) | "C" (reservation by creation date)
+  /// | "D" (daily re-pull — re-run the morning Daily Report VHP pull for one day,
+  /// queued by the scraper-health check when a daily feed didn't arrive).
   section       String
-  /// Section C — inclusive date range the scraper sets in VHP.
+  /// Section C/D — the date range the scraper sets in VHP. For "D" start == end
+  /// is the single snapshot day to re-pull.
   startDate     DateTime? @db.Date
   endDate       DateTime? @db.Date
-  /// Section B — target month "YYYY-MM".
+  /// Section B — target month "YYYY-MM" (also set to the snapshot month for "D").
   month         String?
   /// The week key this fills (Thursday end), used as week_ending on upload.
   weekEnding    DateTime? @db.Date
@@ -1482,4 +1485,32 @@ model DailyReportRecipient {
   createdAt DateTime @default(now())
 
   @@map("daily_report_recipients")
+}
+
+/// One run of the scraper-health check (see lib/monitor). Each run records the
+/// ingestion gaps it found, which of those were NEW vs the previous run that day
+/// (so an alert fires once per gap, not on every re-check), any re-scrape jobs it
+/// queued, and whether the alert email went out. Powers the Scraper Health page's
+/// run history and the alert de-duplication. RAW bookkeeping only — nothing here
+/// is a derived metric.
+model ScraperCheckRun {
+  id         String   @id @default(cuid())
+  /// "cron" (scheduled) | "manual" (admin "Run check now").
+  trigger    String   @default("cron")
+  /// The WITA calendar date this run evaluated (yyyy-mm-dd) — gaps are keyed to it.
+  dateWita   String
+  /// All open ingestion gaps at this run: string[] of "CODE:feed:yyyy-mm-dd".
+  openGaps   Json
+  /// Gaps newly seen vs the most recent prior run for the same dateWita.
+  newGaps    Json
+  /// Re-scrape jobs queued this run: [{ key, jobId }] (empty when none / disabled).
+  recovered  Json
+  /// Whether an alert email was sent this run (only when there were new gaps).
+  emailSent  Boolean  @default(false)
+  /// Why the alert email didn't send, when it should have (e.g. SMTP not set).
+  emailError String?
+  ranAt      DateTime @default(now())
+
+  @@index([ranAt])
+  @@map("scraper_check_runs")
 }

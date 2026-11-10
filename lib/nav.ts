@@ -106,6 +106,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { label: "Import", href: "/admin/import", ready: true },
   { label: "Templates", href: "/admin/template", ready: true },
   { label: "Email Delivery", href: "/admin/daily-email", ready: true },
+  { label: "Scraper Health", href: "/admin/scraper", ready: true },
   { label: "Activity", href: "/admin/activity", ready: true },
   { label: "Users", href: "/admin/users", ready: true },
   { label: "Manual Entry", href: "/admin/data", ready: false },

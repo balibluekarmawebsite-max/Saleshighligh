@@ -156,7 +156,9 @@ export async function createScrapeJob(
 
   const prop = await prisma.property.findUnique({ where: { code: property }, select: { id: true } });
   if (!prop) return { ok: false, error: `Unknown property "${input.property}".` };
-  if (section !== "B" && section !== "C") return { ok: false, error: 'Section must be "B" or "C".' };
+  if (section !== "B" && section !== "C" && section !== "D") {
+    return { ok: false, error: 'Section must be "B", "C" or "D".' };
+  }
 
   const date = (s: string | null | undefined): Date | null => {
     if (!s) return null;
@@ -174,6 +176,12 @@ export async function createScrapeJob(
     endDate = date(input.end);
     if (!startDate || !endDate) return { ok: false, error: "Section C needs a valid start and end date (YYYY-MM-DD)." };
     if (startDate > endDate) return { ok: false, error: "Start date must be on or before the end date." };
+  } else if (section === "D") {
+    // Daily re-pull: one snapshot day. start == end; month derived from it.
+    startDate = date(input.start);
+    if (!startDate) return { ok: false, error: "Section D needs a valid snapshot date (YYYY-MM-DD)." };
+    endDate = startDate;
+    month = input.start!.slice(0, 7);
   } else {
     month = (input.month ?? "").trim();
     if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, error: "Section B needs a month (YYYY-MM)." };
@@ -274,9 +282,11 @@ export async function getRecentScrapeJobs(limit = 30): Promise<ScrapeJobView[]> 
     property: j.property,
     section: j.section,
     period:
-      j.section === "C"
-        ? `${ymd(j.startDate) ?? "?"} → ${ymd(j.endDate) ?? "?"}`
-        : j.month ?? "?",
+      j.section === "D"
+        ? ymd(j.startDate) ?? j.month ?? "?"
+        : j.section === "C"
+          ? `${ymd(j.startDate) ?? "?"} → ${ymd(j.endDate) ?? "?"}`
+          : j.month ?? "?",
     status: j.status,
     message: j.message,
     written: j.written,

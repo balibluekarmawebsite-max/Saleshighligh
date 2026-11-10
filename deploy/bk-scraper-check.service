@@ -1,0 +1,22 @@
+# systemd oneshot that runs the scraper-health check: verifies the morning VHP
+# feeds arrived, records any gap, emails the team once per new gap, and (when
+# SCRAPER_AUTO_RECOVER is on) queues a re-pull for the office-PC scraper.
+#
+# Prefer the installer, which fills in the secret + the app path for you:
+#   sudo bash deploy/install-scraper-check.sh
+#
+# Manual install: replace YOUR_CRON_SECRET with the app's CRON_SECRET
+# (grep CRON_SECRET /path/to/.env), then:
+#   sudo cp deploy/bk-scraper-check.service deploy/bk-scraper-check.timer /etc/systemd/system/
+#   sudo chmod 600 /etc/systemd/system/bk-scraper-check.service   # it holds the secret
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bk-scraper-check.timer
+#   systemctl list-timers bk-scraper-check
+
+[Unit]
+Description=BK scraper-health check (daily feeds arrived?)
+After=network.target bk-dashboard.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" http://127.0.0.1:3000/api/cron/scraper-check
