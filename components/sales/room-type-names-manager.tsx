@@ -42,6 +42,13 @@ export function RoomTypeNamesManager({
     return r;
   }, [overview.rows, propFilter, onlyNeeds, query]);
 
+  // Count of codes still needing a name, scoped to the active property filter so
+  // the banner and toggle match what the table below actually shows.
+  const needsNameCount = useMemo(() => {
+    const scoped = propFilter === "ALL" ? overview.rows : overview.rows.filter((x) => x.propertyCode === propFilter);
+    return scoped.filter((x) => x.needsName).length;
+  }, [overview.rows, propFilter]);
+
   function run(p: Promise<{ ok: boolean; message: string }>) {
     setMsg(null);
     start(async () => {
@@ -65,15 +72,17 @@ export function RoomTypeNamesManager({
 
   return (
     <div className="space-y-5">
-      {/* New-code notice */}
-      {overview.needsName > 0 ? (
+      {/* New-code notice (scoped to the active property filter) */}
+      {needsNameCount > 0 ? (
         <div className="rounded-lg border border-[hsl(var(--brand-gold))]/40 bg-[hsl(var(--brand-gold))]/10 p-4 text-sm text-foreground">
-          <strong>{overview.needsName}</strong> room code{overview.needsName === 1 ? "" : "s"} appear in the reports with
-          no name yet — they show as the raw code until you name them below.
+          <strong>{needsNameCount}</strong> room code{needsNameCount === 1 ? "" : "s"}
+          {propFilter === "ALL" ? "" : ` in ${propFilter}`} appear in the reports with no name yet — they show as the raw
+          code until you name them below.
         </div>
       ) : (
         <div className="rounded-lg border border-variance-positive/30 bg-variance-positive/10 p-4 text-sm text-variance-positive">
-          Every room code in the reports has a name. New codes will appear here flagged for naming.
+          No room codes need a name{propFilter === "ALL" ? "" : ` in ${propFilter}`}. New codes will appear here flagged
+          for naming.
         </div>
       )}
 
@@ -150,7 +159,7 @@ export function RoomTypeNamesManager({
                 : "border-border text-muted-foreground hover:text-foreground",
             )}
           >
-            Needs name ({overview.needsName})
+            Needs name ({needsNameCount})
           </button>
         </div>
         <input
