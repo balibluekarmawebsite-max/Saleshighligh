@@ -260,6 +260,66 @@ export const COUNTRY_NAME_BY_CODE: Record<string, string> = {
   ZW: "Zimbabwe",
 };
 
+/** ISO 3166-1 alpha-3 → alpha-2. VHP's Arrival Guest report uses alpha-3. */
+export const ALPHA3_TO_ALPHA2: Record<string, string> = {
+  ABW: "AW", AFG: "AF", AGO: "AO", AIA: "AI", ALA: "AX", ALB: "AL", AND: "AD", ARE: "AE",
+  ARG: "AR", ARM: "AM", ASM: "AS", ATA: "AQ", ATF: "TF", ATG: "AG", AUS: "AU", AUT: "AT",
+  AZE: "AZ", BDI: "BI", BEL: "BE", BEN: "BJ", BES: "BQ", BFA: "BF", BGD: "BD", BGR: "BG",
+  BHR: "BH", BHS: "BS", BIH: "BA", BLM: "BL", BLR: "BY", BLZ: "BZ", BMU: "BM", BOL: "BO",
+  BRA: "BR", BRB: "BB", BRN: "BN", BTN: "BT", BVT: "BV", BWA: "BW", CAF: "CF", CAN: "CA",
+  CCK: "CC", CHE: "CH", CHL: "CL", CHN: "CN", CIV: "CI", CMR: "CM", COD: "CD", COG: "CG",
+  COK: "CK", COL: "CO", COM: "KM", CPV: "CV", CRI: "CR", CUB: "CU", CUW: "CW", CXR: "CX",
+  CYM: "KY", CYP: "CY", CZE: "CZ", DEU: "DE", DJI: "DJ", DMA: "DM", DNK: "DK", DOM: "DO",
+  DZA: "DZ", ECU: "EC", EGY: "EG", ERI: "ER", ESH: "EH", ESP: "ES", EST: "EE", ETH: "ET",
+  FIN: "FI", FJI: "FJ", FLK: "FK", FRA: "FR", FRO: "FO", FSM: "FM", GAB: "GA", GBR: "GB",
+  GEO: "GE", GGY: "GG", GHA: "GH", GIB: "GI", GIN: "GN", GLP: "GP", GMB: "GM", GNB: "GW",
+  GNQ: "GQ", GRC: "GR", GRD: "GD", GRL: "GL", GTM: "GT", GUF: "GF", GUM: "GU", GUY: "GY",
+  HKG: "HK", HMD: "HM", HND: "HN", HRV: "HR", HTI: "HT", HUN: "HU", IDN: "ID", IMN: "IM",
+  IND: "IN", IOT: "IO", IRL: "IE", IRN: "IR", IRQ: "IQ", ISL: "IS", ISR: "IL", ITA: "IT",
+  JAM: "JM", JEY: "JE", JOR: "JO", JPN: "JP", KAZ: "KZ", KEN: "KE", KGZ: "KG", KHM: "KH",
+  KIR: "KI", KNA: "KN", KOR: "KR", KWT: "KW", LAO: "LA", LBN: "LB", LBR: "LR", LBY: "LY",
+  LCA: "LC", LIE: "LI", LKA: "LK", LSO: "LS", LTU: "LT", LUX: "LU", LVA: "LV", MAC: "MO",
+  MAF: "MF", MAR: "MA", MCO: "MC", MDA: "MD", MDG: "MG", MDV: "MV", MEX: "MX", MHL: "MH",
+  MKD: "MK", MLI: "ML", MLT: "MT", MMR: "MM", MNE: "ME", MNG: "MN", MNP: "MP", MOZ: "MZ",
+  MRT: "MR", MSR: "MS", MTQ: "MQ", MUS: "MU", MWI: "MW", MYS: "MY", MYT: "YT", NAM: "NA",
+  NCL: "NC", NER: "NE", NFK: "NF", NGA: "NG", NIC: "NI", NIU: "NU", NLD: "NL", NOR: "NO",
+  NPL: "NP", NRU: "NR", NZL: "NZ", OMN: "OM", PAK: "PK", PAN: "PA", PCN: "PN", PER: "PE",
+  PHL: "PH", PLW: "PW", PNG: "PG", POL: "PL", PRI: "PR", PRK: "KP", PRT: "PT", PRY: "PY",
+  PSE: "PS", PYF: "PF", QAT: "QA", REU: "RE", ROU: "RO", RUS: "RU", RWA: "RW", SAU: "SA",
+  SDN: "SD", SEN: "SN", SGP: "SG", SGS: "GS", SHN: "SH", SJM: "SJ", SLB: "SB", SLE: "SL",
+  SLV: "SV", SMR: "SM", SOM: "SO", SPM: "PM", SRB: "RS", SSD: "SS", STP: "ST", SUR: "SR",
+  SVK: "SK", SVN: "SI", SWE: "SE", SWZ: "SZ", SXM: "SX", SYC: "SC", SYR: "SY", TCA: "TC",
+  TCD: "TD", TGO: "TG", THA: "TH", TJK: "TJ", TKL: "TK", TKM: "TM", TLS: "TL", TON: "TO",
+  TTO: "TT", TUN: "TN", TUR: "TR", TUV: "TV", TWN: "TW", TZA: "TZ", UGA: "UG", UKR: "UA",
+  UMI: "UM", URY: "UY", USA: "US", UZB: "UZ", VAT: "VA", VCT: "VC", VEN: "VE", VGB: "VG",
+  VIR: "VI", VNM: "VN", VUT: "VU", WLF: "WF", WSM: "WS", YEM: "YE", ZAF: "ZA", ZMB: "ZM",
+  ZWE: "ZW",
+};
+
+/** Non-ISO 3-letter codes (IOC/FIFA/PMS) that VHP or other systems may emit.
+ * Only codes that are NOT valid ISO alpha-3 (so they never shadow a real one).
+ * Notably VHP uses INA for Indonesia (the IOC code), not ISO IDN. */
+const ALPHA3_ALIASES: Record<string, string> = {
+  INA: "ID", // Indonesia (IOC) — VHP's code
+  GER: "DE", // Germany (IOC)
+  NED: "NL", // Netherlands (IOC)
+  SUI: "CH", // Switzerland (IOC)
+  DEN: "DK", // Denmark (IOC)
+  RSA: "ZA", // South Africa (IOC)
+  PHI: "PH", // Philippines (IOC)
+  POR: "PT", // Portugal (IOC)
+  CRO: "HR", // Croatia (IOC)
+  VIE: "VN", // Vietnam (IOC)
+  TPE: "TW", // Chinese Taipei (IOC)
+  UAE: "AE", // United Arab Emirates
+  KSA: "SA", // Saudi Arabia
+  GRE: "GR", // Greece (IOC)
+  SLO: "SI", // Slovenia (IOC)
+  BUL: "BG", // Bulgaria (IOC)
+  LAT: "LV", // Latvia (IOC)
+  MAS: "MY", // Malaysia (IOC)
+};
+
 /** Normalise a country name for matching: strip diacritics, drop "and"/"the",
  * fold "Saint"→"St", remove punctuation and spaces, upper-case. */
 export function normalizeCountryName(input: string): string {
@@ -360,6 +420,12 @@ export function resolveCountry(input: string): ResolvedCountry {
   const upper = raw.toUpperCase();
   if (/^[A-Z]{2}$/.test(upper) && COUNTRY_NAME_BY_CODE[upper]) {
     return { code: upper, name: COUNTRY_NAME_BY_CODE[upper]! };
+  }
+
+  // An alpha-3 code (ISO, else a known IOC/PMS alias) — VHP uses these.
+  if (/^[A-Z]{3}$/.test(upper)) {
+    const a2 = ALPHA3_TO_ALPHA2[upper] ?? ALPHA3_ALIASES[upper];
+    if (a2 && COUNTRY_NAME_BY_CODE[a2]) return { code: a2, name: COUNTRY_NAME_BY_CODE[a2]! };
   }
 
   const code = NAME_TO_CODE.get(normalizeCountryName(raw));

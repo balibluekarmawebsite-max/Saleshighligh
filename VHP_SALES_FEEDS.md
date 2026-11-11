@@ -189,6 +189,24 @@ scope**; the LOS distribution is rebuilt from the **MTD** pull. Creates the
 period as DRAFT if new, refuses a FINAL period (409), records ImportHistory + a
 `sales_guest_arrivals_import` audit row.
 
+### Option B — post the raw CSV (simplest for the scraper)
+Instead of building the `arrivals[]` JSON, the scraper can send VHP's exported
+**Arrival Guest CSV verbatim** and the server parses it (header detection,
+alpha-3 nationality resolution incl. VHP's `INA`=Indonesia, `DD/MM/YY` dates,
+`Adult / Child` → guests, cancelled/no-show rows dropped). The `period` and
+`property` are read from the report header when not supplied.
+
+```
+POST /api/sales/guests
+{ "property": "BKDS", "scope": "MTD", "csv": "<the full CSV text>", "source": "vhp:arrival-guest" }
+```
+Add `"lastYearCsv": "<text>"` for the VS-LY comparison. Everything else (scope,
+FINAL lock, idempotent replace) behaves the same as Option A.
+
+**Manual upload:** the same compile is available in the UI at **Admin → Guests
+Import** — choose the CSV, preview the detected period/property + the compiled
+nationality and LOS tables, then import. Good for a one-off or a back-fill.
+
 ### The two pulls (MTD + YTD)
 The page has an **MTD / YTD** toggle, so pull twice:
 1. **MTD** — arrivals **within the report month** (`scope":"MTD"`). This also

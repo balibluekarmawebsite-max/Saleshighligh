@@ -2,7 +2,9 @@ import type { NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { parseArrivalGuestCsv } from "@/lib/sales/arrival-guest-csv";
 import { runGuestArrivalsImport } from "@/lib/sales/guest-arrivals-import";
+import type { RawArrival } from "@/lib/sales/guest-arrivals-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,12 +68,32 @@ export async function POST(req: NextRequest) {
   }
   const b = (body ?? {}) as Record<string, unknown>;
 
+  // Accept either compiled JSON `arrivals[]` or the raw VHP CSV text (`csv`),
+  // which the server parses. The CSV also carries the period + property, used
+  // when the caller doesn't send them explicitly.
+  let property = String(b.property ?? "");
+  let period = String(b.period ?? "");
+  let arrivals: RawArrival[] = Array.isArray(b.arrivals) ? (b.arrivals as RawArrival[]) : [];
+  let lastYearArrivals: RawArrival[] | undefined = Array.isArray(b.lastYearArrivals)
+    ? (b.lastYearArrivals as RawArrival[])
+    : undefined;
+
+  if (typeof b.csv === "string" && b.csv.trim()) {
+    const parsed = parseArrivalGuestCsv(b.csv);
+    arrivals = parsed.arrivals;
+    if (!period && parsed.meta.periodHint) period = parsed.meta.periodHint;
+    if (!property && parsed.meta.propertyHint) property = parsed.meta.propertyHint;
+  }
+  if (typeof b.lastYearCsv === "string" && b.lastYearCsv.trim()) {
+    lastYearArrivals = parseArrivalGuestCsv(b.lastYearCsv).arrivals;
+  }
+
   const result = await runGuestArrivalsImport({
-    property: String(b.property ?? ""),
-    period: String(b.period ?? ""),
+    property,
+    period,
     scope: b.scope ? String(b.scope) : undefined,
-    arrivals: Array.isArray(b.arrivals) ? (b.arrivals as never[]) : [],
-    lastYearArrivals: Array.isArray(b.lastYearArrivals) ? (b.lastYearArrivals as never[]) : undefined,
+    arrivals,
+    lastYearArrivals,
     source: b.source ? String(b.source) : undefined,
   });
   return Response.json(result.body, { status: result.status });

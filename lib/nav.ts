@@ -109,6 +109,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { label: "Scraper Health", href: "/admin/scraper", ready: true },
   { label: "Account Segments", href: "/admin/account-segments", ready: true },
   { label: "Room Type Names", href: "/admin/room-types", ready: true },
+  { label: "Guests Import", href: "/admin/guests-import", ready: true },
   { label: "Activity", href: "/admin/activity", ready: true },
   { label: "Users", href: "/admin/users", ready: true },
   { label: "Manual Entry", href: "/admin/data", ready: false },
