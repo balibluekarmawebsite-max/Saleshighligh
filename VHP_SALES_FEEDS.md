@@ -137,5 +137,77 @@ Room-Nights-Mix populate from the push.
 
 ---
 
-_More sections (Nationality, LOS, Booking Pace) will follow the same pattern as
-they're wired up._
+## 3. Guests, Geography & Length of Stay — `POST /api/sales/guests`
+
+**Source:** VHP **Arrival Guest** report —
+`https://e1-vhp.com/fr/report/arrival-guest`. Unlike the other feeds this one is
+**RAW** — send one row per arrival/reservation and the **server compiles** it
+into nationality room-nights and the length-of-stay distribution. No aggregation
+on the scraper side.
+
+**Dashboard section:** Rooms Analytics → Guests & Geography (nationality table +
+world map, Top-10, and Length of Stay).
+
+### Request
+
+```
+POST https://dashboard.bluekarmasecrets.com/api/sales/guests
+Authorization: Bearer <SALES_API_TOKEN | IMPORT_API_TOKEN>
+Content-Type: application/json
+
+{
+  "property": "BKDS",
+  "period": "2026-06",
+  "scope": "MTD",
+  "arrivals": [
+    { "country": "Australia", "arrival": "2026-06-01", "departure": "2026-06-05", "rooms": 1, "guests": 2 },
+    { "country": "United Kingdom", "arrival": "2026-06-02", "departure": "2026-06-04", "rooms": 1, "guests": 2 },
+    { "country": "FR", "nights": 3, "rooms": 1, "guests": 2 }
+  ],
+  "lastYearArrivals": [
+    { "country": "Australia", "nights": 3, "rooms": 1 }
+  ],
+  "source": "vhp:arrival-guest"
+}
+```
+
+| Field | Meaning |
+| ----- | ------- |
+| `property` | `BKDS` / `BKDU` / `BKV`. |
+| `period` | Report month `YYYY-MM`. |
+| `scope` | `MTD` (the month, default) or `YTD` (Jan→month). See the two-pull note. |
+| `arrivals[].country` | Nationality — a country **name** (any spelling: `USA`, `UK`, `South Korea`…) **or** an ISO alpha-2 code (`AU`, `FR`). |
+| `arrivals[].arrival` / `.departure` | Stay dates `YYYY-MM-DD` — nights are derived from these… |
+| `arrivals[].nights` | …or send nights directly (then dates aren't needed). |
+| `arrivals[].rooms` | Rooms on the reservation (default `1`). Room nights = nights × rooms. |
+| `arrivals[].guests` | Pax (optional). |
+| `lastYearArrivals` | **Optional.** Same window a year earlier, same row shape — fills the **VS LY** column and rank movement. Omit for no comparison. |
+
+**Behaviour:** compiles the raw rows (merging by resolved country, 7+-capped LOS
+buckets), then **replaces** that period's nationality rows **for the given
+scope**; the LOS distribution is rebuilt from the **MTD** pull. Creates the
+period as DRAFT if new, refuses a FINAL period (409), records ImportHistory + a
+`sales_guest_arrivals_import` audit row.
+
+### The two pulls (MTD + YTD)
+The page has an **MTD / YTD** toggle, so pull twice:
+1. **MTD** — arrivals **within the report month** (`scope":"MTD"`). This also
+   builds the Length-of-Stay section.
+2. **YTD** — arrivals from **Jan 1 → the report month's end** (`"scope":"YTD"`).
+   Only needed to populate the YTD toggle; LOS is untouched.
+
+Each pull is independent and idempotent (re-send safely).
+
+### Verify
+```
+GET https://dashboard.bluekarmasecrets.com/api/sales/guests?property=BKDS&period=2026-06&scope=MTD
+Authorization: Bearer <token>
+```
+Returns the compiled nationality rows (room nights, guests, vs-LY) and the LOS
+buckets. Then open **Rooms Analytics → Guests & Geography** for that
+property/month.
+
+---
+
+_More sections (Booking Pace & Forecast) will follow the same pattern as they're
+wired up._
