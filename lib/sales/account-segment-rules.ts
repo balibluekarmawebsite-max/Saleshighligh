@@ -8,7 +8,13 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { accountKey } from "@/lib/sales/account-segments";
+import {
+  accountKey,
+  classifySegment,
+  DEFAULT_SEGMENT,
+  EXCLUDE_SEGMENT,
+  normalizeSegmentCode,
+} from "@/lib/sales/account-segments";
 
 export interface SegmentRuleView {
   id: string;
@@ -67,5 +73,95 @@ export async function deleteSegmentRule(id: string): Promise<{ ok: boolean; mess
     return { ok: true, message: "Rule removed." };
   } catch {
     return { ok: false, message: "Could not remove (already gone?)." };
+  }
+}
+
+export interface AccountOverviewRow {
+  accountName: string;
+  /** Resolved segment code (a saved rule, else name classification). */
+  segment: string;
+  hasRule: boolean;
+  ruleId: string | null;
+  /** No rule AND the classifier fell back to the default — a likely new agent. */
+  needsReview: boolean;
+  /** Appears in a report's account production (vs. a rule-only entry). */
+  inData: boolean;
+}
+
+export interface AccountSegmentOverview {
+  rows: AccountOverviewRow[];
+  total: number;
+  noRule: number;
+  needsReview: number;
+}
+
+/** Every account seen across all reports, merged with the saved rules, so the
+ * admin can assign a segment to each (and spot new/unassigned agents). */
+export async function getAccountSegmentOverview(): Promise<AccountSegmentOverview> {
+  let names: string[] = [];
+  try {
+    const rows = await prisma.accountProduction.findMany({
+      distinct: ["accountName"],
+      select: { accountName: true },
+      orderBy: { accountName: "asc" },
+    });
+    names = rows.map((r) => r.accountName);
+  } catch {
+    names = [];
+  }
+  const rules = await listSegmentRules();
+  const ruleByKey = new Map(rules.map((r) => [accountKey(r.accountName), r]));
+
+  const map = new Map<string, AccountOverviewRow>();
+  const add = (name: string, inData: boolean) => {
+    const key = accountKey(name);
+    if (!key) return;
+    const existing = map.get(key);
+    if (existing) {
+      existing.inData = existing.inData || inData;
+      return;
+    }
+    const rule = ruleByKey.get(key);
+    const classified = classifySegment(name);
+    const segment = rule ? normalizeSegmentCode(rule.segment) ?? rule.segment : classified;
+    map.set(key, {
+      accountName: name,
+      segment,
+      hasRule: !!rule,
+      ruleId: rule?.id ?? null,
+      needsReview: !rule && classified === DEFAULT_SEGMENT,
+      inData,
+    });
+  };
+  for (const n of names) add(n, true);
+  for (const r of rules) add(r.accountName, false);
+
+  const rows = [...map.values()].sort(
+    (a, b) => Number(b.needsReview) - Number(a.needsReview) || a.accountName.localeCompare(b.accountName),
+  );
+  return {
+    rows,
+    total: rows.length,
+    noRule: rows.filter((r) => !r.hasRule).length,
+    needsReview: rows.filter((r) => r.needsReview).length,
+  };
+}
+
+/** Create a saved rule for every currently auto-classified account, using its
+ * resolved segment — so the list becomes "full" in one click. Returns the count. */
+export async function assignAllAuto(): Promise<{ ok: boolean; message: string; assigned: number }> {
+  try {
+    const { rows } = await getAccountSegmentOverview();
+    const auto = rows.filter((r) => !r.hasRule && r.segment !== EXCLUDE_SEGMENT);
+    for (const r of auto) {
+      await prisma.accountSegmentRule.upsert({
+        where: { accountKey: accountKey(r.accountName) },
+        create: { accountKey: accountKey(r.accountName), accountName: r.accountName, segment: r.segment },
+        update: { accountName: r.accountName, segment: r.segment },
+      });
+    }
+    return { ok: true, message: `Assigned ${auto.length} account(s) to their current segment.`, assigned: auto.length };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not assign.", assigned: 0 };
   }
 }

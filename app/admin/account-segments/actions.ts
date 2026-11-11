@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentUser, isAdmin } from "@/lib/auth-helpers";
-import { deleteSegmentRule, upsertSegmentRule } from "@/lib/sales/account-segment-rules";
+import { assignAllAuto, deleteSegmentRule, upsertSegmentRule } from "@/lib/sales/account-segment-rules";
 
 export interface RuleActionResult {
   ok: boolean;
@@ -26,4 +26,13 @@ export async function removeSegmentRuleAction(id: string): Promise<RuleActionRes
   const r = await deleteSegmentRule(id);
   if (r.ok) revalidatePath("/admin/account-segments");
   return r;
+}
+
+/** Admin-only: save a rule for every auto-classified account (make the list full). */
+export async function assignAllAutoAction(): Promise<RuleActionResult> {
+  const user = await getCurrentUser();
+  if (!isAdmin(user)) return { ok: false, message: "Only admins can manage segments." };
+  const r = await assignAllAuto();
+  if (r.ok) revalidatePath("/admin/account-segments");
+  return { ok: r.ok, message: r.message };
 }
