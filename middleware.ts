@@ -47,5 +47,5 @@ export const config = {
   // headless-browser fetch can reach it), and /uploads (static user images,
   // served by unguessable key — the PDF exporter loads them as <img>
   // sub-resources without a session).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth|api/cron|api/import|api/jobs|api/daily).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|print|uploads|api/auth|api/cron|api/import|api/jobs|api/daily|api/sales).*)"],
 };
