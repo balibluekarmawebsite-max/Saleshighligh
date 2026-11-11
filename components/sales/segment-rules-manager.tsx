@@ -8,8 +8,23 @@ import {
   saveSegmentRuleAction,
 } from "@/app/admin/account-segments/actions";
 import type { AccountSegmentOverview } from "@/lib/sales/account-segment-rules";
-import { SEGMENT_OPTIONS, segmentLabel } from "@/lib/sales/account-segments";
+import { SEGMENT_OPTION_GROUPS, SEGMENT_OPTIONS, segmentLabel } from "@/lib/sales/account-segments";
 import { cn } from "@/lib/utils";
+
+/** Grouped (FIT / GIT / Other) <option>s for a segment picker. */
+function SegmentOptions() {
+  return (
+    <>
+      {SEGMENT_OPTION_GROUPS.map((g) => (
+        <optgroup key={g.group} label={g.group}>
+          {g.options.map((o) => (
+            <option key={o.code} value={o.code}>{o.label}</option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
+}
 
 type FilterKey = "all" | "review" | "norule" | "rule";
 
@@ -104,9 +119,7 @@ export function SegmentRulesManager({ overview, canEdit }: { overview: AccountSe
               onChange={(e) => setAddSeg(e.target.value)}
               className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm text-foreground focus:border-brand-teal focus:outline-none"
             >
-              {SEGMENT_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>{o.label}</option>
-              ))}
+              <SegmentOptions />
             </select>
           </label>
           <button
@@ -172,9 +185,7 @@ export function SegmentRulesManager({ overview, canEdit }: { overview: AccountSe
                         onChange={(e) => setChoice((c) => ({ ...c, [key]: e.target.value }))}
                         className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground focus:border-brand-teal focus:outline-none disabled:opacity-50"
                       >
-                        {SEGMENT_OPTIONS.map((o) => (
-                          <option key={o.code} value={o.code}>{o.label}</option>
-                        ))}
+                        <SegmentOptions />
                       </select>
                     ) : (
                       <span className="text-muted-foreground">{segmentLabel(r.segment)}</span>
