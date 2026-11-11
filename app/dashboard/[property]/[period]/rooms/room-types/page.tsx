@@ -1,20 +1,15 @@
 import { notFound } from "next/navigation";
 
-import { RevenueBulletList } from "@/components/charts/revenue-bullet-list";
-import {
-  RoomTypeQuadrantChart,
-  type QuadrantPoint,
-} from "@/components/charts/room-type-quadrant-chart";
+import { RevenueMixChart } from "@/components/charts/revenue-mix-chart";
 import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ExportableCard } from "@/components/dashboard/exportable-card";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { RoomTypeTable } from "@/components/tables/room-type-table";
-import { achievementPct } from "@/lib/calculations";
 import { GROUP_CODE, getRoomTypesPageData } from "@/lib/dashboard-data";
 import { formatIDR, formatIDRCompact, formatNumber, formatPercent } from "@/lib/format";
-import { periodLabel } from "@/lib/labels";
+import { periodLabel, shortSegment } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
@@ -34,46 +29,28 @@ export default async function RoomTypesPage({
     return (
       <EmptyState
         title={`No room-type data for ${params.property} · ${periodLabel(params.period)}`}
-        message="Import the monthly workbook (ROOMTYPE tab) to populate this page."
+        message="The VHP Forecast Room-by-Room-Type feed (or the monthly workbook) populates this page."
         actionHref="/admin/import"
         actionLabel="Import data"
       />
     );
   }
 
-  const rooms = data.roomTypes;
+  const rooms = data.roomTypes; // sorted by revenue desc
+  const top = rooms[0]!;
+  const topAdr = [...rooms].sort((a, b) => b.adrActual - a.adrActual)[0]!;
+  const totalRev = rooms.reduce((s, r) => s + r.revenueActual, 0);
+  const totalRN = rooms.reduce((s, r) => s + r.roomNightsActual, 0);
+  const blendedAdr = totalRN > 0 ? totalRev / totalRN : 0;
 
-  // Quadrant points (skip rows with a zero budget denominator).
-  const points: QuadrantPoint[] = rooms
-    .map((r) => {
-      const x = achievementPct(r.roomNightsActual, r.roomNightsBudget);
-      const y = achievementPct(r.adrActual, r.adrBudget);
-      if (x === null || y === null) return null;
-      return { name: r.roomTypeName, x, y, z: r.revenueActual };
-    })
-    .filter((p): p is QuadrantPoint => p !== null);
-
-  // Rule-based insights.
-  const withGap = rooms.map((r) => ({ ...r, gap: r.revenueActual - r.revenueBudget }));
-  const best = [...withGap].sort((a, b) => b.gap - a.gap)[0]!;
-  const worst = [...withGap].sort((a, b) => a.gap - b.gap)[0]!;
-  const totalA = rooms.reduce((s, r) => s + r.revenueActual, 0);
-  const totalB = rooms.reduce((s, r) => s + r.revenueBudget, 0);
-  const totalGap = totalA - totalB;
-  const contributors = [...withGap]
-    .filter((r) => r.gap < 0)
-    .sort((a, b) => a.gap - b.gap)
-    .slice(0, 2);
-
-  const bestAch = achievementPct(best.revenueActual, best.revenueBudget);
   const insights = [
-    `Best performing: ${best.roomTypeName} — ${bestAch === null ? "—" : formatPercent(bestAch)} of budget (${formatIDRCompact(best.revenueActual)}).`,
-    `Largest deficit: ${worst.roomTypeName}: ${worst.gap < 0 ? "−" : "+"}${formatIDRCompact(Math.abs(worst.gap))}, driven by RN ${formatNumber(worst.roomNightsActual)} vs ${formatNumber(worst.roomNightsBudget)} and ADR ${formatIDRCompact(worst.adrActual)} vs ${formatIDRCompact(worst.adrBudget)}.`,
-    `Overall: total room revenue ${formatIDR(totalA)} vs budget ${formatIDR(totalB)} — gap ${totalGap < 0 ? "−" : "+"}${formatIDRCompact(Math.abs(totalGap))}.` +
-      (contributors.length > 0
-        ? ` Top gap contributors: ${contributors.map((c) => `${c.roomTypeName} (−${formatIDRCompact(Math.abs(c.gap))})`).join(", ")}.`
-        : ""),
+    `Top revenue: ${top.roomTypeName} — ${formatIDRCompact(top.revenueActual)} (${formatPercent(top.pctOfRevenue)} of room revenue).`,
+    `Highest ADR: ${topAdr.roomTypeName} at ${formatIDR(topAdr.adrActual)}.`,
+    `Total: ${formatNumber(totalRN)} room nights · ${formatIDR(totalRev)} revenue · blended ADR ${formatIDR(blendedAdr)}.`,
   ];
+
+  const revMix = rooms.filter((r) => r.revenueActual > 0).map((r) => ({ label: shortSegment(r.roomTypeName), value: r.revenueActual }));
+  const rnMix = rooms.filter((r) => r.roomNightsActual > 0).map((r) => ({ label: shortSegment(r.roomTypeName), value: r.roomNightsActual }));
 
   const fileBase = `${data.property.code}-${params.period}-room-types`;
 
@@ -90,7 +67,7 @@ export default async function RoomTypesPage({
 
       <ExportableCard
         title="Room Type Production"
-        description="Room nights, ADR and revenue vs budget"
+        description="Room nights, ADR and revenue"
         fileName={`${fileBase}-table`}
       >
         <RoomTypeTable rows={rooms} />
@@ -98,32 +75,31 @@ export default async function RoomTypesPage({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ExportableCard
-          title="Revenue vs Budget"
-          description="Actual bar with budget target marker"
-          fileName={`${fileBase}-bullets`}
+          title="Revenue by Room Type"
+          description="Share of room revenue"
+          fileName={`${fileBase}-revenue-mix`}
         >
-          <RevenueBulletList
-            items={rooms.map((r) => ({ label: r.roomTypeName, actual: r.revenueActual, budget: r.revenueBudget }))}
-          />
+          {revMix.length > 0 ? (
+            <RevenueMixChart data={revMix} valueFormat="idr" />
+          ) : (
+            <p className="text-sm text-muted-foreground">No revenue data.</p>
+          )}
         </ExportableCard>
 
         <ExportableCard
-          title="RN vs ADR Achievement"
-          description="Bubble size = revenue; quadrants classify each room type"
-          fileName={`${fileBase}-quadrant`}
+          title="Room Nights Mix"
+          description="Share of room nights by room type"
+          fileName={`${fileBase}-rn-mix`}
         >
-          {points.length > 0 ? (
-            <RoomTypeQuadrantChart points={points} />
+          {rnMix.length > 0 ? (
+            <RevenueMixChart data={rnMix} valueFormat="number" />
           ) : (
-            <p className="text-sm text-muted-foreground">Not enough data to plot quadrants.</p>
+            <p className="text-sm text-muted-foreground">No room-night data.</p>
           )}
         </ExportableCard>
       </div>
 
-      <SectionCard
-        title="Room Type Analysis"
-        description="Auto-generated from the numbers — no AI"
-      >
+      <SectionCard title="Room Type Analysis" description="Auto-generated from the numbers — no AI">
         <ul className="list-disc space-y-2 pl-5 text-sm text-foreground">
           {insights.map((line, i) => (
             <li key={i}>{line}</li>

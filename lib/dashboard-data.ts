@@ -686,16 +686,18 @@ export async function getRoomTypesPageData(
     return { ...base, hasData: false, status: null, roomTypes: [], narrative: null };
   }
 
+  const rtTotalRevenue = rp.roomTypeProduction.reduce((s, r) => s + r.revenueActual.toNumber(), 0);
   const roomTypes: RoomTypeRow[] = rp.roomTypeProduction
-    .map((r) => ({
-      roomTypeName: r.roomTypeName,
-      roomNightsActual: r.roomNightsActual,
-      roomNightsBudget: r.roomNightsBudget,
-      adrActual: r.adrActual.toNumber(),
-      adrBudget: r.adrBudget.toNumber(),
-      revenueActual: r.revenueActual.toNumber(),
-      revenueBudget: r.revenueBudget.toNumber(),
-    }))
+    .map((r) => {
+      const revenue = r.revenueActual.toNumber();
+      return {
+        roomTypeName: r.roomTypeName,
+        roomNightsActual: r.roomNightsActual,
+        adrActual: r.adrActual.toNumber(),
+        revenueActual: revenue,
+        pctOfRevenue: rtTotalRevenue > 0 ? (revenue / rtTotalRevenue) * 100 : 0,
+      };
+    })
     .sort((a, b) => b.revenueActual - a.revenueActual);
 
   const narr = rp.narrativeContent[0];
@@ -2056,11 +2058,9 @@ export async function getPlansPageData(
 export interface RoomTypeRow {
   roomTypeName: string;
   roomNightsActual: number;
-  roomNightsBudget: number;
   adrActual: number;
-  adrBudget: number;
   revenueActual: number;
-  revenueBudget: number;
+  pctOfRevenue: number;
 }
 
 export interface NationalityRow {
@@ -2171,16 +2171,18 @@ export async function getRoomsSummary(
       Math.max(a.actualRevenue, a.budgetRevenue),
   );
 
+  const rtTotalRevenue = rp.roomTypeProduction.reduce((s, r) => s + r.revenueActual.toNumber(), 0);
   const roomTypes: RoomTypeRow[] = rp.roomTypeProduction
-    .map((r) => ({
-      roomTypeName: r.roomTypeName,
-      roomNightsActual: r.roomNightsActual,
-      roomNightsBudget: r.roomNightsBudget,
-      adrActual: r.adrActual.toNumber(),
-      adrBudget: r.adrBudget.toNumber(),
-      revenueActual: r.revenueActual.toNumber(),
-      revenueBudget: r.revenueBudget.toNumber(),
-    }))
+    .map((r) => {
+      const revenue = r.revenueActual.toNumber();
+      return {
+        roomTypeName: r.roomTypeName,
+        roomNightsActual: r.roomNightsActual,
+        adrActual: r.adrActual.toNumber(),
+        revenueActual: revenue,
+        pctOfRevenue: rtTotalRevenue > 0 ? (revenue / rtTotalRevenue) * 100 : 0,
+      };
+    })
     .sort((a, b) => b.revenueActual - a.revenueActual);
 
   const nationalities: NationalityRow[] = rp.nationality.map((n, i) => ({

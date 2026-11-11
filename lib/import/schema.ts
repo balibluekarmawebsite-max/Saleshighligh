@@ -94,11 +94,12 @@ export const DOMAINS: DomainSpec[] = [
     columns: [
       { key: "roomTypeName", header: "Room Type", type: "string", required: true, example: "Deluxe Room" },
       { key: "roomNightsActual", header: "Room Nights Actual", type: "int", required: true, example: 210 },
-      { key: "roomNightsBudget", header: "Room Nights Budget", type: "int", required: true, example: 230 },
       { key: "adrActual", header: "ADR Actual", type: "decimal", required: true, example: 1650000 },
-      { key: "adrBudget", header: "ADR Budget", type: "decimal", required: true, example: 1900000 },
       { key: "revenueActual", header: "Revenue Actual", type: "decimal", required: true, example: 346500000 },
-      { key: "revenueBudget", header: "Revenue Budget", type: "decimal", required: true, example: 437000000 },
+      // Budget is optional — the report is actuals-only now.
+      { key: "roomNightsBudget", header: "Room Nights Budget", type: "int", example: 230 },
+      { key: "adrBudget", header: "ADR Budget", type: "decimal", example: 1900000 },
+      { key: "revenueBudget", header: "Revenue Budget", type: "decimal", example: 437000000 },
     ],
   },
   {

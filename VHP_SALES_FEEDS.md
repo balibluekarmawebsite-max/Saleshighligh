@@ -84,5 +84,58 @@ Production (YTD)* table reflects the push.
 
 ---
 
-_More sections (Market Segment, Room Types, Nationality, LOS, Booking Pace) will
-follow the same pattern as they're wired up._
+## 2. Room Types — `POST /api/sales/room-types`
+
+**Source:** VHP **Forecast Room by Room Type** report —
+`https://e1-vhp.com/fr/report/forecast-room-by-room-type`, pulled for the
+**report month** (e.g. June 2026 → that month's room-type production).
+
+**Dashboard section:** Rooms Analytics → Room Types. **Actuals only** — the
+report no longer shows budget, so none is needed.
+
+### Request
+
+```
+POST https://dashboard.bluekarmasecrets.com/api/sales/room-types
+Authorization: Bearer <SALES_API_TOKEN | IMPORT_API_TOKEN>
+Content-Type: application/json
+
+{
+  "property": "BKDS",
+  "period": "2026-06",
+  "roomTypes": [
+    { "roomType": "Deluxe Room",   "roomNights": 210, "adr": 1650000, "revenue": 346500000 },
+    { "roomType": "Premier Suite", "roomNights": 120, "adr": 2100000, "revenue": 252000000 },
+    { "roomType": "Pool Villa",    "roomNights": 90,  "adr": 2600000, "revenue": 234000000 },
+    { "roomType": "Family Villa",  "roomNights": 34,  "adr": 2200000, "revenue": 74800000 }
+  ],
+  "source": "vhp:forecast-room-by-room-type"
+}
+```
+
+| Field | Meaning |
+| ----- | ------- |
+| `property` | `BKDS` / `BKDU` / `BKV`. |
+| `period` | The report month `YYYY-MM`. |
+| `roomTypes[].roomType` | Room-type name as VHP shows it. |
+| `roomTypes[].roomNights` | Room nights sold (integer). |
+| `roomTypes[].adr` | **Optional** — the dashboard derives revenue ÷ room-nights if omitted. |
+| `roomTypes[].revenue` | Room revenue, IDR (separators ok). |
+
+**Behaviour:** replaces that month's room-type rows (idempotent), sums any
+duplicate room-type names, derives ADR, creates the period as DRAFT if new,
+refuses a FINAL period (409), records ImportHistory + a
+`sales_room_type_import` audit row.
+
+### Verify
+```
+GET https://dashboard.bluekarmasecrets.com/api/sales/room-types?property=BKDS&period=2026-06
+Authorization: Bearer <token>
+```
+Then open **Rooms Analytics → Room Types** — the table, Revenue-by-Room-Type and
+Room-Nights-Mix populate from the push.
+
+---
+
+_More sections (Nationality, LOS, Booking Pace) will follow the same pattern as
+they're wired up._

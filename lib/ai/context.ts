@@ -101,12 +101,10 @@ async function roomTypeContext(code: string, period: string) {
   return {
     roomTypes: d.roomTypes.map((r) => ({
       roomType: r.roomTypeName,
-      roomNights: countAB({ actual: r.roomNightsActual, budget: r.roomNightsBudget }),
-      adr: moneyAB({ actual: r.adrActual, budget: r.adrBudget }),
-      revenue: {
-        ...moneyAB({ actual: r.revenueActual, budget: r.revenueBudget }),
-        gapVsBudget: money(r.revenueActual - r.revenueBudget),
-      },
+      roomNights: r.roomNightsActual,
+      adr: money(r.adrActual),
+      revenue: money(r.revenueActual),
+      shareOfRevenue: `${r.pctOfRevenue.toFixed(1)}%`,
     })),
   };
 }

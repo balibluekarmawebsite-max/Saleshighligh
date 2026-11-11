@@ -232,16 +232,14 @@ async function roomsSection(pptx: Pptx, code: string, period: string) {
   const rt = await getRoomTypesPageData(code, period);
   const rtSlide = contentSlide(pptx, "Room Type Analytics", periodLabel(period));
   if (rt && rt.hasData && rt.roomTypes.length > 0) {
-    const rows: Cell[][] = [[head("Room Type"), head("RN Act", "right"), head("RN Bud", "right"), head("ADR Act", "right"), head("ADR Bud", "right"), head("Rev Act", "right"), head("Ach %", "right")]];
+    const rows: Cell[][] = [[head("Room Type"), head("Room Nights", "right"), head("ADR", "right"), head("Revenue", "right"), head("% Rev", "right")]];
     for (const r of rt.roomTypes.slice(0, 12)) {
       rows.push([
         td(r.roomTypeName),
         td(num(r.roomNightsActual), "right"),
-        td(num(r.roomNightsBudget), "right"),
         td(money(r.adrActual), "right"),
-        td(money(r.adrBudget), "right"),
         td(money(r.revenueActual), "right"),
-        td(pct(achievementPct(r.revenueActual, r.revenueBudget)), "right"),
+        td(`${r.pctOfRevenue.toFixed(1)}%`, "right"),
       ]);
     }
     addTable(rtSlide, rows);

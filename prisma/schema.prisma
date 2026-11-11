@@ -239,15 +239,17 @@ model SegmentProduction {
 
 /// Room production by room type (actual vs budget).
 model RoomTypeProduction {
-  id               String  @id @default(cuid())
+  id               String   @id @default(cuid())
   periodId         String
   roomTypeName     String
   roomNightsActual Int
-  roomNightsBudget Int
-  adrActual        Decimal @db.Decimal(18, 2)
-  adrBudget        Decimal @db.Decimal(18, 2)
-  revenueActual    Decimal @db.Decimal(18, 2)
-  revenueBudget    Decimal @db.Decimal(18, 2)
+  adrActual        Decimal  @db.Decimal(18, 2)
+  revenueActual    Decimal  @db.Decimal(18, 2)
+  // Budget is optional — the report shows actuals only (the VHP room-type feed
+  // doesn't carry budget). Kept nullable for legacy workbook imports.
+  roomNightsBudget Int?
+  adrBudget        Decimal? @db.Decimal(18, 2)
+  revenueBudget    Decimal? @db.Decimal(18, 2)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

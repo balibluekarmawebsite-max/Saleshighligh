@@ -166,8 +166,8 @@ export default async function PrintPage({
       {show("rooms") && roomTypes?.hasData && roomTypes.roomTypes.length > 0 && (
         <Section title="Room Type Analytics">
           <Table
-            head={["Room Type", "RN Act", "RN Bud", "ADR Act", "ADR Bud", "Rev Act", "Ach %"]}
-            rows={roomTypes.roomTypes.map((r) => [r.roomTypeName, num(r.roomNightsActual), num(r.roomNightsBudget), money(r.adrActual), money(r.adrBudget), money(r.revenueActual), pct(achievementPct(r.revenueActual, r.revenueBudget))])}
+            head={["Room Type", "Room Nights", "ADR", "Revenue", "% Rev"]}
+            rows={roomTypes.roomTypes.map((r) => [r.roomTypeName, num(r.roomNightsActual), money(r.adrActual), money(r.revenueActual), `${r.pctOfRevenue.toFixed(1)}%`])}
           />
           <Prose text={roomTypes.narrative?.content} />
         </Section>
