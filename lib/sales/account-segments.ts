@@ -40,8 +40,15 @@ export function accountKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** The options offered in the admin segment picker: the registry + Exclude. */
+export const SEGMENT_OPTIONS: SegmentDef[] = [
+  ...SEGMENTS,
+  { code: EXCLUDE_SEGMENT, label: "Exclude (hide from report)" },
+];
+
 /** Human label for a segment code (falls back to the raw code). */
 export function segmentLabel(code: string): string {
+  if (code === EXCLUDE_SEGMENT) return "Excluded";
   return SEGMENT_LABEL[code] ?? code;
 }
 

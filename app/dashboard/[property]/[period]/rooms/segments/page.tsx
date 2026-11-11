@@ -7,8 +7,10 @@ import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { ExportableCard } from "@/components/dashboard/exportable-card";
 import { SectionCard } from "@/components/dashboard/section-card";
+import { MarketSegmentUploader } from "@/components/sales/market-segment-uploader";
 import { AccountProductionTable } from "@/components/tables/account-production-table";
 import { SegmentPerformanceTable } from "@/components/tables/segment-performance-table";
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { GROUP_CODE, getSegmentsPageData } from "@/lib/dashboard-data";
 import { formatIDR } from "@/lib/format";
 import { periodLabel, shortSegment } from "@/lib/labels";
@@ -30,7 +32,12 @@ export default async function SegmentsPage({
   const data = await getSegmentsPageData(params.property, params.period, scope);
   if (!data) notFound();
 
-  if (!data.hasData) {
+  const me = await getCurrentUser();
+  const canEdit = canEditProperty(me, params.property);
+
+  // Viewers with nothing to show get the import prompt; editors get the page
+  // (with the AI uploader) so they can populate the month even from empty.
+  if (!data.hasData && !canEdit) {
     return (
       <EmptyState
         title={`No data for ${params.property} · ${periodLabel(params.period)}`}
@@ -88,6 +95,14 @@ export default async function SegmentsPage({
       </div>
 
       {/* Market Segment Performance */}
+      {canEdit && (
+        <MarketSegmentUploader
+          property={params.property}
+          period={params.period}
+          scope={scope}
+          hasData={data.segments.length > 0}
+        />
+      )}
       <ExportableCard
         title="Market Segment Performance"
         description={`This Year vs Budget vs Last Year — ${scope}`}
