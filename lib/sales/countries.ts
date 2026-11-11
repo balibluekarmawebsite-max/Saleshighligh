@@ -411,10 +411,22 @@ export interface ResolvedCountry {
   name: string;
 }
 
-/** Resolve a VHP nationality (alpha-2 code OR a country name) to { code, name }. */
+/** Missing/unknown-nationality placeholders (normalised). Checked BEFORE the
+ * alpha-2 lookup because "NA" is both Namibia's ISO code and the near-universal
+ * PMS token for a blank nationality — VHP sends real countries as alpha-3
+ * ("NAM" for Namibia), so a bare "NA" here is the unknown sentinel. */
+const PLACEHOLDER_NORMS = new Set([
+  "NA", "NAN", "NONE", "NIL", "UNK", "UNKNOWN", "UNDEFINED", "NULL", "TBA", "TBD", "XX", "XXX", "ZZ", "ZZZ",
+]);
+
+/** Resolve a VHP nationality (alpha-2/alpha-3 code OR a country name) to
+ * { code, name }. Unknown-nationality placeholders resolve to {null, "Unknown"}. */
 export function resolveCountry(input: string): ResolvedCountry {
   const raw = String(input ?? "").trim();
   if (!raw) return { code: null, name: "" };
+
+  const norm = normalizeCountryName(raw);
+  if (!norm || PLACEHOLDER_NORMS.has(norm)) return { code: null, name: "Unknown" };
 
   // An explicit alpha-2 code.
   const upper = raw.toUpperCase();
@@ -428,7 +440,7 @@ export function resolveCountry(input: string): ResolvedCountry {
     if (a2 && COUNTRY_NAME_BY_CODE[a2]) return { code: a2, name: COUNTRY_NAME_BY_CODE[a2]! };
   }
 
-  const code = NAME_TO_CODE.get(normalizeCountryName(raw));
+  const code = NAME_TO_CODE.get(norm);
   if (code) return { code, name: COUNTRY_NAME_BY_CODE[code]! };
 
   return { code: null, name: raw };

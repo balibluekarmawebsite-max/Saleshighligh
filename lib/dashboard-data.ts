@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { periodMonthShort } from "@/lib/labels";
 import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
 import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
+import { averageLosNights } from "@/lib/sales/guest-arrivals-logic";
 import { getRoomTypeNameMap } from "@/lib/sales/room-type-name-rules";
 import { resolveRoomTypeNames } from "@/lib/sales/room-type-names";
 
@@ -809,7 +810,6 @@ export async function getGuestsPageData(
     (a, b) => LOS_ORDER_LOCAL.indexOf(a.losBucket) - LOS_ORDER_LOCAL.indexOf(b.losBucket),
   );
   const totalLosRN = losSorted.reduce((s, l) => s + l.roomNights, 0);
-  const totalBookings = losSorted.reduce((s, l) => s + l.bookings, 0);
   const losBuckets: LosBucketRow[] = losSorted.map((l) => ({
     bucket: l.losBucket,
     bookings: l.bookings,
@@ -827,7 +827,7 @@ export async function getGuestsPageData(
     hasData: true,
     nationalities,
     losBuckets,
-    avgLos: totalBookings > 0 ? totalLosRN / totalBookings : null,
+    avgLos: averageLosNights(losSorted),
     share3Plus: totalLosRN > 0 ? (threePlus / totalLosRN) * 100 : null,
     dominantBucket: dominant ? dominant.losBucket : null,
   };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveCountry } from "@/lib/sales/countries";
-import { compileGuestArrivals, losBucket } from "@/lib/sales/guest-arrivals-logic";
+import { averageLosNights, compileGuestArrivals, losBucket } from "@/lib/sales/guest-arrivals-logic";
 
 describe("resolveCountry", () => {
   it("resolves names, codes and common aliases", () => {
@@ -17,6 +17,27 @@ describe("resolveCountry", () => {
 
   it("returns a null code (but keeps the raw name) for the unknown", () => {
     expect(resolveCountry("Westeros")).toEqual({ code: null, name: "Westeros" });
+  });
+
+  it("treats missing-nationality placeholders as Unknown (not Namibia)", () => {
+    // "NA" is Namibia's ISO alpha-2 but also the blank-nationality sentinel.
+    expect(resolveCountry("NA")).toEqual({ code: null, name: "Unknown" });
+    expect(resolveCountry("na")).toEqual({ code: null, name: "Unknown" });
+    expect(resolveCountry("N/A")).toEqual({ code: null, name: "Unknown" });
+    expect(resolveCountry("UNKNOWN")).toEqual({ code: null, name: "Unknown" });
+    // Real Namibia still resolves (VHP sends alpha-3 "NAM" / the full name).
+    expect(resolveCountry("NAM")).toEqual({ code: "NA", name: "Namibia" });
+    expect(resolveCountry("Namibia")).toEqual({ code: "NA", name: "Namibia" });
+  });
+});
+
+describe("averageLosNights", () => {
+  it("is the booking-weighted mean of the bucket nights, not room-nights", () => {
+    // A 3-night, 2-room reservation is still a 3-night stay.
+    expect(averageLosNights([{ losBucket: "3", bookings: 1 }])).toBe(3);
+    expect(averageLosNights([{ losBucket: "2", bookings: 2 }])).toBe(2);
+    expect(averageLosNights([{ losBucket: "1", bookings: 1 }, { losBucket: "7+", bookings: 1 }])).toBe(4); // (1+7)/2
+    expect(averageLosNights([])).toBeNull();
   });
 });
 
@@ -67,6 +88,32 @@ describe("compileGuestArrivals", () => {
     ]);
     expect(r.nationality).toHaveLength(1);
     expect(r.nationality[0]!.roomNights).toBe(5);
+  });
+
+  it("skips null/undefined/primitive elements instead of crashing", () => {
+    const r = compileGuestArrivals([
+      { country: "AU", nights: 2 },
+      null as never,
+      undefined as never,
+      "junk" as never,
+      42 as never,
+    ]);
+    expect(r.totals.arrivals).toBe(1);
+    expect(r.totals.skipped).toBe(4);
+    expect(r.nationality[0]!.countryCode).toBe("AU");
+  });
+
+  it("sends a batch of 'NA' placeholder rows to Unknown, not Namibia", () => {
+    const r = compileGuestArrivals([
+      { country: "NA", nights: 1 },
+      { country: "NA", nights: 2 },
+      { country: "AU", nights: 3 },
+    ]);
+    expect(r.nationality.find((n) => n.countryCode === "NA")).toBeUndefined(); // no phantom Namibia
+    const unknown = r.nationality.find((n) => n.countryName === "Unknown");
+    expect(unknown).toBeTruthy();
+    expect(unknown!.countryCode).toBeNull();
+    expect(unknown!.roomNights).toBe(3); // 1 + 2
   });
 
   it("skips rows with no country or no usable nights, and reports skipped", () => {

@@ -50,6 +50,10 @@ export interface GuestArrivalsResult {
 
 const fail = (status: number, error: string): GuestArrivalsResult => ({ status, body: { ok: false, error } });
 
+/** Thrown inside the transaction when the period is FINAL — mapped to a 409. */
+class FinalLockError extends Error {}
+const FINAL_MSG = "This report period is marked FINAL and is locked for editing.";
+
 function periodDate(period: string): Date | null {
   if (!PERIOD_RE.test(period)) return null;
   const d = new Date(`${period}-01T00:00:00.000Z`);
@@ -83,9 +87,7 @@ export async function runGuestArrivalsImport(input: GuestArrivalsImportInput): P
       where: { propertyId_period: { propertyId: property.id, period: date } },
       select: { id: true, status: true },
     });
-    if (existing?.status === "FINAL") {
-      return fail(409, "This report period is marked FINAL and is locked for editing.");
-    }
+    if (existing?.status === "FINAL") return fail(409, FINAL_MSG);
 
     const compiled = compileGuestArrivals(input.arrivals);
     if (compiled.nationality.length === 0) return fail(422, "no valid arrival rows found.");
@@ -97,12 +99,16 @@ export async function runGuestArrivalsImport(input: GuestArrivalsImportInput): P
     const lyLosByBucket = new Map<string, number>(ly ? ly.los.map((l) => [l.losBucket, l.roomNights]) : []);
 
     const periodId = await prisma.$transaction(async (tx) => {
-      const period =
-        existing ??
-        (await tx.reportPeriod.create({
-          data: { propertyId: property.id, period: date, status: "DRAFT" },
-          select: { id: true, status: true },
-        }));
+      // Atomic find-or-create: two concurrent first pushes for a new period
+      // (e.g. the MTD + YTD pulls fired together) would otherwise race on the
+      // unique (propertyId, period). Re-check FINAL inside the tx too.
+      const period = await tx.reportPeriod.upsert({
+        where: { propertyId_period: { propertyId: property.id, period: date } },
+        create: { propertyId: property.id, period: date, status: "DRAFT" },
+        update: {},
+        select: { id: true, status: true },
+      });
+      if (period.status === "FINAL") throw new FinalLockError();
 
       // Nationality — replace just this scope's rows.
       await tx.nationalityProduction.deleteMany({ where: { periodId: period.id, scope } });
@@ -118,20 +124,21 @@ export async function runGuestArrivalsImport(input: GuestArrivalsImportInput): P
         })),
       });
 
-      // Length of stay — stored once per period, from the MTD pull.
-      if (scope === "MTD") {
+      // Length of stay — stored once per period, from the MTD pull. Only
+      // replace it when this pull actually carries LOS data, so a dateless
+      // correction push (nationality only, no nights) can't wipe a good
+      // distribution stored by an earlier dated push.
+      if (scope === "MTD" && compiled.los.length > 0) {
         await tx.lengthOfStay.deleteMany({ where: { periodId: period.id } });
-        if (compiled.los.length > 0) {
-          await tx.lengthOfStay.createMany({
-            data: compiled.los.map((l) => ({
-              periodId: period.id,
-              losBucket: l.losBucket,
-              bookings: l.bookings,
-              roomNights: l.roomNights,
-              lastYearRoomNights: lyLosByBucket.get(l.losBucket) ?? null,
-            })),
-          });
-        }
+        await tx.lengthOfStay.createMany({
+          data: compiled.los.map((l) => ({
+            periodId: period.id,
+            losBucket: l.losBucket,
+            bookings: l.bookings,
+            roomNights: l.roomNights,
+            lastYearRoomNights: lyLosByBucket.get(l.losBucket) ?? null,
+          })),
+        });
       }
 
       await tx.importHistory.create({
@@ -179,6 +186,7 @@ export async function runGuestArrivalsImport(input: GuestArrivalsImportInput): P
       },
     };
   } catch (e) {
+    if (e instanceof FinalLockError) return fail(409, FINAL_MSG);
     return fail(500, e instanceof Error ? e.message : "guest arrivals import failed.");
   }
 }

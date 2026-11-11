@@ -75,6 +75,17 @@ export function losBucket(nights: number): string {
   return n >= 7 ? "7+" : String(n);
 }
 
+/** Mean length of stay (nights per booking) from a LOS distribution, derived
+ * from the bucket LABEL weighted by booking count — not room-nights, which
+ * over-counts multi-room reservations. "7+" is taken as 7. Null if no bookings. */
+export function averageLosNights(buckets: { losBucket: string; bookings: number }[]): number | null {
+  const nights = (b: string) => (b === "7+" ? 7 : Number(b) || 0);
+  const totalBookings = buckets.reduce((s, b) => s + b.bookings, 0);
+  if (totalBookings <= 0) return null;
+  const stayNights = buckets.reduce((s, b) => s + nights(b.losBucket) * b.bookings, 0);
+  return stayNights / totalBookings;
+}
+
 /** Derive length-of-stay (nights) from an arrival row: explicit nights, else
  * departure − arrival. Returns null if neither is usable. */
 function nightsOf(r: RawArrival): number | null {
@@ -106,6 +117,11 @@ export function compileGuestArrivals(rows: RawArrival[]): GuestCompileResult {
   let guestsKnown = false;
 
   for (const r of rows ?? []) {
+    // A null/undefined/primitive element is one skipped row, not a crash.
+    if (r == null || typeof r !== "object") {
+      skipped += 1;
+      continue;
+    }
     const rawCountry = String(r.countryCode ?? r.country ?? r.countryName ?? r.nationality ?? "").trim();
     if (!rawCountry) {
       skipped += 1;
