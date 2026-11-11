@@ -55,12 +55,6 @@ enum Department {
   TOTAL_REVENUE
 }
 
-enum AccountType {
-  OTA
-  TA
-  CORPORATE
-  WHOLESALER
-}
 
 enum BusinessUnit {
   HOTEL
@@ -296,17 +290,40 @@ model LengthOfStay {
 
 /// Top account / channel production (YTD).
 model AccountProduction {
-  id          String      @id @default(cuid())
+  id          String  @id @default(cuid())
   periodId    String
   accountName String
-  accountType AccountType
+  /// Segment CODE (OTA | TRAVEL_AGENT | OVERSEAS_TRAVEL_AGENT | B2B | CORPORATE |
+  /// DIRECT_BOOKING | …). A free string, not an enum, so segments can be added
+  /// without a migration. The displayed segment is resolved at read time from
+  /// AccountSegmentRule (by account name), falling back to this stored value.
+  accountType String
   roomNights  Int
-  revenue     Decimal     @db.Decimal(18, 2)
+  revenue     Decimal @db.Decimal(18, 2)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   @@unique([periodId, accountName])
   @@map("account_production")
+}
+
+/// Saved account→segment mapping, keyed by the normalised account NAME so one
+/// rule applies to that booker across every property and period. Overrides the
+/// automatic classification; segment = a registry code or the sentinel
+/// "EXCLUDE" (drops the account from the report — totals/vouchers). See
+/// lib/sales/account-segments.ts + account-segment-rules.ts.
+model AccountSegmentRule {
+  id          String   @id @default(cuid())
+  /// lower-cased, whitespace-collapsed account name (the lookup key).
+  accountKey  String   @unique
+  /// The account name as last seen, for display in the admin list.
+  accountName String
+  /// Segment code, or "EXCLUDE".
+  segment     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("account_segment_rules")
 }
 
 // ─── Digital ads ─────────────────────────────────────────────────────────────

@@ -5,16 +5,18 @@ import { ArrowDownUp } from "lucide-react";
 
 import type { AccountRowFull } from "@/lib/dashboard-data";
 import { formatIDR, formatNumber, formatPercent } from "@/lib/format";
-import { ACCOUNT_TYPE_LABELS } from "@/lib/labels";
+import { orderSegments, segmentLabel } from "@/lib/sales/account-segments";
 import { cn } from "@/lib/utils";
 
 type SortKey = "rank" | "roomNights" | "revenue";
-const TYPES = ["OTA", "TA", "CORPORATE", "WHOLESALER"] as const;
 
-/** Sortable, type-filterable account production table (YTD). */
+/** Sortable, segment-filterable account production table (YTD). */
 export function AccountProductionTable({ accounts }: { accounts: AccountRowFull[] }) {
   const [filter, setFilter] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("revenue");
+
+  // Filter chips = the segments actually present, in registry order.
+  const segments = useMemo(() => orderSegments(accounts.map((a) => a.accountType)), [accounts]);
 
   const rows = useMemo(() => {
     const filtered = filter ? accounts.filter((a) => a.accountType === filter) : accounts;
@@ -53,7 +55,7 @@ export function AccountProductionTable({ accounts }: { accounts: AccountRowFull[
         >
           All
         </button>
-        {TYPES.map((t) => (
+        {segments.map((t) => (
           <button
             key={t}
             type="button"
@@ -63,7 +65,7 @@ export function AccountProductionTable({ accounts }: { accounts: AccountRowFull[
               filter === t ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:text-foreground",
             )}
           >
-            {ACCOUNT_TYPE_LABELS[t] ?? t}
+            {segmentLabel(t)}
           </button>
         ))}
       </div>
@@ -86,7 +88,7 @@ export function AccountProductionTable({ accounts }: { accounts: AccountRowFull[
                 <td className="py-2 pr-4 text-muted-foreground">{a.rank}</td>
                 <td className="py-2 pr-4 text-foreground">{a.accountName}</td>
                 <td className="py-2 pr-4 text-muted-foreground">
-                  {ACCOUNT_TYPE_LABELS[a.accountType] ?? a.accountType}
+                  {segmentLabel(a.accountType)}
                 </td>
                 <td className="py-2 pr-4 text-right tabular-nums text-foreground">
                   {formatNumber(a.roomNights)}

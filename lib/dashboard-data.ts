@@ -3,6 +3,8 @@ import { unstable_noStore as noStore } from "next/cache";
 import { achievementPct, avgCheck, cpc, ctr, momChange } from "@/lib/calculations";
 import { prisma } from "@/lib/prisma";
 import { periodMonthShort } from "@/lib/labels";
+import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
+import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
 
 /**
  * Server-side data access for the dashboard. Reads RAW rows from Postgres and
@@ -599,17 +601,27 @@ export async function getSegmentsPageData(
     lastYear: hasLastYear ? sumTriple((s) => s.lastYear) : null,
   };
 
-  const accountsTotalRevenue = rp.accountProduction.reduce(
-    (t, a) => t + a.revenue.toNumber(),
-    0,
-  );
-  const accounts: AccountRowFull[] = rp.accountProduction.map((a, i) => {
-    const revenue = a.revenue.toNumber();
+  // Resolve each account's segment from the saved rules (by name) at READ time —
+  // so rule edits re-segment every property/period without re-import — and drop
+  // EXCLUDE accounts (totals, vouchers). Rank + % are computed on the kept set.
+  const ruleMap = await getSegmentRuleMap();
+  const keptAccounts = rp.accountProduction
+    .map((a) => ({
+      a,
+      segment: resolveSegment(a.accountName, {
+        rule: ruleMap.get(accountKey(a.accountName)),
+        hint: a.accountType,
+      }),
+    }))
+    .filter((x) => !isExcluded(x.segment));
+  const accountsTotalRevenue = keptAccounts.reduce((t, x) => t + x.a.revenue.toNumber(), 0);
+  const accounts: AccountRowFull[] = keptAccounts.map((x, i) => {
+    const revenue = x.a.revenue.toNumber();
     return {
       rank: i + 1,
-      accountName: a.accountName,
-      accountType: a.accountType,
-      roomNights: a.roomNights,
+      accountName: x.a.accountName,
+      accountType: x.segment,
+      roomNights: x.a.roomNights,
       revenue,
       pctOfRevenue: accountsTotalRevenue > 0 ? (revenue / accountsTotalRevenue) * 100 : 0,
     };

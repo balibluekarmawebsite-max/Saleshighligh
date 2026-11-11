@@ -45,7 +45,7 @@ Content-Type: application/json
 | `property` | `BKDS` / `BKDU` / `BKV`. |
 | `period` | The report month `YYYY-MM`. The data is **YTD through this month** (Jan→this month). |
 | `accounts[].account` | Account / booker name as VHP shows it. |
-| `accounts[].type` | **Optional.** `OTA` · `TA` (or `"Travel Agent"`) · `CORPORATE` · `WHOLESALER`. If omitted, the dashboard classifies by name — send it when VHP gives you the category, for accuracy. |
+| `accounts[].type` | **Optional.** `OTA` · `Travel Agent` · `Overseas Travel Agent` · `B2B` · `Corporate` · `Direct Booking`. If omitted, the dashboard classifies by name. A **saved segmentation rule** for an account always wins over this (see below), so you don't need to get it perfect. |
 | `accounts[].roomNights` | YTD room nights for the account (integer). |
 | `accounts[].revenue` | YTD room revenue, IDR (no separators needed; `"1,480"` is also accepted). |
 | `source` | Optional label, for logs. |
@@ -55,6 +55,15 @@ sums any duplicate account names, creates the period as DRAFT if new, refuses a
 FINAL period (409), and records an ImportHistory + `sales_account_production_import`
 audit row (so it shows in Admin → Activity and keeps the summary's "data as of"
 current).
+
+**Segmentation (saved, reusable across every property).** Each account is shown
+under a segment: **OTA · Travel Agent · Overseas Travel Agent · B2B · Corporate ·
+Direct Booking**. A saved rule table (`account_segment_rules`, keyed by account
+name) maps specific accounts to a segment — or to `EXCLUDE`, which drops junk rows
+(e.g. "T o t a l USD", "redeem voucher") from the report. Rules apply to **every
+property and period** and are resolved at read time, so editing a rule re-segments
+all existing data without re-scraping. The scraper's `type` and automatic
+name-classification are only fallbacks when no rule exists.
 
 ### How to pull (the YTD window)
 1. Open the VHP Forecast Room Production report for `property`.

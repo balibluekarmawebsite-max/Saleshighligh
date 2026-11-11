@@ -13,6 +13,7 @@ import {
   getSpaPageData,
   getSummaryPageData,
 } from "@/lib/dashboard-data";
+import { segmentLabel } from "@/lib/sales/account-segments";
 import {
   formatIDRCompact,
   formatNumber,
@@ -222,7 +223,7 @@ async function roomsSection(pptx: Pptx, code: string, period: string) {
   if (seg && seg.accounts.length > 0) {
     const rows: Cell[][] = [[head("#"), head("Account"), head("Type"), head("Room Nights", "right"), head("Revenue", "right"), head("% of Rev", "right")]];
     for (const a of seg.accounts.slice(0, 14)) {
-      rows.push([td(String(a.rank)), td(a.accountName), td(a.accountType), td(num(a.roomNights), "right"), td(money(a.revenue), "right"), td(`${a.pctOfRevenue.toFixed(1)}%`, "right")]);
+      rows.push([td(String(a.rank)), td(a.accountName), td(segmentLabel(a.accountType)), td(num(a.roomNights), "right"), td(money(a.revenue), "right"), td(`${a.pctOfRevenue.toFixed(1)}%`, "right")]);
     }
     addTable(accSlide, rows);
   } else noData(accSlide);

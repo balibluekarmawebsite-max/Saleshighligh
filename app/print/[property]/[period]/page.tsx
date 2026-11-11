@@ -17,6 +17,7 @@ import { getCurrentUser } from "@/lib/auth-helpers";
 import { formatIDRCompact, formatNumber, formatPercent, formatRatioPct, formatVariancePercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
+import { segmentLabel } from "@/lib/sales/account-segments";
 
 export const dynamic = "force-dynamic";
 
@@ -157,7 +158,7 @@ export default async function PrintPage({
         <Section title="Account Production (YTD)">
           <Table
             head={["#", "Account", "Type", "Room Nights", "Revenue", "% of Rev"]}
-            rows={segYtd.accounts.slice(0, 15).map((a) => [a.rank, a.accountName, a.accountType, num(a.roomNights), money(a.revenue), `${a.pctOfRevenue.toFixed(1)}%`])}
+            rows={segYtd.accounts.slice(0, 15).map((a) => [a.rank, a.accountName, segmentLabel(a.accountType), num(a.roomNights), money(a.revenue), `${a.pctOfRevenue.toFixed(1)}%`])}
           />
         </Section>
       )}

@@ -3,14 +3,17 @@
  *
  * The scraper pulls VHP's "Forecast Room Production" report year-to-date
  * (Jan 1 → the report month's end) and POSTs the per-account totals here. This
- * replaces the ACCOUNTS workbook tab for that section: it finds-or-creates the
- * (property, period) ReportPeriod, replaces its account_production rows in one
- * transaction, and records an ImportHistory + audit row. A FINAL period is
- * locked, exactly like the Excel import.
+ * replaces the ACCOUNTS section for that (property, period): it finds-or-creates
+ * the ReportPeriod, resolves each account's SEGMENT from the saved rules (or the
+ * sent type / automatic classification), drops EXCLUDE accounts (totals,
+ * vouchers), replaces account_production in one transaction, and records an
+ * ImportHistory + audit row. A FINAL period is locked, like the Excel import.
  */
 
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
+import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
 import { normalizeAccountRows, type RawAccountRow } from "@/lib/sales/account-production-logic";
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
@@ -35,7 +38,7 @@ export interface AccountProductionResult {
         accounts: number;
         roomNights: number;
         revenue: number;
-        classified: number;
+        excluded: number;
         skipped: number;
         merged: number;
         message: string;
@@ -76,8 +79,19 @@ export async function runAccountProductionImport(
       return fail(409, "This report period is marked FINAL and is locked for editing.");
     }
 
-    const { rows, skipped, classified, merged } = normalizeAccountRows(input.accounts);
+    const { rows, skipped, merged } = normalizeAccountRows(input.accounts);
     if (rows.length === 0) return fail(422, "no valid account rows found.");
+
+    // Resolve each account's segment (saved rule > sent type > classify) and
+    // drop the ones mapped to EXCLUDE (totals, vouchers, …).
+    const ruleMap = await getSegmentRuleMap();
+    const resolved = rows.map((r) => ({
+      ...r,
+      segment: resolveSegment(r.accountName, { rule: ruleMap.get(accountKey(r.accountName)), hint: r.typeHint }),
+    }));
+    const kept = resolved.filter((r) => !isExcluded(r.segment));
+    const excluded = resolved.length - kept.length;
+    if (kept.length === 0) return fail(422, "no accounts left after exclusions.");
 
     const periodId = await prisma.$transaction(async (tx) => {
       const period =
@@ -88,10 +102,10 @@ export async function runAccountProductionImport(
         }));
       await tx.accountProduction.deleteMany({ where: { periodId: period.id } });
       await tx.accountProduction.createMany({
-        data: rows.map((r) => ({
+        data: kept.map((r) => ({
           periodId: period.id,
           accountName: r.accountName,
-          accountType: r.accountType,
+          accountType: r.segment,
           roomNights: r.roomNights,
           revenue: r.revenue,
         })),
@@ -102,27 +116,27 @@ export async function runAccountProductionImport(
           period: date,
           fileName: `VHP Forecast Room Production (YTD) — ${input.source ?? "api"}`,
           uploadedBy: input.uploadedBy ?? null,
-          rowCounts: { ACCOUNTS: rows.length },
+          rowCounts: { ACCOUNTS: kept.length },
         },
       });
       return period.id;
     });
 
-    const roomNights = rows.reduce((s, r) => s + r.roomNights, 0);
-    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const roomNights = kept.reduce((s, r) => s + r.roomNights, 0);
+    const revenue = kept.reduce((s, r) => s + r.revenue, 0);
 
     await logAudit("sales_account_production_import", code, {
       period: input.period,
-      accounts: rows.length,
+      accounts: kept.length,
       roomNights,
-      classified,
+      excluded,
       skipped,
       merged,
       source: input.source ?? null,
     }).catch(() => {});
 
     const notes = [
-      classified > 0 ? `classified ${classified} by name` : "",
+      excluded > 0 ? `excluded ${excluded}` : "",
       merged > 0 ? `merged ${merged} duplicate(s)` : "",
       skipped > 0 ? `skipped ${skipped} invalid` : "",
     ].filter(Boolean);
@@ -133,13 +147,13 @@ export async function runAccountProductionImport(
         property: code,
         period: input.period,
         periodId,
-        accounts: rows.length,
+        accounts: kept.length,
         roomNights,
         revenue,
-        classified,
+        excluded,
         skipped,
         merged,
-        message: `Account Production (YTD) stored — ${rows.length} account(s) for ${input.period}${notes.length ? ` (${notes.join("; ")})` : ""}.`,
+        message: `Account Production (YTD) stored — ${kept.length} account(s) for ${input.period}${notes.length ? ` (${notes.join("; ")})` : ""}.`,
       },
     };
   } catch (e) {
