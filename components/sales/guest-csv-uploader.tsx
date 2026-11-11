@@ -49,6 +49,12 @@ export function GuestCsvUploader({ properties }: { properties: PropertyOption[] 
         setCsvName(file.name);
         setPreview(null);
         setMsg(null);
+        // Reset the target so the next preview re-detects from THIS file — never
+        // carry the previous CSV's property/period/last-year into a new upload.
+        setProperty("");
+        setPeriod("");
+        setLyText("");
+        setLyName(null);
       } else {
         setLyText(text);
         setLyName(file.name);
@@ -87,6 +93,12 @@ export function GuestCsvUploader({ properties }: { properties: PropertyOption[] 
   }
 
   const topNats = preview?.ok ? (preview.nationalities ?? []).slice(0, 15) : [];
+  // Flag when the chosen target disagrees with what the CSV header says, so an
+  // import to the wrong property/period can't slip through silently.
+  const mismatch =
+    preview?.ok === true &&
+    ((!!preview.meta?.propertyHint && property !== "" && preview.meta.propertyHint !== property) ||
+      (!!preview.meta?.periodHint && period !== "" && preview.meta.periodHint !== period));
 
   return (
     <div className="space-y-5">
@@ -181,6 +193,14 @@ export function GuestCsvUploader({ properties }: { properties: PropertyOption[] 
               {busy ? "Importing…" : `Import ${scope}`}
             </button>
           </div>
+
+          {mismatch && (
+            <p className="rounded-md border border-[hsl(var(--brand-gold))]/40 bg-[hsl(var(--brand-gold))]/10 px-3 py-2 text-xs text-foreground">
+              ⚠ The CSV header says <strong>{preview.meta?.propertyHint ?? "?"} · {preview.meta?.periodHint ?? "?"}</strong>,
+              but you&rsquo;re importing to <strong>{property || "?"} · {period || "?"}</strong>. Double-check before
+              importing — this replaces that property/period&rsquo;s guest data.
+            </p>
+          )}
 
           {/* Preview tables */}
           <div className="grid gap-4 md:grid-cols-2">

@@ -36,7 +36,9 @@ export function parseCsv(text: string): string[][] {
       }
       continue;
     }
-    if (c === '"') {
+    if (c === '"' && field === "") {
+      // A quote is only special at the START of a field; a bare quote mid-value
+      // (e.g. an unquoted 5'10" or a truncated export) is a literal character.
       inQuotes = true;
     } else if (c === ",") {
       row.push(field);

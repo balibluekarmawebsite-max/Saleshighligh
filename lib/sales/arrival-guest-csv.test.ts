@@ -47,6 +47,15 @@ describe("parseCsv", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]![0]).toBe("line1\nline2");
   });
+
+  it("treats a bare quote mid-field as a literal (does not merge delimiters/rows)", () => {
+    // A stray quote in an UNQUOTED field must not open quote-mode (RFC-4180).
+    expect(parseCsv(`a,b"c,d`)).toEqual([["a", 'b"c', "d"]]);
+    expect(parseCsv(`a,b"c,d\ne,f,g`)).toEqual([
+      ["a", 'b"c', "d"],
+      ["e", "f", "g"],
+    ]);
+  });
 });
 
 describe("parseArrivalGuestCsv", () => {

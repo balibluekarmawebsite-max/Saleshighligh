@@ -70,6 +70,7 @@ export async function importGuestCsvAction(input: GuestCsvImportInput): Promise<
     scope: input.scope,
     arrivals: parsed.arrivals,
     lastYearArrivals,
+    lastYearProvided: !!input.lastYearCsvText?.trim(),
     source: "admin-csv-upload",
     uploadedBy: user?.email ?? null,
   });

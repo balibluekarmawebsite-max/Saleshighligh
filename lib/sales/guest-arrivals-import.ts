@@ -25,6 +25,9 @@ export interface GuestArrivalsImportInput {
   arrivals: RawArrival[];
   /** Optional: same window a year earlier, for VS-LY + rank movement. */
   lastYearArrivals?: RawArrival[];
+  /** True when a last-year source was supplied (even if it parsed to nothing),
+   * so the result can say whether VS-LY actually attached. */
+  lastYearProvided?: boolean;
   source?: string;
   uploadedBy?: string | null;
 }
@@ -43,6 +46,7 @@ export interface GuestArrivalsResult {
         roomNights: number;
         guests: number | null;
         skipped: number;
+        lastYearAttached: boolean;
         message: string;
       }
     | { ok: false; error: string };
@@ -167,8 +171,14 @@ export async function runGuestArrivalsImport(input: GuestArrivalsImportInput): P
       source: input.source ?? null,
     }).catch(() => {});
 
+    const lastYearAttached = !!ly && ly.nationality.length > 0;
     const losNote = scope === "MTD" ? `, ${compiled.los.length} LOS bucket(s)` : "";
     const skipNote = compiled.totals.skipped > 0 ? ` (skipped ${compiled.totals.skipped} invalid)` : "";
+    const lyNote = input.lastYearProvided
+      ? lastYearAttached
+        ? " · VS-LY attached"
+        : " · last-year file had no usable rows, VS-LY omitted"
+      : "";
     return {
       status: 200,
       body: {
@@ -182,7 +192,8 @@ export async function runGuestArrivalsImport(input: GuestArrivalsImportInput): P
         roomNights: compiled.totals.roomNights,
         guests: compiled.totals.guests,
         skipped: compiled.totals.skipped,
-        message: `Guests stored (${scope}) — ${compiled.nationality.length} nationality row(s)${losNote} for ${input.period}${skipNote}.`,
+        lastYearAttached,
+        message: `Guests stored (${scope}) — ${compiled.nationality.length} nationality row(s)${losNote} for ${input.period}${skipNote}${lyNote}.`,
       },
     };
   } catch (e) {

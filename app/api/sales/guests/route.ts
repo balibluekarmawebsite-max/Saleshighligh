@@ -84,6 +84,9 @@ export async function POST(req: NextRequest) {
     if (!period && parsed.meta.periodHint) period = parsed.meta.periodHint;
     if (!property && parsed.meta.propertyHint) property = parsed.meta.propertyHint;
   }
+  const lastYearProvided =
+    (typeof b.lastYearCsv === "string" && b.lastYearCsv.trim().length > 0) ||
+    (Array.isArray(b.lastYearArrivals) && b.lastYearArrivals.length > 0);
   if (typeof b.lastYearCsv === "string" && b.lastYearCsv.trim()) {
     lastYearArrivals = parseArrivalGuestCsv(b.lastYearCsv).arrivals;
   }
@@ -94,6 +97,7 @@ export async function POST(req: NextRequest) {
     scope: b.scope ? String(b.scope) : undefined,
     arrivals,
     lastYearArrivals,
+    lastYearProvided,
     source: b.source ? String(b.source) : undefined,
   });
   return Response.json(result.body, { status: result.status });
