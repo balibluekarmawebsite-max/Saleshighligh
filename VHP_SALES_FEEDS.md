@@ -117,7 +117,7 @@ Content-Type: application/json
 | ----- | ------- |
 | `property` | `BKDS` / `BKDU` / `BKV`. |
 | `period` | The report month `YYYY-MM`. |
-| `roomTypes[].roomType` | Room-type name as VHP shows it. |
+| `roomTypes[].roomType` | Room type **as VHP shows it** — send the raw code (e.g. `1BPVL`); no need to expand it. Readable names are assigned once in **Admin → Room Type Names** and applied to every period. |
 | `roomTypes[].roomNights` | Room nights sold (integer). |
 | `roomTypes[].adr` | **Optional** — the dashboard derives revenue ÷ room-nights if omitted. |
 | `roomTypes[].revenue` | Room revenue, IDR (separators ok). |

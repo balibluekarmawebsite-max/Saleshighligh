@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { unstable_noStore as noStore } from "next/cache";
 
 import { achievementPct, avgCheck, cpc, ctr, momChange } from "@/lib/calculations";
@@ -5,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { periodMonthShort } from "@/lib/labels";
 import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
 import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
+import { getRoomTypeNameMap } from "@/lib/sales/room-type-name-rules";
+import { resolveRoomTypeNames } from "@/lib/sales/room-type-names";
 
 /**
  * Server-side data access for the dashboard. Reads RAW rows from Postgres and
@@ -686,19 +689,7 @@ export async function getRoomTypesPageData(
     return { ...base, hasData: false, status: null, roomTypes: [], narrative: null };
   }
 
-  const rtTotalRevenue = rp.roomTypeProduction.reduce((s, r) => s + r.revenueActual.toNumber(), 0);
-  const roomTypes: RoomTypeRow[] = rp.roomTypeProduction
-    .map((r) => {
-      const revenue = r.revenueActual.toNumber();
-      return {
-        roomTypeName: r.roomTypeName,
-        roomNightsActual: r.roomNightsActual,
-        adrActual: r.adrActual.toNumber(),
-        revenueActual: revenue,
-        pctOfRevenue: rtTotalRevenue > 0 ? (revenue / rtTotalRevenue) * 100 : 0,
-      };
-    })
-    .sort((a, b) => b.revenueActual - a.revenueActual);
+  const roomTypes = toRoomTypeRows(rp.roomTypeProduction, await getRoomTypeNameMap(property.code));
 
   const narr = rp.narrativeContent[0];
 
@@ -2056,11 +2047,40 @@ export async function getPlansPageData(
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
 export interface RoomTypeRow {
+  /** Display name — the saved code→name mapping, else the raw VHP code. */
   roomTypeName: string;
+  /** Underlying VHP room code(s); shown as a subtitle when it differs. */
+  roomCode: string;
   roomNightsActual: number;
   adrActual: number;
   revenueActual: number;
   pctOfRevenue: number;
+}
+
+/** Shared: resolve stored room-type rows to display names (merging codes that
+ * map to the same name) and compute each row's share of room revenue. */
+function toRoomTypeRows(
+  raw: { roomTypeName: string; roomNightsActual: number; adrActual: Prisma.Decimal; revenueActual: Prisma.Decimal }[],
+  nameByCode: Map<string, string>,
+): RoomTypeRow[] {
+  const resolved = resolveRoomTypeNames(
+    raw.map((r) => ({
+      code: r.roomTypeName,
+      roomNights: r.roomNightsActual,
+      adr: r.adrActual.toNumber(),
+      revenue: r.revenueActual.toNumber(),
+    })),
+    nameByCode,
+  );
+  const total = resolved.reduce((s, r) => s + r.revenue, 0);
+  return resolved.map((r) => ({
+    roomTypeName: r.roomTypeName,
+    roomCode: r.roomCode,
+    roomNightsActual: r.roomNights,
+    adrActual: r.adr,
+    revenueActual: r.revenue,
+    pctOfRevenue: total > 0 ? (r.revenue / total) * 100 : 0,
+  }));
 }
 
 export interface NationalityRow {
@@ -2171,19 +2191,7 @@ export async function getRoomsSummary(
       Math.max(a.actualRevenue, a.budgetRevenue),
   );
 
-  const rtTotalRevenue = rp.roomTypeProduction.reduce((s, r) => s + r.revenueActual.toNumber(), 0);
-  const roomTypes: RoomTypeRow[] = rp.roomTypeProduction
-    .map((r) => {
-      const revenue = r.revenueActual.toNumber();
-      return {
-        roomTypeName: r.roomTypeName,
-        roomNightsActual: r.roomNightsActual,
-        adrActual: r.adrActual.toNumber(),
-        revenueActual: revenue,
-        pctOfRevenue: rtTotalRevenue > 0 ? (revenue / rtTotalRevenue) * 100 : 0,
-      };
-    })
-    .sort((a, b) => b.revenueActual - a.revenueActual);
+  const roomTypes = toRoomTypeRows(rp.roomTypeProduction, await getRoomTypeNameMap(property.code));
 
   const nationalities: NationalityRow[] = rp.nationality.map((n, i) => ({
     rank: i + 1,

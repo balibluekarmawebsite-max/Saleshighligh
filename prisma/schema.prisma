@@ -257,6 +257,25 @@ model RoomTypeProduction {
   @@map("room_type_production")
 }
 
+/// Maps a VHP room CODE (e.g. "1BPVL") to a readable room NAME shown in the
+/// report. Scoped per property (room codes are PMS-specific), keyed by the
+/// normalised code. Resolved at read time, so renaming re-labels every period
+/// without re-scraping. Two codes given the same name are merged into one row.
+model RoomTypeNameRule {
+  id           String   @id @default(cuid())
+  /// Property the mapping applies to (BKDS / BKDU / BKV).
+  propertyCode String
+  /// Upper-cased, whitespace-stripped room code — the lookup key.
+  roomCode     String
+  /// The human-readable room name to display.
+  roomName     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([propertyCode, roomCode])
+  @@map("room_type_name_rules")
+}
+
 /// Room production by guest nationality (MTD/YTD).
 model NationalityProduction {
   id                 String  @id @default(cuid())

@@ -8,15 +8,30 @@ export function RoomTypeTable({ rows }: { rows: RoomTypeRow[] }) {
   const totalRev = rows.reduce((s, r) => s + r.revenueActual, 0);
   const totalAdr = totalRN > 0 ? totalRev / totalRN : 0;
 
-  const renderRow = (label: string, rn: number, adr: number, rev: number, pct: number, isTotal = false) => (
-    <tr key={label} className={cn("border-b border-border/60", isTotal && "border-t-2 border-border font-semibold")}>
-      <td className="py-2 pr-4 text-foreground">{label}</td>
-      <td className="py-2 pr-4 text-right tabular-nums text-foreground">{formatNumber(rn)}</td>
-      <td className="py-2 pr-4 text-right tabular-nums text-foreground">{formatIDR(adr)}</td>
-      <td className="py-2 pr-4 text-right tabular-nums text-foreground">{formatIDR(rev)}</td>
-      <td className="py-2 text-right tabular-nums text-muted-foreground">{formatPercent(pct)}</td>
-    </tr>
-  );
+  const renderRow = (
+    label: string,
+    rn: number,
+    adr: number,
+    rev: number,
+    pct: number,
+    opts: { isTotal?: boolean; code?: string } = {},
+  ) => {
+    const { isTotal = false, code } = opts;
+    return (
+      <tr key={label} className={cn("border-b border-border/60", isTotal && "border-t-2 border-border font-semibold")}>
+        <td className="py-2 pr-4 text-foreground">
+          {label}
+          {code && code.toUpperCase() !== label.toUpperCase() && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{code}</span>
+          )}
+        </td>
+        <td className="py-2 pr-4 text-right tabular-nums text-foreground">{formatNumber(rn)}</td>
+        <td className="py-2 pr-4 text-right tabular-nums text-foreground">{formatIDR(adr)}</td>
+        <td className="py-2 pr-4 text-right tabular-nums text-foreground">{formatIDR(rev)}</td>
+        <td className="py-2 text-right tabular-nums text-muted-foreground">{formatPercent(pct)}</td>
+      </tr>
+    );
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -31,8 +46,12 @@ export function RoomTypeTable({ rows }: { rows: RoomTypeRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => renderRow(r.roomTypeName, r.roomNightsActual, r.adrActual, r.revenueActual, r.pctOfRevenue))}
-          {renderRow("Total", totalRN, totalAdr, totalRev, 100, true)}
+          {rows.map((r) =>
+            renderRow(r.roomTypeName, r.roomNightsActual, r.adrActual, r.revenueActual, r.pctOfRevenue, {
+              code: r.roomCode,
+            }),
+          )}
+          {renderRow("Total", totalRN, totalAdr, totalRev, 100, { isTotal: true })}
         </tbody>
       </table>
     </div>
