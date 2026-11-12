@@ -56,23 +56,35 @@ export async function saveMealSales(input: MealSalesImportInput): Promise<MealSa
       });
       if (period.status === "FINAL") throw new FinalLockError();
 
+      // The submitted grid is authoritative for the period: a meal that is no
+      // longer present is removed, so stale rows can't corrupt the totals/mix.
+      await tx.fnbSales.deleteMany({
+        where: { periodId: period.id, mealPeriod: { notIn: rows.map((r) => r.mealPeriod) } },
+      });
+
       for (const r of rows) {
+        // On update only write budget when the source actually carried one, so a
+        // re-upload of actuals alone keeps a budget already stored (workbook).
+        const update: {
+          coversActual: number;
+          revenueActual: number;
+          coversBudget?: number;
+          revenueBudget?: number;
+        } = { coversActual: r.coversActual, revenueActual: r.revenueActual };
+        if (r.coversBudget != null) update.coversBudget = r.coversBudget;
+        if (r.revenueBudget != null) update.revenueBudget = r.revenueBudget;
+
         await tx.fnbSales.upsert({
           where: { periodId_mealPeriod: { periodId: period.id, mealPeriod: r.mealPeriod } },
           create: {
             periodId: period.id,
             mealPeriod: r.mealPeriod,
             coversActual: r.coversActual,
-            coversBudget: r.coversBudget,
+            coversBudget: r.coversBudget ?? 0,
             revenueActual: r.revenueActual,
-            revenueBudget: r.revenueBudget,
+            revenueBudget: r.revenueBudget ?? 0,
           },
-          update: {
-            coversActual: r.coversActual,
-            coversBudget: r.coversBudget,
-            revenueActual: r.revenueActual,
-            revenueBudget: r.revenueBudget,
-          },
+          update,
         });
       }
     });

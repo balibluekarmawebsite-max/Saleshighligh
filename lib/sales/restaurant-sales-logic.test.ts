@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { normalizeMeal, normalizeMealRows, toInt } from "@/lib/sales/restaurant-sales-logic";
 
 describe("toInt", () => {
-  it("strips thousand separators (Indonesian + en-US)", () => {
+  it("parses Indonesian thousands without inflating on a decimal comma", () => {
     expect(toInt("137.350.206")).toBe(137_350_206);
-    expect(toInt("1,749")).toBe(1749);
+    expect(toInt("137.350.206,00")).toBe(137_350_206); // decimal comma, not ~100x
+    expect(toInt("1.749")).toBe(1749); // dot thousands
     expect(toInt("892")).toBe(892);
     expect(toInt(153_980)).toBe(153_980);
     expect(toInt("")).toBeNull();
@@ -44,5 +45,15 @@ describe("normalizeMealRows", () => {
     expect(r.rows).toHaveLength(1);
     expect(r.rows[0]!.mealPeriod).toBe("DINNER");
     expect(r.skipped).toBe(3);
+  });
+
+  it("marks an absent budget as null (not 0) so a stored budget is preserved", () => {
+    const r = normalizeMealRows([{ meal: "Breakfast", coversActual: 892, revenueActual: 137_350_206 }]);
+    expect(r.rows[0]!.coversBudget).toBeNull();
+    expect(r.rows[0]!.revenueBudget).toBeNull();
+    // an explicit 0 is kept as 0 (a real budget of zero)
+    const z = normalizeMealRows([{ meal: "Lunch", coversActual: 10, coversBudget: 0, revenueActual: 100, revenueBudget: 0 }]);
+    expect(z.rows[0]!.coversBudget).toBe(0);
+    expect(z.rows[0]!.revenueBudget).toBe(0);
   });
 });

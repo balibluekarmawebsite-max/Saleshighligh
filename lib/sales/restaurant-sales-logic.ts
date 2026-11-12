@@ -5,6 +5,8 @@
  * Difference column are derived elsewhere, so only these four numbers matter.
  */
 
+import { normalizeNumber } from "@/lib/import/number";
+
 export const MEAL_PERIODS = ["BREAKFAST", "LUNCH", "DINNER"] as const;
 export type MealPeriod = (typeof MEAL_PERIODS)[number];
 
@@ -14,14 +16,12 @@ export const MEAL_PERIOD_LABEL: Record<MealPeriod, string> = {
   DINNER: "Dinner",
 };
 
-/** Coerce an integer, stripping thousand separators ("137.350.206", "1,749")
- * and any stray characters. No real decimals are expected (whole IDR / counts). */
+/** Coerce a whole number using the project's Indonesian/US-aware parser, so
+ * "137.350.206", "1.749" and "137.350.206,00" all read correctly (not inflated
+ * by stripping the decimal comma), then round to an integer (covers / whole IDR). */
 export const toInt = (v: unknown): number | null => {
-  if (typeof v === "number") return Number.isFinite(v) ? Math.round(v) : null;
-  const s = String(v ?? "").replace(/[^\d]/g, "");
-  if (!s) return null;
-  const n = parseInt(s, 10);
-  return Number.isFinite(n) ? n : null;
+  const n = normalizeNumber(v);
+  return n == null ? null : Math.round(n);
 };
 
 /** Map a free-text meal name to the enum, else null (TOTAL/blank is dropped). */
@@ -45,9 +45,10 @@ export interface RawMealRow {
 export interface NormalMealRow {
   mealPeriod: MealPeriod;
   coversActual: number;
-  coversBudget: number;
+  /** null = the source carried no budget (leave an existing one untouched). */
+  coversBudget: number | null;
   revenueActual: number;
-  revenueBudget: number;
+  revenueBudget: number | null;
 }
 
 export interface MealNormalizeResult {
@@ -80,9 +81,11 @@ export function normalizeMealRows(raw: RawMealRow[]): MealNormalizeResult {
     byMeal.set(meal, {
       mealPeriod: meal,
       coversActual: Math.max(0, coversActual),
-      coversBudget: Math.max(0, coversBudget ?? 0),
+      // null (not 0) when no budget was supplied, so a re-upload of actuals
+      // alone doesn't wipe a budget already stored from the workbook import.
+      coversBudget: coversBudget == null ? null : Math.max(0, coversBudget),
       revenueActual: Math.max(0, revenueActual),
-      revenueBudget: Math.max(0, revenueBudget ?? 0),
+      revenueBudget: revenueBudget == null ? null : Math.max(0, revenueBudget),
     });
   }
 

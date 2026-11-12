@@ -23,11 +23,12 @@ const emptyForm = (initial: MealRow[]): Form => {
   for (const m of initial) {
     const key = m.meal as MealPeriod;
     if (f[key]) {
+      // Keep what's stored (including a real 0), so saving doesn't drop a meal.
       f[key] = {
-        coversActual: m.coversActual ? String(m.coversActual) : "",
-        coversBudget: m.coversBudget ? String(m.coversBudget) : "",
-        revenueActual: m.revenueActual ? String(m.revenueActual) : "",
-        revenueBudget: m.revenueBudget ? String(m.revenueBudget) : "",
+        coversActual: String(m.coversActual),
+        coversBudget: String(m.coversBudget),
+        revenueActual: String(m.revenueActual),
+        revenueBudget: String(m.revenueBudget),
       };
     }
   }
@@ -84,9 +85,10 @@ export function RestaurantSalesUploader({
           for (const m of r.meals!) {
             next[m.mealPeriod] = {
               coversActual: String(m.coversActual),
-              coversBudget: String(m.coversBudget),
               revenueActual: String(m.revenueActual),
-              revenueBudget: String(m.revenueBudget),
+              // Keep a budget the AI didn't read, rather than blanking it.
+              coversBudget: m.coversBudget != null ? String(m.coversBudget) : prev[m.mealPeriod].coversBudget,
+              revenueBudget: m.revenueBudget != null ? String(m.revenueBudget) : prev[m.mealPeriod].revenueBudget,
             };
           }
           return next;

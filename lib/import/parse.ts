@@ -1,5 +1,7 @@
 import * as XLSX from "xlsx";
 
+import { normalizeNumber } from "@/lib/import/number";
+
 import {
   DOMAINS,
   META_TAB,
@@ -41,40 +43,7 @@ export interface ParseResult {
  * (1,234,567.89) formatting, currency symbols, and whitespace. Returns null for
  * empty/unparseable input.
  */
-export function normalizeNumber(raw: unknown): number | null {
-  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
-  if (raw === null || raw === undefined) return null;
-  let s = String(raw).trim();
-  if (s === "") return null;
-  s = s.replace(/[^0-9.,-]/g, ""); // strip Rp, %, spaces
-  if (s === "" || s === "-") return null;
-
-  const lastDot = s.lastIndexOf(".");
-  const lastComma = s.lastIndexOf(",");
-
-  if (lastDot !== -1 && lastComma !== -1) {
-    // Both separators: the later one is the decimal separator.
-    if (lastComma > lastDot) {
-      s = s.replace(/\./g, "").replace(/,/g, "."); // Indonesian
-    } else {
-      s = s.replace(/,/g, ""); // US thousands
-    }
-  } else if (lastComma !== -1) {
-    // Only commas → treat as decimal (Indonesian).
-    s = s.replace(/,/g, ".");
-  } else if (lastDot !== -1) {
-    // Only dots: one dot with 1–2 trailing digits is a decimal; otherwise
-    // dots are thousand separators (Indonesian).
-    const parts = s.split(".");
-    const tail = parts[parts.length - 1] ?? "";
-    if (!(parts.length === 2 && tail.length > 0 && tail.length <= 2)) {
-      s = s.replace(/\./g, "");
-    }
-  }
-
-  const n = parseFloat(s);
-  return Number.isNaN(n) ? null : n;
-}
+export { normalizeNumber };
 
 function toDateString(raw: unknown): string | null {
   if (raw instanceof Date) {
