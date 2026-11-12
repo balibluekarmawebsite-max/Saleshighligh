@@ -8,8 +8,13 @@
 
 import { getRestaurantPageData } from "@/lib/dashboard-data";
 import { formatIDRCompact, formatPercent } from "@/lib/format";
-import { groqChat, isGroqConfigured, type GroqImage } from "@/lib/weekly/groq";
-import type { OverviewSection } from "@/lib/sales/restaurant-overview";
+import { groqChat, isGroqConfigured, parseJsonLoose, type GroqImage } from "@/lib/weekly/groq";
+import {
+  coerceOverview,
+  isOverviewEmpty,
+  type OverviewData,
+  type OverviewSection,
+} from "@/lib/sales/restaurant-overview";
 
 function addMonths(period: string, delta: number): string {
   const [y, m] = period.split("-").map(Number);
@@ -116,5 +121,62 @@ export async function generateOverviewSection(input: {
     return { ok: true, text };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "AI generation failed." };
+  }
+}
+
+/**
+ * Extraction for the "Upload / compile with AI" button on the Overview editor.
+ * Unlike generateOverviewSection (which drafts FROM the imported figures), this
+ * takes the user's OWN notes — pasted text or a screenshot/file of a written
+ * overview — and SORTS them into the four sections, preserving their wording and
+ * any figures exactly. It invents nothing; a section with no matching content
+ * comes back empty.
+ */
+const EXTRACT_SYSTEM = `You reorganise a hotel restaurant's monthly overview notes into four labelled sections and return STRICT JSON. The input is the user's own notes (pasted text or a screenshot) — your job is to SORT them, not to write new ones.
+
+Return ONLY this JSON (no prose, no code fences):
+{"challenges":["..."],"highlights":["..."],"marketing":["..."],"takeaway":"..."}
+
+Sections:
+- challenges  = Key Challenges: problems, declines, anything below budget/target, weak meal periods.
+- highlights  = Positive Highlights: wins, growth, anything above budget/target, strong meal periods.
+- marketing   = Marketing Focus: actions and plans for next month (promotions, campaigns, events, acquisition).
+- takeaway    = Key Takeaway: a short 2–3 sentence summary and the single priority. ONE string, not an array.
+
+Rules:
+- Use ONLY the content given. Keep the user's wording, tone and any figures EXACTLY as written; never invent, add to, or recompute a number.
+- If the notes already carry headings (Key Challenges, Positive Highlights, Marketing Focus, Key Takeaway, or 😊/☹️/💡), follow them.
+- Each bullet is one short line — no leading dash or bullet character, no headings, no markdown.
+- If a section has no matching content, return an empty array [] (or "" for takeaway). Never pad a section with made-up points.`;
+
+export async function extractOverview(
+  input: { text?: string | null; image?: GroqImage | null },
+): Promise<{ ok: true; data: OverviewData } | { ok: false; error: string }> {
+  if (!isGroqConfigured()) {
+    return { ok: false, error: "AI extraction is not configured — set GROQ_API_KEY on the server." };
+  }
+  const text = input.text?.trim();
+  if (!text && !input.image) {
+    return { ok: false, error: "Paste the overview or attach a screenshot/file first." };
+  }
+  const user = text
+    ? `Sort the following restaurant overview notes into the four sections:\n\n${text}`
+    : "Sort the restaurant overview notes in the attached image into the four sections.";
+  try {
+    const raw = await groqChat({
+      system: EXTRACT_SYSTEM,
+      user,
+      image: input.image ?? null,
+      jsonMode: !input.image,
+      temperature: 0.2,
+      maxTokens: 1500,
+    });
+    const data = coerceOverview(parseJsonLoose(raw));
+    if (isOverviewEmpty(data)) {
+      return { ok: false, error: "Nothing could be read from that — check the text/image and try again." };
+    }
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "AI extraction failed." };
   }
 }

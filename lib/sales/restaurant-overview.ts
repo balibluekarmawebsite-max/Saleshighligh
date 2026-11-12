@@ -31,6 +31,33 @@ const asLines = (v: unknown): string[] => {
   return [];
 };
 
+/** A takeaway may arrive as a string or (from an AI extraction) an array of
+ * sentences — join the latter into one paragraph. */
+const asTakeaway = (v: unknown): string => {
+  if (Array.isArray(v)) return v.map((x) => String(x ?? "").trim()).filter(Boolean).join(" ");
+  return String(v ?? "").trim();
+};
+
+/** Pick the first defined value among the given keys (tolerates alias keys an
+ * AI extraction might use, e.g. "keyChallenges" for "challenges"). */
+const pick = (o: Record<string, unknown>, ...keys: string[]): unknown => {
+  for (const k of keys) if (o[k] !== undefined) return o[k];
+  return undefined;
+};
+
+/** Coerce an arbitrary object (parsed JSON, or an AI extraction result) into the
+ * four-section shape. Tolerant of bullet-vs-string and a few alias keys, so both
+ * the stored JSON and the "compile with AI" upload read through one path. */
+export function coerceOverview(raw: unknown): OverviewData {
+  const o = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
+  return {
+    challenges: asLines(pick(o, "challenges", "keyChallenges")),
+    highlights: asLines(pick(o, "highlights", "positiveHighlights")),
+    marketing: asLines(pick(o, "marketing", "marketingFocus", "marketingPlan")),
+    takeaway: asTakeaway(pick(o, "takeaway", "keyTakeaway")),
+  };
+}
+
 /** Parse stored content into the four sections. JSON is the canonical form;
  * anything else (legacy 😊/☹️/💡 text) is kept verbatim in the takeaway. */
 export function parseOverview(content: string | null | undefined): OverviewData {
@@ -38,13 +65,7 @@ export function parseOverview(content: string | null | undefined): OverviewData 
   if (!raw) return emptyOverview();
   if (raw.startsWith("{")) {
     try {
-      const o = JSON.parse(raw) as Record<string, unknown>;
-      return {
-        challenges: asLines(o.challenges),
-        highlights: asLines(o.highlights),
-        marketing: asLines(o.marketing),
-        takeaway: String(o.takeaway ?? "").trim(),
-      };
+      return coerceOverview(JSON.parse(raw));
     } catch {
       // fall through to legacy handling
     }

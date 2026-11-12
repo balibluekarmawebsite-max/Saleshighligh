@@ -6,7 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { periodToDate } from "@/lib/dashboard-data";
 import { prisma } from "@/lib/prisma";
-import { generateOverviewSection } from "@/lib/sales/restaurant-overview-ai";
+import { extractOverview, generateOverviewSection } from "@/lib/sales/restaurant-overview-ai";
 import { serializeOverview, type OverviewData, type OverviewSection } from "@/lib/sales/restaurant-overview";
 import { extractMealSales } from "@/lib/sales/restaurant-sales-ai";
 import { saveMealSales } from "@/lib/sales/restaurant-sales-import";
@@ -30,6 +30,32 @@ export async function generateRestaurantOverviewAction(input: {
   }
   const r = await generateOverviewSection({ property: input.property, period: input.period, section: input.section });
   return r.ok ? { ok: true, text: r.text } : { ok: false, error: r.error };
+}
+
+export interface OverviewExtractResult {
+  ok: boolean;
+  error?: string;
+  data?: OverviewData;
+}
+
+/** Editor/admin: AI-sort a pasted/screenshotted overview into the four
+ * sections (preview only — nothing is written). */
+export async function extractRestaurantOverviewAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<OverviewExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractOverview({ text: input.text, image });
+  return r.ok ? { ok: true, data: r.data } : { ok: false, error: r.error };
 }
 
 export interface SaveResult {

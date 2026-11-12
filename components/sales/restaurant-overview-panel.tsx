@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
 import {
+  extractRestaurantOverviewAction,
   generateRestaurantOverviewAction,
   saveRestaurantOverviewAction,
 } from "@/app/dashboard/[property]/[period]/restaurant/actions";
@@ -136,12 +137,64 @@ function OverviewEditor({
   const [saving, startSave] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Upload / compile-with-AI state.
+  const [uploadText, setUploadText] = useState("");
+  const [image, setImage] = useState<{ base64: string; mediaType: string; name: string } | null>(null);
+  const [compiling, setCompiling] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const aiBusy = busySection !== null || compiling;
+
   // Close on Escape.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  function pickImage(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const base64 = result.includes(",") ? result.slice(result.indexOf(",") + 1) : result;
+      setImage({ base64, mediaType: file.type || "image/png", name: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function compile() {
+    setMsg(null);
+    setCompiling(true);
+    void (async () => {
+      try {
+        const r = await extractRestaurantOverviewAction({
+          property,
+          text: uploadText.trim() || null,
+          imageBase64: image?.base64 ?? null,
+          imageMediaType: image?.mediaType ?? null,
+        });
+        if (r.ok && r.data) {
+          const d = r.data;
+          // Merge: fill each section the AI sorted out, but keep anything the
+          // user already typed where the AI returned nothing for that section.
+          setForm((f) => ({
+            challenges: d.challenges.length ? bulletsToText(d.challenges) : f.challenges,
+            highlights: d.highlights.length ? bulletsToText(d.highlights) : f.highlights,
+            marketing: d.marketing.length ? bulletsToText(d.marketing) : f.marketing,
+            takeaway: d.takeaway.trim() ? d.takeaway : f.takeaway,
+          }));
+          setAiUsed(true);
+          setMsg({ ok: true, text: "Sorted into the sections below — review, edit, then save." });
+        } else {
+          setMsg({ ok: false, text: r.error ?? "Could not read that." });
+        }
+      } catch {
+        setMsg({ ok: false, text: "Could not compile — please try again." });
+      } finally {
+        setCompiling(false);
+      }
+    })();
+  }
 
   function generate(section: OverviewSection) {
     setMsg(null);
@@ -201,6 +254,57 @@ function OverviewEditor({
         </div>
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto p-5">
+          {/* Upload / compile with AI — paste or attach a written overview and let
+              the AI sort it into the four sections below. */}
+          <div className="space-y-2.5 rounded-lg border border-brand-teal/30 bg-brand-teal/5 p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-brand-teal">Upload &amp; compile with AI</p>
+              <span className="text-[11px] text-muted-foreground">optional — or type below</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Paste a written overview or attach a screenshot/file, then compile — the AI sorts your own
+              wording into Key Challenges, Positive Highlights, Marketing Focus and the Key Takeaway. Review
+              before saving; it keeps your figures as written and invents nothing.
+            </p>
+            <textarea
+              value={uploadText}
+              onChange={(e) => setUploadText(e.target.value)}
+              rows={3}
+              placeholder="Paste the overview notes here…"
+              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none"
+            />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => pickImage(e.target.files?.[0])}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                {image ? `📎 ${image.name}` : "Attach screenshot / file"}
+              </button>
+              {image && (
+                <button type="button" onClick={() => setImage(null)} className="text-xs text-variance-negative hover:underline">
+                  Remove
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={compile}
+                disabled={aiBusy || saving || (!uploadText.trim() && !image)}
+                className="ml-auto inline-flex items-center gap-1 rounded-md bg-brand-teal px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-teal/90 disabled:opacity-50"
+              >
+                <Sparkles className="h-3 w-3" />
+                {compiling ? "Compiling…" : "Compile with AI"}
+              </button>
+            </div>
+          </div>
+
           {OVERVIEW_SECTIONS.map((section) => (
             <div key={section}>
               <div className="mb-1 flex items-center justify-between">
@@ -211,7 +315,7 @@ function OverviewEditor({
                 <button
                   type="button"
                   onClick={() => generate(section)}
-                  disabled={busySection !== null || saving}
+                  disabled={aiBusy || saving}
                   className="inline-flex items-center gap-1 text-xs font-medium text-brand-teal transition-colors hover:underline disabled:opacity-50"
                 >
                   <Sparkles className="h-3 w-3" />
@@ -246,7 +350,7 @@ function OverviewEditor({
             <button
               type="button"
               onClick={save}
-              disabled={saving || busySection !== null}
+              disabled={saving || aiBusy}
               className="rounded-md bg-brand-gold px-3 py-1.5 text-sm font-medium text-brand-teal transition-colors hover:bg-brand-gold/90 disabled:opacity-50"
             >
               {saving ? "Saving…" : "Save overview"}
