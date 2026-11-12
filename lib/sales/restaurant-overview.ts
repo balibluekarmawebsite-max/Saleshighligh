@@ -76,7 +76,10 @@ export function isOverviewEmpty(data: OverviewData): boolean {
 export function bulletsFromText(text: string): string[] {
   return String(text ?? "")
     .split("\n")
-    .map((l) => l.replace(/^\s*[-•*‣·]+\s*/, "").trim())
+    // Strip a leading bullet marker, but only treat "-"/"*" as a marker when a
+    // space follows — so a minus sign attached to a figure ("-12%", "-Rp 50M",
+    // "-8.40%") is kept, not read as a bullet and dropped.
+    .map((l) => l.replace(/^\s*(?:[•‣·]+\s*|[-*]+(?=\s)\s*)/, "").trim())
     .filter(Boolean);
 }
 

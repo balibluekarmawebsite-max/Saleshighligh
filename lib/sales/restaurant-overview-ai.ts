@@ -101,13 +101,15 @@ export async function generateOverviewSection(input: {
   if (!isGroqConfigured()) {
     return { ok: false, error: "AI is not configured — set GROQ_API_KEY on the server." };
   }
-  const context = await buildContext(input.property, input.period);
-  if (!context) {
-    return { ok: false, error: "No restaurant figures for this period yet — import the F&B data first." };
-  }
-
-  const user = `Restaurant context (JSON):\n${context}\n\n${SECTION_INSTRUCTION[input.section]}`;
   try {
+    // Inside the try so a transient DB error building the context returns a
+    // clean error instead of throwing out of the action (which would strand the
+    // modal on "Generating…").
+    const context = await buildContext(input.property, input.period);
+    if (!context) {
+      return { ok: false, error: "No restaurant figures for this period yet — import the F&B data first." };
+    }
+    const user = `Restaurant context (JSON):\n${context}\n\n${SECTION_INSTRUCTION[input.section]}`;
     const raw = await groqChat({ system: SYSTEM, user, image: input.image ?? null, temperature: 0.2, maxTokens: 700 });
     const text = String(raw ?? "").trim();
     if (!text) return { ok: false, error: "The AI returned nothing — try again." };

@@ -147,13 +147,18 @@ function OverviewEditor({
     setMsg(null);
     setBusySection(section);
     void (async () => {
-      const r = await generateRestaurantOverviewAction({ property, period, section });
-      setBusySection(null);
-      if (r.ok && r.text != null) {
-        setForm((f) => ({ ...f, [section]: r.text! }));
-        setAiUsed(true);
-      } else {
-        setMsg({ ok: false, text: r.error ?? "Could not generate." });
+      try {
+        const r = await generateRestaurantOverviewAction({ property, period, section });
+        if (r.ok && r.text != null) {
+          setForm((f) => ({ ...f, [section]: r.text! }));
+          setAiUsed(true);
+        } else {
+          setMsg({ ok: false, text: r.error ?? "Could not generate." });
+        }
+      } catch {
+        setMsg({ ok: false, text: "Could not generate — please try again." });
+      } finally {
+        setBusySection(null);
       }
     })();
   }

@@ -34,6 +34,14 @@ describe("restaurant overview parse/serialize", () => {
     expect(bulletsFromText("- one\n• two\n\n  * three  ")).toEqual(["one", "two", "three"]);
   });
 
+  it("keeps a leading minus attached to a figure (does not read it as a bullet)", () => {
+    expect(bulletsFromText("-12% covers vs September")).toEqual(["-12% covers vs September"]);
+    expect(bulletsFromText("-Rp 50M dinner shortfall")).toEqual(["-Rp 50M dinner shortfall"]);
+    expect(bulletsFromText("-8.40% revenue vs budget")).toEqual(["-8.40% revenue vs budget"]);
+    // a dash + space is still a bullet marker
+    expect(bulletsFromText("- 3 pts occupancy lost")).toEqual(["3 pts occupancy lost"]);
+  });
+
   it("coerces a stored string field into bullets (defensive)", () => {
     const parsed = parseOverview(JSON.stringify({ challenges: "- a\n- b", takeaway: "t" }));
     expect(parsed.challenges).toEqual(["a", "b"]);
