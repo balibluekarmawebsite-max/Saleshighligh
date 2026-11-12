@@ -8,6 +8,9 @@ import { periodToDate } from "@/lib/dashboard-data";
 import { prisma } from "@/lib/prisma";
 import { generateOverviewSection } from "@/lib/sales/restaurant-overview-ai";
 import { serializeOverview, type OverviewData, type OverviewSection } from "@/lib/sales/restaurant-overview";
+import { extractMealSales } from "@/lib/sales/restaurant-sales-ai";
+import { saveMealSales } from "@/lib/sales/restaurant-sales-import";
+import type { NormalMealRow, RawMealRow } from "@/lib/sales/restaurant-sales-logic";
 
 export interface GenerateResult {
   ok: boolean;
@@ -83,4 +86,50 @@ export async function saveRestaurantOverviewAction(input: {
   }).catch(() => {});
   revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
   return { ok: true, message: "Overview saved." };
+}
+
+export interface MealExtractResult {
+  ok: boolean;
+  error?: string;
+  meals?: NormalMealRow[];
+}
+
+/** Editor/admin: AI-extract Restaurant Sales meal rows from text/screenshot (preview only). */
+export async function extractMealSalesAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<MealExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractMealSales({ text: input.text, image });
+  return r.ok ? { ok: true, meals: r.meals } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save Restaurant Sales meal rows (covers + revenue per meal). */
+export async function saveMealSalesAction(input: {
+  property: string;
+  period: string;
+  meals: RawMealRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveMealSales({
+    property: input.property,
+    period: input.period,
+    meals: input.meals,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return { ok: r.ok, message: r.message };
 }

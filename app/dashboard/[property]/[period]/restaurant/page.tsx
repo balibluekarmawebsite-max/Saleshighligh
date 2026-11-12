@@ -12,7 +12,8 @@ import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
 import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
-import { MealPeriodTable } from "@/components/tables/meal-period-table";
+import { RestaurantSalesUploader } from "@/components/sales/restaurant-sales-uploader";
+import { RestaurantSalesTable } from "@/components/tables/restaurant-sales-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { achievementPct, variancePct } from "@/lib/calculations";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
@@ -170,30 +171,48 @@ export default async function RestaurantPage({
         </section>
       )}
 
-      {/* 2 — Meal period performance */}
-      {meals.length > 0 ? (
-        <div className="space-y-6">
-          <SectionCard
-            title="Meal Period Performance"
-            description="Covers, average check and revenue vs budget by meal period"
-            insight={
-              strongest && weakest
-                ? `${strongest.meal} led on budget achievement (${strongest.ach!.toFixed(0)}%); ${weakest.meal} lagged (${weakest.ach!.toFixed(0)}%).`
-                : undefined
-            }
-          >
-            <MealPeriodTable meals={meals} />
-            <div className="flex flex-wrap gap-2">
-              {strongest && <Chip tone="good">Strongest · {strongest.meal} {strongest.ach!.toFixed(0)}%</Chip>}
-              {weakest && <Chip tone="bad">Weakest · {weakest.meal} {weakest.ach!.toFixed(0)}%</Chip>}
-              {acOutlier && acOutlier.acVar !== null && (
-                <Chip tone="gold">
-                  {acOutlier.meal} avg check {formatVariancePercent(acOutlier.acVar)} vs budget
-                </Chip>
-              )}
+      {/* 2 — Restaurant Sales Performance */}
+      <div className="space-y-6">
+        <SectionCard
+          title="Restaurant Sales Performance"
+          description="Covers, average check and revenue by meal period (Actual · % · Budget · % · Different · %)"
+          insight={
+            meals.length > 0 && strongest && weakest
+              ? `${strongest.meal} led on budget achievement (${strongest.ach!.toFixed(0)}%); ${weakest.meal} lagged (${weakest.ach!.toFixed(0)}%).`
+              : undefined
+          }
+        >
+          {canEdit && (
+            <div className="mb-1">
+              <RestaurantSalesUploader
+                property={params.property}
+                period={params.period}
+                initial={meals}
+                hasData={meals.length > 0}
+              />
             </div>
-          </SectionCard>
+          )}
+          {meals.length > 0 ? (
+            <>
+              <RestaurantSalesTable meals={meals} />
+              <div className="flex flex-wrap gap-2">
+                {strongest && <Chip tone="good">Strongest · {strongest.meal} {strongest.ach!.toFixed(0)}%</Chip>}
+                {weakest && <Chip tone="bad">Weakest · {weakest.meal} {weakest.ach!.toFixed(0)}%</Chip>}
+                {acOutlier && acOutlier.acVar !== null && (
+                  <Chip tone="gold">
+                    {acOutlier.meal} avg check {formatVariancePercent(acOutlier.acVar)} vs budget
+                  </Chip>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No sales data yet{canEdit ? " — upload a screenshot or paste the table above." : "."}
+            </p>
+          )}
+        </SectionCard>
 
+        {meals.length > 0 && (
           <ExportableCard
             title="Revenue by Meal — Actual vs Budget"
             description="Meal-period revenue against budget"
@@ -201,14 +220,8 @@ export default async function RestaurantPage({
           >
             <ActualBudgetBarChart data={mealBarData} />
           </ExportableCard>
-        </div>
-      ) : (
-        <SectionNote
-          title="Meal Period Performance"
-          description="Covers, average check and revenue by meal period"
-          message="No meal-period data for this period yet."
-        />
-      )}
+        )}
+      </div>
 
       {/* 3 — Source of booking */}
       {sources.length > 0 ? (
