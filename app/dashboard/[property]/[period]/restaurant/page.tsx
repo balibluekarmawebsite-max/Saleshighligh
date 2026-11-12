@@ -277,42 +277,43 @@ export default async function RestaurantPage({
           </div>
         )}
 
-        {hasAcquisition ? (
-          <div className="space-y-6">
-            {acquisition.length > 0 && (
-              <div className="grid gap-6 lg:grid-cols-2">
-                <ExportableCard title="Booking" description="Share of bookings by channel" fileName={`${fileBase}-acq-bookings`}>
-                  <RevenueMixChart data={bookingsMix} valueFormat="number" />
-                </ExportableCard>
-                <ExportableCard title="Cover" description="Share of covers by channel" fileName={`${fileBase}-acq-covers`}>
-                  <RevenueMixChart data={coversMix} valueFormat="number" />
-                </ExportableCard>
-              </div>
-            )}
-            {coverBookingDaily.length > 0 && (
-              <ExportableCard title="Cover vs Booking" description="Daily bookings and covers across the month" fileName={`${fileBase}-acq-daily`}>
-                <CoverVsBookingChart data={coverBookingDaily} />
+        <div className="space-y-6">
+          {acquisition.length > 0 && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <ExportableCard title="Booking" description="Share of bookings by channel" fileName={`${fileBase}-acq-bookings`}>
+                <RevenueMixChart data={bookingsMix} valueFormat="number" />
               </ExportableCard>
-            )}
-            <div className="rounded-lg border border-border bg-card p-5">
-              <h3 className="text-sm font-semibold text-foreground">Customer Acquisition Breakdown</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Bookings &amp; covers distribution with the key performance insight.</p>
-              <div className="mt-3">
-                <NarrativePanel
-                  block={acquisitionNarrative}
-                  section="ACQUISITION_SPLIT"
-                  property={params.property}
-                  period={params.period}
-                  emptyText="No acquisition summary written for this period yet."
-                />
-              </div>
+              <ExportableCard title="Cover" description="Share of covers by channel" fileName={`${fileBase}-acq-covers`}>
+                <RevenueMixChart data={coversMix} valueFormat="number" />
+              </ExportableCard>
+            </div>
+          )}
+          {coverBookingDaily.length > 0 && (
+            <ExportableCard title="Cover vs Booking" description="Daily bookings and covers across the month" fileName={`${fileBase}-acq-daily`}>
+              <CoverVsBookingChart data={coverBookingDaily} />
+            </ExportableCard>
+          )}
+          {!hasAcquisition && (
+            <p className="text-sm text-muted-foreground">
+              No acquisition data yet{canEdit ? " — upload a screenshot or paste the channel split / daily table above." : "."}
+            </p>
+          )}
+          {/* Summary always renders (like the other pages) so a saved narrative
+              is never orphaned when the numeric data is absent or later cleared. */}
+          <div className="rounded-lg border border-border bg-card p-5">
+            <h3 className="text-sm font-semibold text-foreground">Customer Acquisition Breakdown</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Bookings &amp; covers distribution with the key performance insight.</p>
+            <div className="mt-3">
+              <NarrativePanel
+                block={acquisitionNarrative}
+                section="ACQUISITION_SPLIT"
+                property={params.property}
+                period={params.period}
+                emptyText="No acquisition summary written for this period yet."
+              />
             </div>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No acquisition data yet{canEdit ? " — upload a screenshot or paste the channel split / daily table above." : "."}
-          </p>
-        )}
+        </div>
       </SectionCard>
 
       {/* 5 — Chope panel */}
