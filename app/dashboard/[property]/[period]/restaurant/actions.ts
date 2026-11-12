@@ -11,6 +11,9 @@ import { serializeOverview, type OverviewData, type OverviewSection } from "@/li
 import { extractMealSales } from "@/lib/sales/restaurant-sales-ai";
 import { saveMealSales } from "@/lib/sales/restaurant-sales-import";
 import type { NormalMealRow, RawMealRow } from "@/lib/sales/restaurant-sales-logic";
+import { extractSources } from "@/lib/sales/restaurant-sources-ai";
+import { saveSources } from "@/lib/sales/restaurant-sources-import";
+import type { NormalSourceRow, RawSourceRow } from "@/lib/sales/restaurant-sources-logic";
 
 export interface GenerateResult {
   ok: boolean;
@@ -153,6 +156,52 @@ export async function saveMealSalesAction(input: {
     property: input.property,
     period: input.period,
     meals: input.meals,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface SourcesExtractResult {
+  ok: boolean;
+  error?: string;
+  sources?: NormalSourceRow[];
+}
+
+/** Editor/admin: AI-extract Source-of-Booking rows from text/screenshot (preview only). */
+export async function extractRestaurantSourcesAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<SourcesExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractSources({ text: input.text, image });
+  return r.ok ? { ok: true, sources: r.sources } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save Source-of-Booking rows (persons + revenue per source). */
+export async function saveRestaurantSourcesAction(input: {
+  property: string;
+  period: string;
+  sources: RawSourceRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveSources({
+    property: input.property,
+    period: input.period,
+    sources: input.sources,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,
   });

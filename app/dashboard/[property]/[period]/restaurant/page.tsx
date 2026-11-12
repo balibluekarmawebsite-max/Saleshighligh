@@ -13,7 +13,9 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
 import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
 import { RestaurantSalesUploader } from "@/components/sales/restaurant-sales-uploader";
+import { RestaurantSourcesUploader } from "@/components/sales/restaurant-sources-uploader";
 import { RestaurantSalesTable } from "@/components/tables/restaurant-sales-table";
+import { RestaurantSourcesTable } from "@/components/tables/restaurant-sources-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { achievementPct, variancePct } from "@/lib/calculations";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
@@ -224,48 +226,35 @@ export default async function RestaurantPage({
       </div>
 
       {/* 3 — Source of booking */}
-      {sources.length > 0 ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ExportableCard title="Source of Booking" description="Persons, average check and revenue by source" fileName={`${fileBase}-sources`}>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs font-medium text-muted-foreground">
-                    <th className="px-3 py-2 text-left">Source</th>
-                    <th className="px-3 py-2 text-left">Type</th>
-                    <th className="px-3 py-2 text-right">Persons</th>
-                    <th className="px-3 py-2 text-right">%</th>
-                    <th className="px-3 py-2 text-right">Avg Check</th>
-                    <th className="px-3 py-2 text-right">Revenue</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sources.map((s) => (
-                    <tr key={s.sourceName} className="border-b border-border/60">
-                      <td className="px-3 py-2 font-medium text-foreground">{s.sourceName}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{CAT_LABEL[s.category] ?? s.category}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(s.persons)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{s.pctPersons.toFixed(1)}%</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-foreground">{s.avgCheck !== null ? formatIDR(s.avgCheck) : "—"}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatIDR(s.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </ExportableCard>
-
-          <ExportableCard title="Covers Mix" description="In-House vs Outsider vs Platforms" fileName={`${fileBase}-source-mix`}>
-            <RevenueMixChart data={sourceMix} valueFormat="number" />
-          </ExportableCard>
-        </div>
-      ) : (
-        <SectionNote
-          title="Source of Booking"
-          description="In-House vs Outsider vs delivery platforms"
-          message="No source-of-booking data for this period yet."
-        />
-      )}
+      <SectionCard
+        title="Source of Booking"
+        description="Persons, % share, average check and revenue by source (In-House · Outsider · Platforms)"
+      >
+        {canEdit && (
+          <div className="mb-1">
+            <RestaurantSourcesUploader
+              property={params.property}
+              period={params.period}
+              initial={sources}
+              hasData={sources.length > 0}
+            />
+          </div>
+        )}
+        {sources.length > 0 ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ExportableCard title="By Source" description="Persons · % · average check · revenue, with TOTAL" fileName={`${fileBase}-sources`}>
+              <RestaurantSourcesTable sources={sources} />
+            </ExportableCard>
+            <ExportableCard title="Covers Mix" description="In-House vs Outsider vs Platforms" fileName={`${fileBase}-source-mix`}>
+              <RevenueMixChart data={sourceMix} valueFormat="number" />
+            </ExportableCard>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No source-of-booking data yet{canEdit ? " — upload a screenshot or paste the table above." : "."}
+          </p>
+        )}
+      </SectionCard>
 
       {/* 4 — Acquisition split */}
       {acquisition.length > 0 ? (
