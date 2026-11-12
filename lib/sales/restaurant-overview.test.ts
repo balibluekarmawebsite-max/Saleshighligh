@@ -84,6 +84,12 @@ describe("coerceOverview (AI extraction / upload)", () => {
     expect(data.challenges).toEqual(["-12% covers vs September", "Revenue below budget"]);
   });
 
+  it("never renders a stray object takeaway as [object Object]", () => {
+    expect(coerceOverview({ takeaway: { foo: 1 } }).takeaway).toBe("");
+    // a primitive (number) is still kept as text
+    expect(coerceOverview({ takeaway: 5 }).takeaway).toBe("5");
+  });
+
   it("returns an empty overview for junk / non-object input", () => {
     expect(isOverviewEmpty(coerceOverview(null))).toBe(true);
     expect(isOverviewEmpty(coerceOverview("nope"))).toBe(true);

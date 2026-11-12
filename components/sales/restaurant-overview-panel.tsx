@@ -279,7 +279,12 @@ function OverviewEditor({
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => pickImage(e.target.files?.[0])}
+                onChange={(e) => {
+                  pickImage(e.target.files?.[0]);
+                  // Clear the input so re-selecting the SAME file (e.g. after
+                  // Remove) still fires change and re-attaches it.
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
               />
               <button
                 type="button"

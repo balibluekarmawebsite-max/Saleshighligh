@@ -149,7 +149,17 @@ export function RestaurantSalesUploader({
         className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickImage(e.target.files?.[0])} />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            pickImage(e.target.files?.[0]);
+            // Clear so re-selecting the SAME file (after Remove) re-attaches it.
+            if (fileRef.current) fileRef.current.value = "";
+          }}
+        />
         <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
           {image ? `📎 ${image.name}` : "Attach screenshot / file"}
         </button>

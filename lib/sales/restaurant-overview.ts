@@ -32,9 +32,11 @@ const asLines = (v: unknown): string[] => {
 };
 
 /** A takeaway may arrive as a string or (from an AI extraction) an array of
- * sentences — join the latter into one paragraph. */
+ * sentences — join the latter into one paragraph. A stray object never renders
+ * as "[object Object]"; it becomes empty. */
 const asTakeaway = (v: unknown): string => {
   if (Array.isArray(v)) return v.map((x) => String(x ?? "").trim()).filter(Boolean).join(" ");
+  if (v != null && typeof v === "object") return "";
   return String(v ?? "").trim();
 };
 
