@@ -6,7 +6,7 @@ import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { runMonthlyAdsSync } from "@/lib/sales/ads-monthly-sync";
 import { extractOtaRankings } from "@/lib/sales/ota-ranking-ai";
 import { saveOtaRankings } from "@/lib/sales/ota-ranking-import";
-import type { NormalRankingRow } from "@/lib/sales/ota-ranking-logic";
+import type { NormalRankingRow, RawRankingRow } from "@/lib/sales/ota-ranking-logic";
 
 export interface MarketingActionResult {
   ok: boolean;
@@ -52,11 +52,12 @@ export async function extractOtaRankingAction(input: {
   return r.ok ? { ok: true, rankings: r.rankings } : { ok: false, error: r.error };
 }
 
-/** Editor/admin: save OTA ranking rows for the period (one recorded month). */
+/** Editor/admin: save OTA ranking rows for the period (one recorded month).
+ * Rows arrive as raw strings and are parsed server-side (locale-aware). */
 export async function saveOtaRankingAction(input: {
   property: string;
   period: string;
-  rankings: NormalRankingRow[];
+  rankings: RawRankingRow[];
 }): Promise<MarketingActionResult> {
   const user = await getCurrentUser();
   if (!canEditProperty(user, input.property)) {

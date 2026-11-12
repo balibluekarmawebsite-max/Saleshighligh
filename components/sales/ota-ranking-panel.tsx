@@ -56,7 +56,11 @@ export function OtaRankingPanel({
     for (const c of rankCards) {
       const pl = c.platform as RankingPlatform;
       if (f[pl]) {
-        f[pl] = { rank: c.rank != null ? String(c.rank) : "", total: c.totalInMarket != null ? String(c.totalInMarket) : "", rating: "" };
+        f[pl] = {
+          rank: c.rank != null ? String(c.rank) : "",
+          total: c.totalInMarket != null ? String(c.totalInMarket) : "",
+          rating: c.rating != null ? String(c.rating) : "",
+        };
       }
     }
     return f;
@@ -111,17 +115,13 @@ export function OtaRankingPanel({
   }
 
   function save() {
-    const rankings = RANKING_PLATFORMS.map((pl) => {
-      const row = form[pl];
-      const rank = Number(row.rank);
-      if (!row.rank.trim() || !Number.isFinite(rank) || rank <= 0) return null;
-      return {
-        platform: pl,
-        rank: Math.round(rank),
-        totalInMarket: row.total.trim() ? Math.round(Number(row.total)) : null,
-        rating: row.rating.trim() ? Number(row.rating) : null,
-      };
-    }).filter((r): r is NonNullable<typeof r> => r !== null);
+    // Send raw strings; the server parses them (locale-aware) in one place.
+    const rankings = RANKING_PLATFORMS.map((pl) => ({
+      platform: pl,
+      rank: form[pl].rank,
+      totalInMarket: form[pl].total,
+      rating: form[pl].rating,
+    })).filter((r) => r.rank.trim() !== "");
 
     if (rankings.length === 0) {
       setMsg({ ok: false, text: "Enter at least one platform rank." });

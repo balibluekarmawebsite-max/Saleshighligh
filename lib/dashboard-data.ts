@@ -864,6 +864,7 @@ export interface RankCard {
   platform: string;
   rank: number | null;
   totalInMarket: number | null;
+  rating: number | null;
   change: number | null; // prevRank - rank (+ = improved, lower is better)
 }
 
@@ -1054,6 +1055,7 @@ export async function getMarketingPageData(
       platform: pl,
       rank: cur?.rank ?? null,
       totalInMarket: cur?.totalInMarket ?? null,
+      rating: cur?.rating != null ? cur.rating.toNumber() : null,
       change: cur && prev ? prev.rank - cur.rank : null,
     };
   });

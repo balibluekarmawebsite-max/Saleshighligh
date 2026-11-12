@@ -58,6 +58,13 @@ export async function saveOtaRankings(input: OtaRankingImportInput): Promise<Ota
       if (period.status === "FINAL") throw new FinalLockError();
 
       for (const r of rows) {
+        // On update, only overwrite the rating when a new one was supplied — a
+        // blank rating field must not wipe a previously-stored score.
+        const update: { rank: number; totalInMarket: number | null; rating?: number } = {
+          rank: r.rank,
+          totalInMarket: r.totalInMarket,
+        };
+        if (r.rating != null) update.rating = r.rating;
         await tx.platformRanking.upsert({
           where: { periodId_platform: { periodId: period.id, platform: r.platform } },
           create: {
@@ -67,7 +74,7 @@ export async function saveOtaRankings(input: OtaRankingImportInput): Promise<Ota
             totalInMarket: r.totalInMarket,
             rating: r.rating,
           },
-          update: { rank: r.rank, totalInMarket: r.totalInMarket, rating: r.rating },
+          update,
         });
       }
     });

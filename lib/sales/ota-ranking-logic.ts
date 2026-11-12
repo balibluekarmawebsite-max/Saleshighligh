@@ -29,9 +29,25 @@ export interface NormalRankingRow {
   rating: number | null;
 }
 
-const num = (v: unknown): number | null => {
-  if (v == null || v === "") return null;
-  const n = typeof v === "number" ? v : Number(String(v).replace(/[,\s#]/g, ""));
+/** Integer parse for rank/total: keep digits only, so "#3", "1,248" and the
+ * Indonesian "1.248" all read as the whole number (1248), never a fraction. */
+const intNum = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? Math.round(v) : null;
+  const s = String(v ?? "").replace(/[^\d]/g, "");
+  if (!s) return null;
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** Decimal parse for rating: accept a comma OR dot decimal ("9,1" or "9.1"),
+ * drop stray characters, keep a single decimal point. */
+const decNum = (v: unknown): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  let s = String(v ?? "").trim().replace(/,/g, ".").replace(/[^\d.]/g, "");
+  const dot = s.indexOf(".");
+  if (dot >= 0) s = s.slice(0, dot + 1) + s.slice(dot + 1).replace(/\./g, "");
+  if (!s || s === ".") return null;
+  const n = parseFloat(s);
   return Number.isFinite(n) ? n : null;
 };
 
@@ -57,19 +73,24 @@ export function normalizeRankings(raw: RawRankingRow[]): RankingNormalizeResult 
   let skipped = 0;
 
   for (const r of raw ?? []) {
+    if (r == null || typeof r !== "object") {
+      skipped += 1;
+      continue;
+    }
     const platform = normalizeRankingPlatform(r.platform);
-    const rank = num(r.rank);
+    const rank = intNum(r.rank);
     if (!platform || rank == null || rank <= 0) {
       skipped += 1;
       continue;
     }
-    const total = num(r.totalInMarket ?? r.total);
-    const rating = num(r.rating);
+    const total = intNum(r.totalInMarket ?? r.total);
+    const rating = decNum(r.rating);
     byPlatform.set(platform, {
       platform,
-      rank: Math.round(rank),
-      totalInMarket: total != null && total > 0 ? Math.round(total) : null,
-      // Ratings are 0–5 (or 0–10); keep a sane positive value, else null.
+      rank,
+      totalInMarket: total != null && total > 0 ? total : null,
+      // Ratings are 0–5 (Tripadvisor) or 0–10 (Booking/Expedia). Keep a sane
+      // positive value (≤10, the stored column's range), else null.
       rating: rating != null && rating > 0 && rating <= 10 ? rating : null,
     });
   }

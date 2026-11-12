@@ -493,7 +493,8 @@ model PlatformRanking {
   platform      RankingPlatform
   rank          Int
   totalInMarket Int?
-  rating        Decimal?        @db.Decimal(3, 2)
+  // 4,2 so a Booking.com / Expedia perfect "10.00" fits (Tripadvisor uses 0–5).
+  rating        Decimal?        @db.Decimal(4, 2)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

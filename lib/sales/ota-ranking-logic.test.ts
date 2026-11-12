@@ -43,4 +43,19 @@ describe("normalizeRankings", () => {
     expect(r.rows).toHaveLength(1);
     expect(r.rows[0]).toEqual({ platform: "BOOKING", rank: 4, totalInMarket: null, rating: null });
   });
+
+  it("parses Indonesian-locale strings and allows a perfect 10 rating", () => {
+    const r = normalizeRankings([
+      { platform: "Booking", rank: "#5", total: "1.248", rating: "9,1" }, // dot thousands, comma decimal
+      { platform: "Expedia", rank: "3", total: "1,024", rating: "10" }, // comma thousands, perfect score
+    ]);
+    expect(r.rows[0]).toEqual({ platform: "BOOKING", rank: 5, totalInMarket: 1248, rating: 9.1 });
+    expect(r.rows[1]).toEqual({ platform: "EXPEDIA", rank: 3, totalInMarket: 1024, rating: 10 });
+  });
+
+  it("skips null/primitive rows without crashing", () => {
+    const r = normalizeRankings([null as never, "x" as never, { platform: "Booking", rank: 2 }]);
+    expect(r.rows).toHaveLength(1);
+    expect(r.skipped).toBe(2);
+  });
 });

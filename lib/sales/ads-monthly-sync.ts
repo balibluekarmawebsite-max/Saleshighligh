@@ -82,7 +82,8 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
       return fail(409, "This report period is marked FINAL and is locked for editing.");
     }
 
-    const window = monthWindow(input.period);
+    const periodStr = date.toISOString().slice(0, 7); // normalized (trimmed) YYYY-MM
+    const window = monthWindow(periodStr);
     const fetched = await fetchAdsReport(code, window); // throws on HTTP/auth errors
 
     const rows = fetched.platforms
@@ -108,28 +109,21 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
         update: {},
         select: { id: true },
       });
-      for (const r of rows) {
-        await tx.adsPerformance.upsert({
-          where: { periodId_unit_platform: { periodId: period.id, unit: "HOTEL", platform: r.platform } },
-          create: {
-            periodId: period.id,
-            unit: "HOTEL",
-            platform: r.platform,
-            spend: r.spend,
-            impressions: r.impressions,
-            clicks: r.clicks,
-            reach: r.reach,
-            trackedRevenue: r.trackedRevenue,
-          },
-          update: {
-            spend: r.spend,
-            impressions: r.impressions,
-            clicks: r.clicks,
-            reach: r.reach,
-            trackedRevenue: r.trackedRevenue,
-          },
-        });
-      }
+      // Replace the period's HOTEL ads rows so a platform no longer returned by
+      // the ads API doesn't linger and inflate spend/ROAS.
+      await tx.adsPerformance.deleteMany({ where: { periodId: period.id, unit: "HOTEL" } });
+      await tx.adsPerformance.createMany({
+        data: rows.map((r) => ({
+          periodId: period.id,
+          unit: "HOTEL" as const,
+          platform: r.platform,
+          spend: r.spend,
+          impressions: r.impressions,
+          clicks: r.clicks,
+          reach: r.reach,
+          trackedRevenue: r.trackedRevenue,
+        })),
+      });
       await tx.importHistory.create({
         data: {
           propertyId: property.id,
@@ -147,7 +141,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
     const roasPct = spend > 0 ? (trackedRevenue / spend) * 100 : null;
 
     await logAudit("sales_ads_monthly_sync", code, {
-      period: input.period,
+      period: periodStr,
       platforms: rows.length,
       spend,
       trackedRevenue,
@@ -159,14 +153,14 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
       body: {
         ok: true,
         property: code,
-        period: input.period,
+        period: periodStr,
         periodId,
         platforms: rows.length,
         spend,
         trackedRevenue,
         roasPct,
         window: fetched.window,
-        message: `Ads synced — ${rows.length} platform(s) for ${input.period}${roasPct !== null ? ` · ROAS ${roasPct.toFixed(0)}%` : ""}.`,
+        message: `Ads synced — ${rows.length} platform(s) for ${periodStr}${roasPct !== null ? ` · ROAS ${roasPct.toFixed(0)}%` : ""}.`,
       },
     };
   } catch (e) {
