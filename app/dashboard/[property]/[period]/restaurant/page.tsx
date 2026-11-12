@@ -124,8 +124,21 @@ export default async function RestaurantPage({
         </p>
       </div>
 
-      {/* 1 — Overview strip */}
-      {overview ? (
+      {/* 1 — Overview (structured narrative) */}
+      <Card>
+        <CardContent className="p-6">
+          <RestaurantOverviewPanel
+            property={params.property}
+            period={params.period}
+            content={narrative?.content ?? null}
+            aiGenerated={narrative?.aiGenerated ?? false}
+            canEdit={canEdit}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 1b — KPI strip (shown once the F&B figures are imported) */}
+      {overview && (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
             label="Total Covers"
@@ -155,8 +168,6 @@ export default async function RestaurantPage({
             sub="of budget"
           />
         </section>
-      ) : (
-        <SectionNote title="Overview" message="Import the F&B tab to populate covers, revenue and average check." />
       )}
 
       {/* 2 — Meal period performance */}
@@ -361,18 +372,6 @@ export default async function RestaurantPage({
         <SectionNote title="Restaurant Tripadvisor" description="Listing performance" message="No restaurant Tripadvisor data for this period yet." />
       )}
 
-      {/* 9 — Overview narrative (structured) */}
-      <Card>
-        <CardContent className="p-6">
-          <RestaurantOverviewPanel
-            property={params.property}
-            period={params.period}
-            content={narrative?.content ?? null}
-            aiGenerated={narrative?.aiGenerated ?? false}
-            canEdit={canEdit}
-          />
-        </CardContent>
-      </Card>
     </div>
   );
 }
