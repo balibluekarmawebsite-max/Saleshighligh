@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { periodMonthShort } from "@/lib/labels";
 import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
 import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
+import { channelLabel, channelSortKey } from "@/lib/sales/restaurant-acquisition-logic";
 import { averageLosNights } from "@/lib/sales/guest-arrivals-logic";
 import { getRoomTypeNameMap } from "@/lib/sales/room-type-name-rules";
 import { resolveRoomTypeNames } from "@/lib/sales/room-type-names";
@@ -1146,9 +1147,16 @@ export interface SourceRow {
 }
 
 export interface AcqRow {
-  channel: string; // WALK_IN | REPEATER | CHOPE | CATERING
+  channel: string; // free text: Walk-in | Repeater | Chope | Phone/WA | …
+  label: string; // display label (channelLabel)
   bookingsPct: number; // display percent (0–100)
   coversPct: number;
+}
+
+export interface AcqDailyPoint {
+  day: number; // 1–31
+  bookings: number;
+  covers: number;
 }
 
 export interface ChopeSummary {
@@ -1202,6 +1210,8 @@ export interface RestaurantPageData {
   restaurantRevenueBudget: number;
   sources: SourceRow[];
   acquisition: AcqRow[];
+  acquisitionDaily: AcqDailyPoint[];
+  acquisitionNarrative: NarrativeBlock | null;
   chope: ChopeSummary | null;
   gokai: GokaiSummary | null;
   ads: AdsSummary | null;
@@ -1212,7 +1222,6 @@ export interface RestaurantPageData {
 }
 
 const MEAL_ORDER = ["BREAKFAST", "LUNCH", "DINNER"];
-const ACQ_ORDER = ["WALK_IN", "REPEATER", "CHOPE", "CATERING"];
 
 /** Bucket a free-text F&B source name into In-House / Outsider / Platform. */
 function classifyFnbSource(name: string): FnbSourceCategory {
@@ -1240,11 +1249,12 @@ export async function getRestaurantPageData(
           fnbSales: true,
           fnbSources: true,
           fnbAcquisition: true,
+          fnbAcquisitionDaily: true,
           chopeReports: true,
           gokaiReports: true,
           adsPerformance: { where: { unit: "RESTAURANT" } },
           tripadvisorMetrics: { where: { unit: "RESTAURANT" } },
-          narrativeContent: { where: { section: "RESTAURANT_OVERVIEW" } },
+          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT"] } } },
         },
       },
     },
@@ -1276,6 +1286,8 @@ export async function getRestaurantPageData(
       restaurantRevenueBudget: 0,
       sources: [],
       acquisition: [],
+      acquisitionDaily: [],
+      acquisitionNarrative: null,
       chope: null,
       gokai: null,
       ads: null,
@@ -1337,14 +1349,20 @@ export async function getRestaurantPageData(
     })
     .sort((a, b) => b.revenue - a.revenue);
 
-  // Acquisition mix (stored as ratios → display percents)
+  // Acquisition mix (free-text channel, stored as ratios → display percents).
   const acquisition: AcqRow[] = [...current.fnbAcquisition]
-    .sort((a, b) => ACQ_ORDER.indexOf(a.channel) - ACQ_ORDER.indexOf(b.channel))
+    .sort((a, b) => channelSortKey(a.channel) - channelSortKey(b.channel) || a.channel.localeCompare(b.channel))
     .map((r) => ({
       channel: r.channel,
+      label: channelLabel(r.channel),
       bookingsPct: r.bookingsPct.toNumber() * 100,
       coversPct: r.coversPct.toNumber() * 100,
     }));
+
+  // Daily cover vs booking (the "Cover vs Booking" chart), sorted by day.
+  const acquisitionDaily: AcqDailyPoint[] = [...current.fnbAcquisitionDaily]
+    .sort((a, b) => a.day - b.day)
+    .map((d) => ({ day: d.day, bookings: d.bookings, covers: d.covers }));
 
   // Chope
   const chopeRow = current.chopeReports[0];
@@ -1419,8 +1437,12 @@ export async function getRestaurantPageData(
     };
   }
 
-  const narr = current.narrativeContent[0];
-  const narrative = narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null;
+  const narrAt = (section: string) => {
+    const n = current.narrativeContent.find((x) => x.section === section);
+    return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
+  };
+  const narrative = narrAt("RESTAURANT_OVERVIEW");
+  const acquisitionNarrative = narrAt("ACQUISITION_SPLIT");
 
   return {
     ...base,
@@ -1432,6 +1454,8 @@ export async function getRestaurantPageData(
     restaurantRevenueBudget,
     sources,
     acquisition,
+    acquisitionDaily,
+    acquisitionNarrative,
     chope,
     gokai,
     ads,

@@ -14,6 +14,14 @@ import type { NormalMealRow, RawMealRow } from "@/lib/sales/restaurant-sales-log
 import { extractSources } from "@/lib/sales/restaurant-sources-ai";
 import { saveSources } from "@/lib/sales/restaurant-sources-import";
 import type { NormalSourceRow, RawSourceRow } from "@/lib/sales/restaurant-sources-logic";
+import { extractAcquisition } from "@/lib/sales/restaurant-acquisition-ai";
+import { saveAcquisition } from "@/lib/sales/restaurant-acquisition-import";
+import type {
+  NormalChannelRow,
+  NormalDailyRow,
+  RawChannelRow,
+  RawDailyRow,
+} from "@/lib/sales/restaurant-acquisition-logic";
 
 export interface GenerateResult {
   ok: boolean;
@@ -202,6 +210,55 @@ export async function saveRestaurantSourcesAction(input: {
     property: input.property,
     period: input.period,
     sources: input.sources,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface AcquisitionExtractResult {
+  ok: boolean;
+  error?: string;
+  channels?: NormalChannelRow[];
+  daily?: NormalDailyRow[];
+}
+
+/** Editor/admin: AI-extract acquisition channels + daily rows from text/screenshot (preview only). */
+export async function extractRestaurantAcquisitionAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<AcquisitionExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractAcquisition({ text: input.text, image });
+  return r.ok ? { ok: true, channels: r.channels, daily: r.daily } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save acquisition channels and/or daily cover-vs-booking rows. */
+export async function saveRestaurantAcquisitionAction(input: {
+  property: string;
+  period: string;
+  channels?: RawChannelRow[];
+  daily?: RawDailyRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveAcquisition({
+    property: input.property,
+    period: input.period,
+    channels: input.channels,
+    daily: input.daily,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,
   });

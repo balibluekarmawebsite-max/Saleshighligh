@@ -244,6 +244,49 @@ async function socialContext(code: string, period: string) {
   };
 }
 
+function addMonthsPeriod(period: string, delta: number): string {
+  const [y, m] = period.split("-").map(Number);
+  const d = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+const fmtPoints = (v: number): string => `${v > 0 ? "+" : ""}${v.toFixed(1)} pts`;
+
+/** Acquisition split: per-channel booking/cover share + month-over-month point
+ * movement, plus daily totals. Percentages come pre-formatted so the model only
+ * quotes them. Last-year numbers aren't stored, so none are supplied. */
+async function acquisitionContext(code: string, period: string) {
+  const cur = await getRestaurantPageData(code, period);
+  if (!cur || !cur.hasData || (cur.acquisition.length === 0 && cur.acquisitionDaily.length === 0)) return null;
+
+  const prevPeriod = addMonthsPeriod(period, -1);
+  const prev = await getRestaurantPageData(code, prevPeriod);
+  const prevByChannel = new Map((prev?.acquisition ?? []).map((a) => [a.label.toLowerCase(), a]));
+  const prevMonth = periodLabel(prevPeriod);
+
+  const channels = cur.acquisition.map((a) => {
+    const p = prevByChannel.get(a.label.toLowerCase());
+    return {
+      channel: a.label,
+      bookingShare: `${a.bookingsPct.toFixed(1)}%`,
+      coverShare: `${a.coversPct.toFixed(1)}%`,
+      bookingVsLastMonth: p ? `${fmtPoints(a.bookingsPct - p.bookingsPct)} vs ${prevMonth}` : null,
+      coverVsLastMonth: p ? `${fmtPoints(a.coversPct - p.coversPct)} vs ${prevMonth}` : null,
+    };
+  });
+
+  const daily =
+    cur.acquisitionDaily.length > 0
+      ? {
+          days: cur.acquisitionDaily.length,
+          totalBookings: num(cur.acquisitionDaily.reduce((s, d) => s + d.bookings, 0)),
+          totalCovers: num(cur.acquisitionDaily.reduce((s, d) => s + d.covers, 0)),
+        }
+      : null;
+
+  return { restaurant: cur.property.restaurantName, previousMonth: prevMonth, channels, daily };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -253,6 +296,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   SPA_OVERVIEW: spaContext,
   ADS_SUMMARY: adsContext,
   SOCIAL_SUMMARY: socialContext,
+  ACQUISITION_SPLIT: acquisitionContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

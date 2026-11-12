@@ -46,7 +46,6 @@ const ACCOUNT_TYPE = ["OTA", "TA", "CORPORATE", "WHOLESALER"] as const;
 const BUSINESS_UNIT = ["HOTEL", "RESTAURANT", "SPA"] as const;
 const ADS_PLATFORM = ["GOOGLE", "META", "CORPORATE"] as const;
 const MEAL_PERIOD = ["BREAKFAST", "LUNCH", "DINNER"] as const;
-const FNB_CHANNEL = ["WALK_IN", "REPEATER", "CHOPE", "CATERING"] as const;
 const SPA_SEGMENT = ["IN_HOUSE", "OUTSIDE", "INCLUSION"] as const;
 const RANKING_PLATFORM = ["BOOKING", "EXPEDIA", "TRIPADVISOR"] as const;
 const SOCIAL_PLATFORM = ["INSTAGRAM", "FACEBOOK", "TIKTOK", "YOUTUBE"] as const;
@@ -183,7 +182,7 @@ export const DOMAINS: DomainSpec[] = [
     tab: "FNB_ACQUISITION",
     model: "fnbAcquisition",
     columns: [
-      { key: "channel", header: "Channel", type: "enum", required: true, enumValues: FNB_CHANNEL, example: "WALK_IN" },
+      { key: "channel", header: "Channel", type: "string", required: true, example: "Walk-in" },
       { key: "bookingsPct", header: "Bookings %", type: "percent", required: true, example: 0.45 },
       { key: "coversPct", header: "Covers %", type: "percent", required: true, example: 0.48 },
     ],

@@ -74,13 +74,6 @@ enum MealPeriod {
   DINNER
 }
 
-enum FnbChannel {
-  WALK_IN
-  REPEATER
-  CHOPE
-  CATERING
-}
-
 enum SpaGuestSegment {
   IN_HOUSE
   OUTSIDE
@@ -116,6 +109,7 @@ enum NarrativeSection {
   MAGAZINE
   PR
   PROMOTIONS
+  ACQUISITION_SPLIT
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -182,6 +176,7 @@ model ReportPeriod {
   fnbSales           FnbSales[]
   fnbSources         FnbSourceOfBooking[]
   fnbAcquisition     FnbAcquisition[]
+  fnbAcquisitionDaily FnbAcquisitionDaily[]
   chopeReports       ChopeReport[]
   gokaiReports       GokaiReport[]
   spaSales           SpaSales[]
@@ -403,18 +398,36 @@ model FnbSourceOfBooking {
   @@map("fnb_source_of_booking")
 }
 
-/// Restaurant acquisition mix (share of bookings/covers by channel).
+/// Restaurant acquisition mix (share of bookings/covers by channel). The
+/// channel is free text so each month can carry any set of channels
+/// (Walk-in, Repeater, Chope, Phone/WA, Catering, …). Percentages are stored
+/// as ratios (0–1) and shown ×100.
 model FnbAcquisition {
-  id          String     @id @default(cuid())
+  id          String  @id @default(cuid())
   periodId    String
-  channel     FnbChannel
-  bookingsPct Decimal    @db.Decimal(9, 4)
-  coversPct   Decimal    @db.Decimal(9, 4)
+  channel     String
+  bookingsPct Decimal @db.Decimal(9, 4)
+  coversPct   Decimal @db.Decimal(9, 4)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   @@unique([periodId, channel])
   @@map("fnb_acquisition")
+}
+
+/// Daily restaurant bookings vs covers within a month (the "Cover vs Booking"
+/// chart). One row per day-of-month (1–31).
+model FnbAcquisitionDaily {
+  id       String @id @default(cuid())
+  periodId String
+  day      Int
+  bookings Int
+  covers   Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, day])
+  @@map("fnb_acquisition_daily")
 }
 
 /// Chope reservation-platform report (one per period).
