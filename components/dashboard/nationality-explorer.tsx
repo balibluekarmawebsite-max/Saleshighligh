@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, Minus } from "lucide-react";
 
 import { NationalityMap } from "@/components/charts/nationality-map";
 import { MoMBadge } from "@/components/dashboard/mom-badge";
@@ -29,8 +29,16 @@ function RankMove({ move }: { move: number | null }) {
   );
 }
 
+const TOP_N = 10;
+
 export function NationalityExplorer({ data }: { data: NationalityRank[] }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+
+  // Top 10 by default; the rest sit behind a "show more" toggle. The map still
+  // uses the full list, so a collapsed row can still be highlighted.
+  const visible = showAll ? data : data.slice(0, TOP_N);
+  const hiddenCount = data.length - visible.length;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -47,7 +55,7 @@ export function NationalityExplorer({ data }: { data: NationalityRank[] }) {
             </tr>
           </thead>
           <tbody>
-            {data.map((n) => {
+            {visible.map((n) => {
               const isSelected = selected === n.countryCode;
               return (
                 <tr
@@ -84,6 +92,17 @@ export function NationalityExplorer({ data }: { data: NationalityRank[] }) {
             })}
           </tbody>
         </table>
+
+        {data.length > TOP_N && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-teal transition-colors hover:underline"
+          >
+            {showAll ? "Show top 10 only" : `Show all ${data.length} nationalities (+${hiddenCount} more)`}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAll && "rotate-180")} />
+          </button>
+        )}
       </div>
 
       <div className="hidden lg:block">
