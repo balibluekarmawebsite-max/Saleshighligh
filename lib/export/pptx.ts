@@ -14,6 +14,7 @@ import {
   getSummaryPageData,
 } from "@/lib/dashboard-data";
 import { segmentLabel } from "@/lib/sales/account-segments";
+import { overviewContentToText } from "@/lib/sales/restaurant-overview";
 import {
   formatIDRCompact,
   formatNumber,
@@ -346,7 +347,7 @@ async function restaurantSection(pptx: Pptx, code: string, period: string) {
   }
 
   const nar = contentSlide(pptx, `${title} — Overview Narrative`, periodLabel(period));
-  addNarrative(nar, d.narrative?.content ?? null);
+  addNarrative(nar, overviewContentToText(d.narrative?.content ?? null) || null);
 }
 
 async function spaSection(pptx: Pptx, code: string, period: string) {

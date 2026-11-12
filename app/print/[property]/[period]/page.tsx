@@ -14,6 +14,7 @@ import {
   getSummaryPageData,
 } from "@/lib/dashboard-data";
 import { getCurrentUser } from "@/lib/auth-helpers";
+import { overviewContentToText } from "@/lib/sales/restaurant-overview";
 import { formatIDRCompact, formatNumber, formatPercent, formatRatioPct, formatVariancePercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
@@ -207,7 +208,7 @@ export default async function PrintPage({
           {restaurant.meals.length > 0 && (
             <Table head={["Meal", "Covers", "Avg Check", "Rev Act", "Rev Bud", "% of Rev"]} rows={restaurant.meals.map((m) => [m.meal, num(m.coversActual), money(m.avgCheckActual), money(m.revenueActual), money(m.revenueBudget), `${m.pctOfRevenue.toFixed(1)}%`])} />
           )}
-          <Prose text={restaurant.narrative?.content} />
+          <Prose text={overviewContentToText(restaurant.narrative?.content ?? null)} />
         </Section>
       )}
 

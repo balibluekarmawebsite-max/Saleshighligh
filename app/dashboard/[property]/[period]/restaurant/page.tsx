@@ -8,13 +8,14 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { ExportableCard } from "@/components/dashboard/exportable-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { MoMBadge } from "@/components/dashboard/mom-badge";
-import { NarrativeColumns } from "@/components/dashboard/narrative-columns";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
+import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
 import { MealPeriodTable } from "@/components/tables/meal-period-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { achievementPct, variancePct } from "@/lib/calculations";
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import {
   GROUP_CODE,
   getRestaurantPageData,
@@ -83,6 +84,7 @@ export default async function RestaurantPage({
 
   const { property, overview, meals, sources, acquisition, chope, gokai, tripadvisor, narrative } = data;
   const fileBase = `${property.code}-${params.period}-restaurant`;
+  const canEdit = canEditProperty(await getCurrentUser(), params.property);
 
   // Meal-period auto insights
   const mealAch = meals.map((m) => ({
@@ -359,14 +361,16 @@ export default async function RestaurantPage({
         <SectionNote title="Restaurant Tripadvisor" description="Listing performance" message="No restaurant Tripadvisor data for this period yet." />
       )}
 
-      {/* 9 — Narrative */}
+      {/* 9 — Overview narrative (structured) */}
       <Card>
-        <CardContent className="space-y-4 p-6">
-          <div>
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">Restaurant Narrative</h3>
-            <p className="mt-1 text-sm text-muted-foreground">What went well, what needs work, and the key takeaways.</p>
-          </div>
-          <NarrativeColumns block={narrative} section="RESTAURANT_OVERVIEW" property={params.property} period={params.period} />
+        <CardContent className="p-6">
+          <RestaurantOverviewPanel
+            property={params.property}
+            period={params.period}
+            content={narrative?.content ?? null}
+            aiGenerated={narrative?.aiGenerated ?? false}
+            canEdit={canEdit}
+          />
         </CardContent>
       </Card>
     </div>
