@@ -8,7 +8,7 @@ import {
   saveRestaurantSourcesAction,
 } from "@/app/dashboard/[property]/[period]/restaurant/actions";
 import type { SourceRow } from "@/lib/dashboard-data";
-import { toInt, toNum, sourceTotals } from "@/lib/sales/restaurant-sources-logic";
+import { normalizeSourceRows, toInt, toNum, sourceTotals } from "@/lib/sales/restaurant-sources-logic";
 import { formatIDR, formatNumber, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -53,9 +53,10 @@ export function RestaurantSourcesUploader({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Live derived preview (what the dashboard will show after save).
-  const valid = rows.map(parsed).filter((x): x is { persons: number; revenue: number } => !!x);
-  const totals = sourceTotals(valid);
+  // Live derived preview that matches exactly what will be stored: run the grid
+  // through the SAME normalization as save (drops TOTAL/blank rows, de-dupes by
+  // name) so the TOTAL and the % denominator never overstate the saved result.
+  const totals = sourceTotals(normalizeSourceRows(rows).rows);
 
   function pickImage(file: File | undefined) {
     if (!file) return;
