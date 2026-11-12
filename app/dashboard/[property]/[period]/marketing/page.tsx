@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 
 import { RankTrendChart } from "@/components/charts/rank-trend-chart";
 import { RoasTrendChart } from "@/components/charts/roas-trend-chart";
@@ -11,34 +10,17 @@ import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { Card, CardContent } from "@/components/ui/card";
+import { AdsSyncButton } from "@/components/sales/ads-sync-button";
+import { OtaRankingPanel } from "@/components/sales/ota-ranking-panel";
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { GROUP_CODE, getMarketingPageData } from "@/lib/dashboard-data";
 import { formatIDR, formatNumber, formatPercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google", META: "Meta", CORPORATE: "Corporate" };
 const PLATFORM_COLOR: Record<string, string> = { GOOGLE: "#0F4C5C", META: "#C9A227", CORPORATE: "#64748B" };
-const RANK_LABEL: Record<string, string> = { BOOKING: "Booking.com", EXPEDIA: "Expedia", TRIPADVISOR: "Tripadvisor" };
-
-function RankChange({ change }: { change: number | null }) {
-  if (change === null) return <span className="text-xs text-muted-foreground">no prior month</span>;
-  if (change === 0)
-    return (
-      <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
-        <Minus className="h-3.5 w-3.5" /> no change
-      </span>
-    );
-  const improved = change > 0; // lower rank number is better
-  const Icon = improved ? ArrowUp : ArrowDown;
-  return (
-    <span className={cn("inline-flex items-center gap-0.5 text-xs font-medium", improved ? "text-variance-positive" : "text-variance-negative")}>
-      <Icon className="h-3.5 w-3.5" />
-      {Math.abs(change)} {improved ? "improved" : "dropped"}
-    </span>
-  );
-}
 
 export default async function MarketingPage({
   params,
@@ -49,6 +31,8 @@ export default async function MarketingPage({
     return <ComingSoon title="Group — Digital Ads & Reputation" description="Consolidated view coming soon." />;
   }
 
+  const me = await getCurrentUser();
+  const canEdit = canEditProperty(me, params.property);
   const data = await getMarketingPageData(params.property, params.period);
   if (!data) notFound();
   if (!data.hasData) {
@@ -79,6 +63,11 @@ export default async function MarketingPage({
       {/* Ads KPIs */}
       {ads ? (
         <>
+          {canEdit && (
+            <div className="flex justify-end">
+              <AdsSyncButton property={params.property} period={params.period} variant="link" />
+            </div>
+          )}
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Total Spend" value={formatIDR(ads.totalSpend)} />
             <StatTile label="Tracked Revenue" value={formatIDR(ads.trackedRevenue)} />
@@ -158,28 +147,29 @@ export default async function MarketingPage({
         </>
       ) : (
         <SectionCard title="Digital Ads" description="No ad data for this period">
-          <p className="text-sm text-muted-foreground">Import the ADS tab to populate ad performance.</p>
+          <p className="text-sm text-muted-foreground">
+            Pull this month&rsquo;s spend, ROAS and platform split straight from the ads dashboard — the same source as
+            the weekly report.
+          </p>
+          {canEdit ? (
+            <div className="mt-3">
+              <AdsSyncButton property={params.property} period={params.period} />
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">Ask an editor to sync, or import the ADS tab.</p>
+          )}
         </SectionCard>
       )}
 
       {/* OTA ranking */}
       <SectionCard title="OTA Ranking Tracker" description="Current position and month-over-month movement (lower rank is better)">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {data.rankCards.map((r) => (
-            <div key={r.platform} className="rounded-lg border border-border p-4">
-              <p className="text-sm font-medium text-foreground">{RANK_LABEL[r.platform] ?? r.platform}</p>
-              <p className="mt-1 text-2xl font-semibold text-foreground">
-                {r.rank !== null ? `#${r.rank}` : "—"}
-                {r.totalInMarket !== null && (
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">of {formatNumber(r.totalInMarket)}</span>
-                )}
-              </p>
-              <div className="mt-1">
-                <RankChange change={r.change} />
-              </div>
-            </div>
-          ))}
-        </div>
+        <OtaRankingPanel
+          property={params.property}
+          period={params.period}
+          rankCards={data.rankCards}
+          rankHistory={data.rankHistory}
+          canEdit={canEdit}
+        />
       </SectionCard>
 
       <ExportableCard title="12-Month Rank Trend" description="Up = better (rank number lower)" fileName={`${fileBase}-rank-trend`}>

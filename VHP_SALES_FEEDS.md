@@ -227,5 +227,44 @@ property/month.
 
 ---
 
+## 4. Digital Ads & ROAS (monthly) — `POST /api/sales/ads/sync`
+
+**Source:** the **ads dashboard API** (not VHP) — the same source the weekly
+report uses (`ADS_API_URL` / `ADS_API_KEY`), pulled for the **whole report
+month**. There's nothing to scrape or compile; this endpoint triggers the pull
+server-side and stores the monthly `AdsPerformance` rows (unit HOTEL, Google +
+Meta) the Marketing page reads.
+
+```
+POST https://dashboard.bluekarmasecrets.com/api/sales/ads/sync
+Authorization: Bearer <SALES_API_TOKEN | IMPORT_API_TOKEN>
+Content-Type: application/json
+
+{ "property": "BKDS", "period": "2026-10" }
+```
+
+| Field | Meaning |
+| ----- | ------- |
+| `property` | `BKDS` / `BKDU` / `BKV`. |
+| `period` | Report month `YYYY-MM`; the window is the 1st → last day of that month. |
+
+Pulls Google/Meta **spend · impressions · clicks · reach · conversion value**
+for the month and upserts `AdsPerformance`. Needs `ADS_API_KEY` on the server
+(503 if missing). Creates the period as DRAFT if new, refuses a FINAL period
+(409). Editors/admins can also trigger it from the dashboard: **Digital Ads →
+"Sync ads from dashboard"**.
+
+## 5. OTA Ranking Tracker — in-app upload (manual + AI)
+
+No scraper endpoint. Enter the monthly Booking.com / Expedia / Tripadvisor
+**rank · of-market · rating** in the dashboard: **Digital Ads & Reputation →
+OTA Ranking Tracker → "Update ranking"** — type the figures, or paste the text /
+attach a screenshot and **Compile with AI**, then Save. Each save is one
+recorded month; **"Show all recorded rankings"** lists the full track record and
+the **12-Month Rank Trend** plots it. (Rankings are stored in `PlatformRanking`,
+keyed by period, so re-saving a month overwrites it.)
+
+---
+
 _More sections (Booking Pace & Forecast) will follow the same pattern as they're
 wired up._

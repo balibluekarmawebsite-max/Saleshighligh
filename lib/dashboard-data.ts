@@ -874,6 +874,20 @@ export interface RankTrendPoint {
   TRIPADVISOR: number | null;
 }
 
+export interface RankHistoryCell {
+  rank: number;
+  totalInMarket: number | null;
+  rating: number | null;
+}
+
+export interface RankHistoryRow {
+  period: string;
+  month: string;
+  BOOKING: RankHistoryCell | null;
+  EXPEDIA: RankHistoryCell | null;
+  TRIPADVISOR: RankHistoryCell | null;
+}
+
 export interface TripMetric {
   key: string;
   label: string;
@@ -890,6 +904,7 @@ export interface MarketingPageData {
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   rankCards: RankCard[];
   rankTrend: RankTrendPoint[];
+  rankHistory: RankHistoryRow[];
   tripadvisor: {
     rank: number | null;
     totalInMarket: number | null;
@@ -1011,6 +1026,7 @@ export async function getMarketingPageData(
       spendRevenue: [],
       rankCards: [],
       rankTrend: [],
+      rankHistory: [],
       tripadvisor: null,
     };
   }
@@ -1042,6 +1058,30 @@ export async function getMarketingPageData(
     };
   });
 
+  // Full rank history ("every month recorded") — all periods with any ranking,
+  // newest first, for the show-more track record.
+  const historyPeriods = await prisma.reportPeriod.findMany({
+    where: { propertyId: property.id, platformRankings: { some: {} } },
+    orderBy: { period: "desc" },
+    select: {
+      period: true,
+      platformRankings: { select: { platform: true, rank: true, totalInMarket: true, rating: true } },
+    },
+  });
+  const rankHistory: RankHistoryRow[] = historyPeriods.map((p) => {
+    const cell = (pl: string): RankHistoryCell | null => {
+      const r = p.platformRankings.find((x) => x.platform === pl);
+      return r ? { rank: r.rank, totalInMarket: r.totalInMarket, rating: r.rating ? r.rating.toNumber() : null } : null;
+    };
+    return {
+      period: dateToPeriod(p.period),
+      month: periodMonthShort(dateToPeriod(p.period)),
+      BOOKING: cell("BOOKING"),
+      EXPEDIA: cell("EXPEDIA"),
+      TRIPADVISOR: cell("TRIPADVISOR"),
+    };
+  });
+
   // Tripadvisor
   const tm = current.tripadvisorMetrics[0];
   const prevTm = previous?.tripadvisorMetrics[0];
@@ -1066,7 +1106,7 @@ export async function getMarketingPageData(
     };
   }
 
-  return { ...base, hasData: true, ads, roasTrend, spendRevenue, rankCards, rankTrend, tripadvisor };
+  return { ...base, hasData: true, ads, roasTrend, spendRevenue, rankCards, rankTrend, rankHistory, tripadvisor };
 }
 
 // ─── Restaurant page (aggregated) ────────────────────────────────────────────
