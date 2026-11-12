@@ -187,7 +187,10 @@ export async function getGroupData(period: string): Promise<GroupData> {
           const rows = rp?.adsPerformance.filter((a) => a.unit === u.unit) ?? [];
           if (rows.length === 0) return null;
           const spend = rows.reduce((s, a) => s + a.spend.toNumber(), 0);
-          const rev = rows.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+          // Headline ROAS uses blended booked revenue when present (same on each
+          // row), else the per-platform conversion value (legacy imports).
+          const booked = Math.max(0, ...rows.map((a) => a.bookedRevenue?.toNumber() ?? 0));
+          const rev = booked > 0 ? booked : rows.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
           const r = roas(rev, spend);
           return r == null ? null : r * 100;
         }),

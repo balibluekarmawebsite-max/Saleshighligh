@@ -359,7 +359,11 @@ model AdsPerformance {
   impressions    Int
   clicks         Int
   reach          Int?
+  /// Per-platform ad-reported conversion value (used for per-platform ROAS).
   trackedRevenue Decimal      @db.Decimal(18, 2)
+  /// Blended BOOKED revenue for the period (same on each row of a sync) — the
+  /// headline ROAS basis, matching the ads dashboard. Null for legacy imports.
+  bookedRevenue  Decimal?     @db.Decimal(18, 2)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

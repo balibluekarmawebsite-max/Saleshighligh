@@ -925,7 +925,17 @@ type RawAd = {
   clicks: number;
   reach: number | null;
   trackedRevenue: { toNumber(): number };
+  bookedRevenue: { toNumber(): number } | null;
 };
+
+/** Headline revenue for an ads period: the blended BOOKED revenue when present
+ * (the ads dashboard's basis), else the sum of per-platform conversion value
+ * (legacy imports). Booked revenue is stored identically on each row, so take
+ * the max rather than the sum. */
+function headlineAdsRevenue(rows: RawAd[]): number {
+  const booked = Math.max(0, ...rows.map((a) => a.bookedRevenue?.toNumber() ?? 0));
+  return booked > 0 ? booked : rows.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+}
 
 /** Build the ads summary + spend/revenue + ROAS trend for one business unit. */
 function buildAdsBlock(
@@ -943,7 +953,7 @@ function buildAdsBlock(
   let spendRevenue: { platform: string; spend: number; revenue: number }[] = [];
   if (sorted.length > 0) {
     const totalSpend = sorted.reduce((s, a) => s + a.spend.toNumber(), 0);
-    const trackedRevenue = sorted.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+    const trackedRevenue = headlineAdsRevenue(sorted); // booked revenue when available
     const totalClicks = sorted.reduce((s, a) => s + a.clicks, 0);
     const roasRatio = totalSpend > 0 ? trackedRevenue / totalSpend : null;
     ads = {
@@ -971,7 +981,7 @@ function buildAdsBlock(
   }
   const roasTrend: RoasPoint[] = ascPeriods.slice(-6).map((p) => {
     const spend = p.adsPerformance.reduce((s, a) => s + a.spend.toNumber(), 0);
-    const rev = p.adsPerformance.reduce((s, a) => s + a.trackedRevenue.toNumber(), 0);
+    const rev = headlineAdsRevenue(p.adsPerformance);
     return {
       month: periodMonthShort(dateToPeriod(p.period)),
       roasPct: spend > 0 ? (rev / spend) * 100 : null,

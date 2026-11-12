@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { RankTrendChart } from "@/components/charts/rank-trend-chart";
-import { RoasTrendChart } from "@/components/charts/roas-trend-chart";
 import { SpendRevenueChart } from "@/components/charts/spend-revenue-chart";
 import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -70,7 +69,7 @@ export default async function MarketingPage({
           )}
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Total Spend" value={formatIDR(ads.totalSpend)} />
-            <StatTile label="Tracked Revenue" value={formatIDR(ads.trackedRevenue)} />
+            <StatTile label="Revenue" value={formatIDR(ads.trackedRevenue)} />
             <StatTile
               label="ROAS"
               value={ads.roasPct !== null ? `${ads.roasPct.toFixed(0)}%` : "—"}
@@ -132,18 +131,10 @@ export default async function MarketingPage({
               </div>
             </ExportableCard>
 
-            <ExportableCard title="Spend vs Revenue" description="Attribution by platform" fileName={`${fileBase}-spend-revenue`}>
+            <ExportableCard title="Spend vs Revenue" description="Ad-tracked conversion value by platform" fileName={`${fileBase}-spend-revenue`}>
               <SpendRevenueChart data={data.spendRevenue} />
             </ExportableCard>
           </div>
-
-          <ExportableCard title="6-Month ROAS Trend" description="Return on ad spend over time" fileName={`${fileBase}-roas-trend`}>
-            {data.roasTrend.length > 1 ? (
-              <RoasTrendChart data={data.roasTrend} />
-            ) : (
-              <p className="text-sm text-muted-foreground">Only one month of data so far — the trend appears once more periods are imported.</p>
-            )}
-          </ExportableCard>
         </>
       ) : (
         <SectionCard title="Digital Ads" description="No ad data for this period">

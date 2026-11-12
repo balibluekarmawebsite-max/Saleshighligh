@@ -102,6 +102,11 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
       return fail(422, "The ads API returned no Google/Meta platform rows for this month.");
     }
 
+    // Blended BOOKED revenue for the month — the headline ROAS basis (the ads
+    // dashboard's "Revenue"/ROAS). Stored on each row so the read path recovers
+    // it regardless of which platforms survive.
+    const bookedRevenue = fetched.blended.revenue != null && fetched.blended.revenue >= 0 ? fetched.blended.revenue : null;
+
     const periodId = await prisma.$transaction(async (tx) => {
       const period = await tx.reportPeriod.upsert({
         where: { propertyId_period: { propertyId: property.id, period: date } },
@@ -122,6 +127,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
           clicks: r.clicks,
           reach: r.reach,
           trackedRevenue: r.trackedRevenue,
+          bookedRevenue,
         })),
       });
       await tx.importHistory.create({
@@ -137,7 +143,8 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
     });
 
     const spend = rows.reduce((s, r) => s + r.spend, 0);
-    const trackedRevenue = rows.reduce((s, r) => s + r.trackedRevenue, 0);
+    const convValue = rows.reduce((s, r) => s + r.trackedRevenue, 0);
+    const trackedRevenue = bookedRevenue ?? convValue; // headline revenue basis
     const roasPct = spend > 0 ? (trackedRevenue / spend) * 100 : null;
 
     await logAudit("sales_ads_monthly_sync", code, {
