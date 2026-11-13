@@ -163,9 +163,10 @@ export function RestaurantAcquisitionUploader({
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Paste the acquisition report or attach a screenshot/file, then compile with AI — or type it in below. Channels
-        are free text (any set each month); percentages are stored as entered. The daily table drives the Cover-vs-Booking
-        chart.
+        Upload <strong>either</strong> the channel split (Booking % / Cover % per channel) <strong>or</strong> the
+        day-by-day bookings/covers table — the AI detects which one it is and fills the matching grid below (you can also
+        upload both, or type them in). Give the AI the <strong>numbers</strong>, not the chart picture. Channels are free
+        text (any set each month); percentages are stored as entered; the daily table drives the Cover-vs-Booking chart.
       </p>
 
       <textarea

@@ -16,23 +16,27 @@ import {
 } from "@/lib/sales/restaurant-acquisition-logic";
 import { groqChat, isGroqConfigured, parseJsonLoose, type GroqImage } from "@/lib/weekly/groq";
 
-const SYSTEM = `You extract a RESTAURANT "ACQUISITION SPLIT" (booking source) report into STRICT JSON. There are two possible parts; include whichever the input actually contains, and use an empty array for the other.
+const SYSTEM = `You read a RESTAURANT "ACQUISITION SPLIT" (booking source) report and return STRICT JSON. The input can be EITHER of two kinds — detect which one it is and fill the matching array, leaving the other as []:
+  (A) a CHANNEL split — a small table or pie-chart legend giving each channel's Booking % and Cover %, OR
+  (B) a DAILY table — a day-by-day list of bookings and covers for the month.
+It may occasionally contain both; then fill both. Always include BOTH keys.
 
-Return ONLY this JSON (no prose, no code fences):
+Return ONLY this JSON (no prose, no code fences), using EXACTLY these key names:
 {"channels":[{"channel":"Walk-in","bookingsPct":<number>,"coversPct":<number>}],"daily":[{"day":<int 1-31>,"bookings":<int>,"covers":<int>}]}
 
 CHANNELS (the Booking vs Cover distribution / the two pie charts):
-- One object per channel. Keep the channel name EXACTLY as written: e.g. "Walk-in", "Repeater", "Chope", "Phone/WA", "Catering". The channel set can be anything — do NOT invent or drop channels.
-- bookingsPct = that channel's share of BOOKINGS; coversPct = its share of COVERS. Output them as PERCENT NUMBERS, not ratios: "64.6%" -> 64.6; "31.4%" -> 31.4; "4.0%" -> 4.0.
-- Ignore any TOTAL row.
+- One object per channel row. Keep the channel name EXACTLY as written: e.g. "Walk-in", "Repeater", "Chope", "Phone/WA", "Catering". The channel set can be anything — do NOT invent or drop channels.
+- bookingsPct = that channel's share of BOOKINGS; coversPct = its share of COVERS. Output PERCENT NUMBERS, not ratios: "64.6%" -> 64.6; "31.4%" -> 31.4; "4.0%" -> 4.0. If a channel shows only one percentage, use it for both.
+- Ignore any TOTAL / 100% row.
 
-DAILY (the "Cover vs Booking" chart / a day-by-day table):
-- One object per day of the month, day = 1..31. bookings = that day's booking count, covers = that day's cover count. Plain integers.
-- Only include days that have real numbers. If there is no daily table, return "daily":[].
+DAILY (the "Cover vs Booking" numbers / a day-by-day table):
+- One object PER DAY, day = 1..31. bookings = that day's booking count, covers = that day's cover count. Plain integers.
+- Read EVERY day row you can see, even if the table is long. Do NOT read values off a line/area chart image — only off actual numbers.
+- If there is no daily table, return "daily":[].
 
 Rules:
-- Never invent numbers; read only what is shown.
-- If a part is absent, return it as an empty array — do not fabricate it.`;
+- Never invent numbers; read only what is shown, and read as much of it as you can.
+- Whichever kind is present, do your best to extract it rather than returning everything empty.`;
 
 export async function extractAcquisition(
   input: { text?: string | null; image?: GroqImage | null },
@@ -67,7 +71,11 @@ export async function extractAcquisition(
     const { rows: channels } = normalizeChannelRows(channelRows);
     const { rows: daily } = normalizeDailyRows(dailyRows);
     if (channels.length === 0 && daily.length === 0) {
-      return { ok: false, error: "No acquisition data could be read — check the format and try again." };
+      return {
+        ok: false,
+        error:
+          "Couldn't read a channel split or a daily table from that. Upload the NUMBERS — a channel list with Booking %/Cover %, or a day-by-day Bookings/Covers table (not a chart image) — or paste the figures as text.",
+      };
     }
     return { ok: true, channels, daily };
   } catch (e) {

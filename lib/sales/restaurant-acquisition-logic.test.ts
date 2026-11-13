@@ -40,6 +40,17 @@ describe("normalizeChannelRows", () => {
     expect(r.skipped).toBe(0);
   });
 
+  it("accepts the AI's alias keys (name/booking/cover) so rows aren't dropped", () => {
+    const r = normalizeChannelRows([
+      { name: "Walk-in", booking: "64.6", cover: "63.9" },
+      { source: "Repeater", bookingShare: "31.4%", coverShare: "31.8%" },
+    ] as never);
+    expect(r.rows).toHaveLength(2);
+    expect(r.rows[0]).toEqual({ channel: "Walk-in", bookingsPct: expect.closeTo(0.646, 5), coversPct: expect.closeTo(0.639, 5) });
+    expect(r.rows[1]!.channel).toBe("Repeater");
+    expect(r.skipped).toBe(0);
+  });
+
   it("drops TOTAL and rows missing a name or a percentage; de-dupes last-wins", () => {
     const r = normalizeChannelRows([
       { channel: "Walk-In", bookingsPct: "60%", coversPct: "60%" },
@@ -76,6 +87,17 @@ describe("normalizeDailyRows", () => {
     const r = normalizeDailyRows([{ day: "7", bookings: "1.234", covers: "-3" }]);
     expect(r.rows[0]).toEqual({ day: 7, bookings: 1234, covers: 0 });
     expect(toInt("1.749")).toBe(1749);
+  });
+
+  it("accepts the AI's alias keys (date/booking/cover)", () => {
+    const r = normalizeDailyRows([
+      { date: 1, booking: 24, cover: 36 },
+      { dayOfMonth: 2, bookingCount: 30, coverCount: 44 },
+    ] as never);
+    expect(r.rows.map((x) => x.day)).toEqual([1, 2]);
+    expect(r.rows[0]).toEqual({ day: 1, bookings: 24, covers: 36 });
+    expect(r.rows[1]).toEqual({ day: 2, bookings: 30, covers: 44 });
+    expect(r.skipped).toBe(0);
   });
 });
 

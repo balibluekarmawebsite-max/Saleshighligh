@@ -39,6 +39,27 @@ export function parsePctToRatio(v: unknown): number | null {
 
 const TOTAL_RE = /^(grand\s+)?total$/i;
 
+/**
+ * First defined, non-empty value among the given keys. Lets the AI extraction
+ * use any of several reasonable key names (e.g. "name"/"booking"/"cover" instead
+ * of "channel"/"bookingsPct"/"coversPct") without every row being dropped.
+ */
+const pick = (o: Record<string, unknown>, ...keys: string[]): unknown => {
+  for (const k of keys) {
+    const v = o[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return undefined;
+};
+
+// Accepted key aliases for the AI's JSON (tolerant of model wording).
+const CHANNEL_KEYS = ["channel", "channelName", "name", "source", "label"];
+const BOOKING_PCT_KEYS = ["bookingsPct", "bookingPct", "bookingsPercent", "bookingPercent", "bookingShare", "bookings", "booking"];
+const COVER_PCT_KEYS = ["coversPct", "coverPct", "coversPercent", "coverPercent", "coverShare", "covers", "cover"];
+const DAY_KEYS = ["day", "date", "dayOfMonth", "dom", "d"];
+const DAILY_BOOKING_KEYS = ["bookings", "booking", "bookingCount", "bookingsCount", "bookingTotal"];
+const DAILY_COVER_KEYS = ["covers", "cover", "coverCount", "coversCount", "coverTotal"];
+
 // ─── Channel rows ────────────────────────────────────────────────────────────
 
 export interface RawChannelRow {
@@ -73,9 +94,10 @@ export function normalizeChannelRows(raw: RawChannelRow[]): ChannelNormalizeResu
       skipped += 1;
       continue;
     }
-    const channel = String(r.channel ?? "").trim();
-    const bookingsPct = parsePctToRatio(r.bookingsPct);
-    const coversPct = parsePctToRatio(r.coversPct);
+    const o = r as Record<string, unknown>;
+    const channel = String(pick(o, ...CHANNEL_KEYS) ?? "").trim();
+    const bookingsPct = parsePctToRatio(pick(o, ...BOOKING_PCT_KEYS));
+    const coversPct = parsePctToRatio(pick(o, ...COVER_PCT_KEYS));
     if (!channel || TOTAL_RE.test(channel) || bookingsPct == null || coversPct == null) {
       skipped += 1;
       continue;
@@ -118,9 +140,10 @@ export function normalizeDailyRows(raw: RawDailyRow[]): DailyNormalizeResult {
       skipped += 1;
       continue;
     }
-    const day = toInt(r.day);
-    const bookings = toInt(r.bookings);
-    const covers = toInt(r.covers);
+    const o = r as Record<string, unknown>;
+    const day = toInt(pick(o, ...DAY_KEYS));
+    const bookings = toInt(pick(o, ...DAILY_BOOKING_KEYS));
+    const covers = toInt(pick(o, ...DAILY_COVER_KEYS));
     if (day == null || day < 1 || day > 31 || bookings == null || covers == null) {
       skipped += 1;
       continue;
