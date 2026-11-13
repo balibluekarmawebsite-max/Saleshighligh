@@ -44,11 +44,23 @@ const SECTION_GUIDANCE: Record<string, string> = {
 
   SOCIAL_SUMMARY: `Summarise organic social performance by business unit and platform, citing the month-over-month changes provided. Lead each unit with its strongest movements and flag the weakest metric. Keep it to a short paragraph per unit.`,
 
-  ACQUISITION_SPLIT: `Summarise the restaurant's customer acquisition mix. Produce three labelled blocks, each on its own line:
-"Bookings Distribution:" then one short sentence per channel giving its share of BOOKINGS and the month-over-month point movement provided (e.g. "Walk-ins: 64.6% — down 2.6 pts vs last month").
-"Covers Distribution:" then the same, one short sentence per channel, for its share of COVERS.
-"Performance Insight:" then 2–3 sentences interpreting the mix (reliance on walk-ins, growth in repeat visitation or advance reservations) and one concrete action for next month.
-Quote ONLY the figures in the context. Do NOT invent last-year numbers — none are provided; mention last year only if the context carries it.`,
+  ACQUISITION_SPLIT: `Summarise the restaurant's customer acquisition mix as THREE labelled blocks. Put each heading on its own line ending with a colon, then its content, with ONE blank line between blocks. Use this exact shape:
+
+Bookings Distribution:
+- <Channel>: <share of bookings>%[ — up/down X.X pts vs <month>]
+(one bullet per channel, "- " prefixed)
+
+Covers Distribution:
+- <Channel>: <share of covers>%[ — up/down X.X pts vs <month>]
+(one bullet per channel)
+
+Performance Insight:
+<a single 2–3 sentence paragraph interpreting the mix — reliance on walk-ins, repeat visitation, advance reservations — and ONE concrete action for next month>
+
+Rules:
+- Append the "— up/down X.X pts vs <month>" clause ONLY when a month-over-month movement is given in the context. When it is absent, write just the percentage — NEVER "movement not available", "N/A", "unchanged" or any placeholder.
+- Quote ONLY the figures in the context. Do not invent last-year numbers.
+- No markdown bold, no headings beyond the three labels, no preamble.`,
 
   GROUP_SUMMARY: `Write a one-page executive brief for management comparing the three Blue Karma properties — BKDS (Dijiwa Seminyak), BKDU (Dijiwa Ubud) and BKV (Village). Structure it as roughly five short paragraphs:
 1. Consolidated Group performance versus budget (total revenue, occupancy, ADR, RevPAR), citing the group figures.
