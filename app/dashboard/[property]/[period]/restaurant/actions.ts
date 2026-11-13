@@ -14,7 +14,7 @@ import type { NormalMealRow, RawMealRow } from "@/lib/sales/restaurant-sales-log
 import { extractSources } from "@/lib/sales/restaurant-sources-ai";
 import { saveSources } from "@/lib/sales/restaurant-sources-import";
 import type { NormalSourceRow, RawSourceRow } from "@/lib/sales/restaurant-sources-logic";
-import { extractAcquisition } from "@/lib/sales/restaurant-acquisition-ai";
+import { extractAcquisition, type AcquisitionMode } from "@/lib/sales/restaurant-acquisition-ai";
 import { saveAcquisition } from "@/lib/sales/restaurant-acquisition-import";
 import type {
   NormalChannelRow,
@@ -222,14 +222,18 @@ export interface AcquisitionExtractResult {
   error?: string;
   channels?: NormalChannelRow[];
   daily?: NormalDailyRow[];
+  approximate?: boolean;
 }
 
-/** Editor/admin: AI-extract acquisition channels + daily rows from text/screenshot (preview only). */
+/** Editor/admin: AI-extract acquisition data from text/screenshot (preview only).
+ * `mode` scopes the read to one type ("channels" or "daily") so a channel
+ * upload can't be misread as daily data or vice-versa. */
 export async function extractRestaurantAcquisitionAction(input: {
   property: string;
   text?: string | null;
   imageBase64?: string | null;
   imageMediaType?: string | null;
+  mode?: AcquisitionMode;
 }): Promise<AcquisitionExtractResult> {
   const user = await getCurrentUser();
   if (!canEditProperty(user, input.property)) {
@@ -239,8 +243,10 @@ export async function extractRestaurantAcquisitionAction(input: {
     input.imageBase64 && input.imageMediaType
       ? { data: input.imageBase64, mediaType: input.imageMediaType }
       : null;
-  const r = await extractAcquisition({ text: input.text, image });
-  return r.ok ? { ok: true, channels: r.channels, daily: r.daily } : { ok: false, error: r.error };
+  const r = await extractAcquisition({ text: input.text, image, mode: input.mode });
+  return r.ok
+    ? { ok: true, channels: r.channels, daily: r.daily, approximate: r.approximate }
+    : { ok: false, error: r.error };
 }
 
 /** Editor/admin: save acquisition channels and/or daily cover-vs-booking rows. */

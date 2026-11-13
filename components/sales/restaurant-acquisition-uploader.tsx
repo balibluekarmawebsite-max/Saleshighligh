@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -18,6 +18,7 @@ interface ChannelRow {
 }
 
 type DailyMap = Record<number, { bookings: string; covers: string }>;
+type Img = { base64: string; mediaType: string; name: string } | null;
 
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -35,10 +36,79 @@ const dailyFromInitial = (rows: AcqDailyPoint[]): DailyMap => {
 };
 
 const pctSum = (rows: ChannelRow[], key: "bookingsPct" | "coversPct"): number =>
-  rows.reduce((s, r) => {
-    const ratio = parsePctToRatio(r[key]);
-    return s + (ratio ?? 0) * 100;
-  }, 0);
+  rows.reduce((s, r) => s + (parsePctToRatio(r[key]) ?? 0) * 100, 0);
+
+/** A scoped upload control: paste textarea + screenshot/file attach + Compile. */
+function UploadControls({
+  placeholder,
+  text,
+  onText,
+  image,
+  onImage,
+  onCompile,
+  working,
+  disabled,
+}: {
+  placeholder: string;
+  text: string;
+  onText: (v: string) => void;
+  image: Img;
+  onImage: (v: Img) => void;
+  onCompile: () => void;
+  working: boolean;
+  disabled: boolean;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  function pick(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const base64 = result.includes(",") ? result.slice(result.indexOf(",") + 1) : result;
+      onImage({ base64, mediaType: file.type || "image/png", name: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+  return (
+    <div className="space-y-2">
+      <textarea
+        value={text}
+        onChange={(e) => onText(e.target.value)}
+        rows={2}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            pick(e.target.files?.[0]);
+            if (fileRef.current) fileRef.current.value = "";
+          }}
+        />
+        <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+          {image ? `📎 ${image.name}` : "Attach screenshot / file"}
+        </button>
+        {image && (
+          <button type="button" onClick={() => onImage(null)} className="text-xs text-variance-negative hover:underline">
+            Remove
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCompile}
+          disabled={disabled || (!text.trim() && !image)}
+          className="ml-auto rounded-md bg-brand-teal px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-teal/90 disabled:opacity-50"
+        >
+          {working ? "Working…" : "Compile with AI"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function RestaurantAcquisitionUploader({
   property,
@@ -55,28 +125,22 @@ export function RestaurantAcquisitionUploader({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(!hasData);
-  const [text, setText] = useState("");
-  const [image, setImage] = useState<{ base64: string; mediaType: string; name: string } | null>(null);
   const [channels, setChannels] = useState<ChannelRow[]>(() => channelsFromInitial(initialChannels));
   const [daily, setDaily] = useState<DailyMap>(() => dailyFromInitial(initialDaily));
-  const [busy, startBusy] = useTransition();
+
+  const [channelText, setChannelText] = useState("");
+  const [channelImage, setChannelImage] = useState<Img>(null);
+  const [dailyText, setDailyText] = useState("");
+  const [dailyImage, setDailyImage] = useState<Img>(null);
+  const [dailyApproximate, setDailyApproximate] = useState(false);
+
+  const [busyKind, setBusyKind] = useState<null | "channels" | "daily" | "save">(null);
+  const busy = busyKind !== null;
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const bookingSum = pctSum(channels, "bookingsPct");
   const coverSum = pctSum(channels, "coversPct");
   const dailyFilled = DAYS.filter((d) => daily[d]?.bookings?.trim() && daily[d]?.covers?.trim()).length;
-
-  function pickImage(file: File | undefined) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result ?? "");
-      const base64 = result.includes(",") ? result.slice(result.indexOf(",") + 1) : result;
-      setImage({ base64, mediaType: file.type || "image/png", name: file.name });
-    };
-    reader.readAsDataURL(file);
-  }
 
   function setChannelCell(i: number, field: keyof ChannelRow, value: string) {
     setChannels((rs) => rs.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
@@ -85,40 +149,76 @@ export function RestaurantAcquisitionUploader({
     setDaily((m) => ({ ...m, [day]: { bookings: "", covers: "", ...m[day], [field]: value } }));
   }
 
-  function compile() {
+  function compileChannels() {
     setMsg(null);
-    startBusy(async () => {
-      const r = await extractRestaurantAcquisitionAction({
-        property,
-        text: text.trim() || null,
-        imageBase64: image?.base64 ?? null,
-        imageMediaType: image?.mediaType ?? null,
-      });
-      if (!r.ok) {
-        setMsg({ ok: false, text: r.error ?? "Could not read that." });
-        return;
-      }
-      if (r.channels && r.channels.length > 0) {
-        setChannels(
-          r.channels.map((c) => ({
-            channel: c.channel,
-            bookingsPct: String(+(c.bookingsPct * 100).toFixed(2)),
-            coversPct: String(+(c.coversPct * 100).toFixed(2)),
-          })),
-        );
-      }
-      if (r.daily && r.daily.length > 0) {
-        setDaily((m) => {
-          const next = { ...m };
-          for (const d of r.daily!) next[d.day] = { bookings: String(d.bookings), covers: String(d.covers) };
-          return next;
+    setBusyKind("channels");
+    void (async () => {
+      try {
+        const r = await extractRestaurantAcquisitionAction({
+          property,
+          mode: "channels",
+          text: channelText.trim() || null,
+          imageBase64: channelImage?.base64 ?? null,
+          imageMediaType: channelImage?.mediaType ?? null,
         });
+        if (r.ok && r.channels && r.channels.length > 0) {
+          setChannels(
+            r.channels.map((c) => ({
+              channel: c.channel,
+              bookingsPct: String(+(c.bookingsPct * 100).toFixed(2)),
+              coversPct: String(+(c.coversPct * 100).toFixed(2)),
+            })),
+          );
+          setMsg({ ok: true, text: `Read ${r.channels.length} channel(s) — review, then save.` });
+        } else if (r.ok) {
+          setMsg({ ok: false, text: "No channels read — upload the channel list (name + Booking % + Cover %)." });
+        } else {
+          setMsg({ ok: false, text: r.error ?? "Could not read the channels." });
+        }
+      } catch {
+        setMsg({ ok: false, text: "Could not compile — please try again." });
+      } finally {
+        setBusyKind(null);
       }
-      const parts: string[] = [];
-      if (r.channels?.length) parts.push(`${r.channels.length} channel(s)`);
-      if (r.daily?.length) parts.push(`${r.daily.length} day(s)`);
-      setMsg({ ok: true, text: parts.length ? `Read ${parts.join(" + ")} — review, then save.` : "Nothing read." });
-    });
+    })();
+  }
+
+  function compileDaily() {
+    setMsg(null);
+    setBusyKind("daily");
+    void (async () => {
+      try {
+        const r = await extractRestaurantAcquisitionAction({
+          property,
+          mode: "daily",
+          text: dailyText.trim() || null,
+          imageBase64: dailyImage?.base64 ?? null,
+          imageMediaType: dailyImage?.mediaType ?? null,
+        });
+        if (r.ok && r.daily && r.daily.length > 0) {
+          setDaily((m) => {
+            const next = { ...m };
+            for (const d of r.daily!) next[d.day] = { bookings: String(d.bookings), covers: String(d.covers) };
+            return next;
+          });
+          setDailyApproximate(!!r.approximate);
+          setMsg({
+            ok: true,
+            text: r.approximate
+              ? `Estimated ${r.daily.length} day(s) from the chart — these are approximate, please check them before saving.`
+              : `Read ${r.daily.length} day(s) — review, then save.`,
+          });
+        } else if (r.ok) {
+          setMsg({ ok: false, text: "No daily rows read — paste/screenshot the day-by-day Bookings/Covers table." });
+        } else {
+          setMsg({ ok: false, text: r.error ?? "Could not read the daily table." });
+        }
+      } catch {
+        setMsg({ ok: false, text: "Could not compile — please try again." });
+      } finally {
+        setBusyKind(null);
+      }
+    })();
   }
 
   function save() {
@@ -135,11 +235,16 @@ export function RestaurantAcquisitionUploader({
       return;
     }
     setMsg(null);
-    startBusy(async () => {
-      const r = await saveRestaurantAcquisitionAction({ property, period, channels: channelRows, daily: dailyRows });
-      setMsg({ ok: r.ok, text: r.message });
-      if (r.ok) router.refresh();
-    });
+    setBusyKind("save");
+    void (async () => {
+      try {
+        const r = await saveRestaurantAcquisitionAction({ property, period, channels: channelRows, daily: dailyRows });
+        setMsg({ ok: r.ok, text: r.message });
+        if (r.ok) router.refresh();
+      } finally {
+        setBusyKind(null);
+      }
+    })();
   }
 
   if (!open) {
@@ -155,7 +260,7 @@ export function RestaurantAcquisitionUploader({
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-secondary/20 p-4">
+    <div className="space-y-4 rounded-lg border border-border bg-secondary/20 p-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-foreground">Acquisition Split — upload &amp; compile for {period}</p>
         <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">
@@ -163,52 +268,25 @@ export function RestaurantAcquisitionUploader({
         </button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Upload <strong>either</strong> the channel split (Booking % / Cover % per channel) <strong>or</strong> the
-        day-by-day bookings/covers table — the AI detects which one it is and fills the matching grid below (you can also
-        upload both, or type them in). Give the AI the <strong>numbers</strong>, not the chart picture. Channels are free
-        text (any set each month); percentages are stored as entered; the daily table drives the Cover-vs-Booking chart.
+        The two parts upload <strong>separately</strong> so the AI reads each cleanly. Channels are free text (any set
+        each month); percentages are stored as entered. For the daily chart, upload the <strong>numbers table</strong>,
+        not the chart picture.
       </p>
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={3}
-        placeholder="Paste the channel split (name, booking %, cover %) and/or the daily bookings/covers table…"
-        className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none"
-      />
-      <div className="flex flex-wrap items-center gap-3">
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            pickImage(e.target.files?.[0]);
-            if (fileRef.current) fileRef.current.value = "";
-          }}
-        />
-        <button type="button" onClick={() => fileRef.current?.click()} className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-          {image ? `📎 ${image.name}` : "Attach screenshot / file"}
-        </button>
-        {image && (
-          <button type="button" onClick={() => setImage(null)} className="text-xs text-variance-negative hover:underline">
-            Remove
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={compile}
-          disabled={busy || (!text.trim() && !image)}
-          className="ml-auto rounded-md bg-brand-teal px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-teal/90 disabled:opacity-50"
-        >
-          {busy ? "Working…" : "Compile with AI"}
-        </button>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Channels grid */}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-foreground">Channels (Booking % &amp; Cover %)</p>
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* ── Channels ─────────────────────────────── */}
+        <div className="space-y-2.5">
+          <p className="text-xs font-semibold text-foreground">1 · Channels (Booking % &amp; Cover %)</p>
+          <UploadControls
+            placeholder="Paste the channel split (name, booking %, cover %) — or attach the table / pie legend…"
+            text={channelText}
+            onText={setChannelText}
+            image={channelImage}
+            onImage={setChannelImage}
+            onCompile={compileChannels}
+            working={busyKind === "channels"}
+            disabled={busy}
+          />
           <div className="overflow-x-auto rounded-md border border-border bg-card">
             <table className="w-full min-w-[320px] text-sm">
               <thead>
@@ -276,11 +354,26 @@ export function RestaurantAcquisitionUploader({
           </button>
         </div>
 
-        {/* Daily grid */}
-        <div className="space-y-2">
+        {/* ── Daily ────────────────────────────────── */}
+        <div className="space-y-2.5">
           <p className="text-xs font-semibold text-foreground">
-            Daily Cover vs Booking <span className="font-normal text-muted-foreground">({dailyFilled}/31 days)</span>
+            2 · Daily Cover vs Booking <span className="font-normal text-muted-foreground">({dailyFilled}/31 days)</span>
           </p>
+          <UploadControls
+            placeholder="Paste the day-by-day table (day, bookings, covers) — or attach a screenshot of the NUMBERS table…"
+            text={dailyText}
+            onText={setDailyText}
+            image={dailyImage}
+            onImage={setDailyImage}
+            onCompile={compileDaily}
+            working={busyKind === "daily"}
+            disabled={busy}
+          />
+          {dailyApproximate && (
+            <p className="rounded-md bg-[hsl(var(--brand-gold))]/10 px-2.5 py-1.5 text-xs text-[hsl(var(--brand-gold))]">
+              ⚠ These were estimated from a chart — please check the numbers before saving.
+            </p>
+          )}
           <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-card">
             <table className="w-full min-w-[280px] text-sm">
               <thead className="sticky top-0 bg-card">
@@ -320,14 +413,14 @@ export function RestaurantAcquisitionUploader({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
         <button
           type="button"
           onClick={save}
           disabled={busy}
           className="rounded-md bg-brand-gold px-3 py-1.5 text-sm font-medium text-brand-teal transition-colors hover:bg-brand-gold/90 disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save acquisition split"}
+          {busyKind === "save" ? "Saving…" : "Save acquisition split"}
         </button>
         {msg && <span className={cn("text-xs", msg.ok ? "text-variance-positive" : "text-variance-negative")}>{msg.text}</span>}
       </div>
