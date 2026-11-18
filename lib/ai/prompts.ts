@@ -47,7 +47,12 @@ const SECTION_GUIDANCE: Record<string, string> = {
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:
-- Total Fulfilled Bookings and Covers, the Average Party Size, the Chope revenue, and its % of restaurant revenue (only the figures in the context).
+- Total Fulfilled Bookings: <n> reservations
+- Total Covers (Fulfilled): <n> guests
+- Average Party Size: <n> guests per booking
+- Revenue Generated via Chope: <IDR>
+- Revenue Contribution: <pct>% of restaurant revenue
+(ONE metric per bullet — never join them with semicolons; omit a line whose figure is not in the context)
 
 Booking Status Breakdown:
 - One bullet per status that has data — Fulfilled, Cancelled, No Show, Upcoming, Walk-ins — each as "<Status>: <bookings> bookings | <covers> covers". Omit a status that is zero across the board.
