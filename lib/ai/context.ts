@@ -326,6 +326,24 @@ async function chopeContext(code: string, period: string) {
   };
 }
 
+/** Gokai CRM: the six guest-experience metrics with their reported (or computed)
+ * month-over-month change, pre-formatted so the model only quotes them. */
+async function gokaiSummaryContext(code: string, period: string) {
+  const d = await getRestaurantPageData(code, period);
+  if (!d || !d.hasData || !d.gokai) return null;
+  const fmtVal = (m: { value: number; format: string }) =>
+    m.format === "idr" ? money(m.value) : m.format === "pct" ? `${m.value.toFixed(3)}%` : num(m.value);
+  return {
+    restaurant: d.property.restaurantName,
+    unit: d.gokai.unit,
+    metrics: d.gokai.metrics.map((m) => ({
+      metric: m.label,
+      value: fmtVal(m),
+      monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,
+    })),
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -337,6 +355,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   SOCIAL_SUMMARY: socialContext,
   ACQUISITION_SPLIT: acquisitionContext,
   CHOPE_SUMMARY: chopeContext,
+  GOKAI_SUMMARY: gokaiSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

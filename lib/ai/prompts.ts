@@ -44,6 +44,19 @@ const SECTION_GUIDANCE: Record<string, string> = {
 
   SOCIAL_SUMMARY: `Summarise organic social performance by business unit and platform, citing the month-over-month changes provided. Lead each unit with its strongest movements and flag the weakest metric. Keep it to a short paragraph per unit.`,
 
+  GOKAI_SUMMARY: `Summarise the Gokai guest-experience / upselling-tools performance for the month. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Guest Engagement & Conversion Metrics:
+- One bullet per engagement metric with its value and month-over-month change, e.g. "Guest Sign-ups: 293 (+8.52% vs last month)", "Guest Journey Open Rate: 40.82% (−34.66% vs last month)". Use the context figures. If a metric has no month-over-month value, give just the value.
+
+Revenue Performance:
+- "Upsell Sales: <n> transactions (<MoM>)" and "Upsell Revenue: <IDR> (<MoM>)".
+
+Key Insights:
+- 2–4 short bullets: where guest acquisition grew, where engagement or upsell conversion declined, and ONE concrete action to recover upsell performance next month.
+
+Quote ONLY the figures in the context; never write "movement not available" or similar — simply omit the change when it is absent. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:

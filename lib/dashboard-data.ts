@@ -1193,7 +1193,10 @@ export interface GokaiMetric {
   label: string;
   value: number;
   format: "number" | "pct" | "idr";
+  /** Display MoM: the reported value, else computed from the previous period. */
   mom: number | null;
+  /** The raw stored reported MoM (null/absent when not entered) — for seeding the editor. */
+  reportedMom?: number | null;
 }
 
 export interface GokaiSummary {
@@ -1233,6 +1236,7 @@ export interface RestaurantPageData {
   chopeDaily: ChopeDailyPoint[];
   chopeNarrative: NarrativeBlock | null;
   gokai: GokaiSummary | null;
+  gokaiNarrative: NarrativeBlock | null;
   ads: AdsSummary | null;
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   roasTrend: RoasPoint[];
@@ -1274,7 +1278,7 @@ export async function getRestaurantPageData(
           gokaiReports: true,
           adsPerformance: { where: { unit: "RESTAURANT" } },
           tripadvisorMetrics: { where: { unit: "RESTAURANT" } },
-          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT", "CHOPE_SUMMARY"] } } },
+          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT", "CHOPE_SUMMARY", "GOKAI_SUMMARY"] } } },
         },
       },
     },
@@ -1312,6 +1316,7 @@ export async function getRestaurantPageData(
       chopeDaily: [],
       chopeNarrative: null,
       gokai: null,
+      gokaiNarrative: null,
       ads: null,
       spendRevenue: [],
       roasTrend: [],
@@ -1431,17 +1436,20 @@ export async function getRestaurantPageData(
   let gokai: GokaiSummary | null = null;
   if (gCur) {
     const gPrev = previous?.gokaiReports.find((g) => g.unit === gCur.unit);
-    const mom = (cur: number, prev: number | undefined) =>
-      prev === undefined ? null : momChange(cur, prev);
+    const rep = (d: Prisma.Decimal | null) => (d != null ? d.toNumber() : null);
+    // Prefer the MoM % reported on the Gokai dashboard; else compute it from the
+    // previous period when that exists.
+    const momOf = (reported: number | null, cur: number, prev: number | undefined) =>
+      reported != null ? reported : prev === undefined ? null : momChange(cur, prev);
     gokai = {
       unit: gCur.unit,
       metrics: [
-        { key: "signups", label: "Sign-ups", value: gCur.signups, format: "number", mom: mom(gCur.signups, gPrev?.signups) },
-        { key: "openRate", label: "Open Rate", value: gCur.openRatePct.toNumber() * 100, format: "pct", mom: mom(gCur.openRatePct.toNumber(), gPrev?.openRatePct.toNumber()) },
-        { key: "ctr", label: "CTR", value: gCur.ctrPct.toNumber() * 100, format: "pct", mom: mom(gCur.ctrPct.toNumber(), gPrev?.ctrPct.toNumber()) },
-        { key: "survey", label: "Survey Completion", value: gCur.surveyCompletionPct.toNumber() * 100, format: "pct", mom: mom(gCur.surveyCompletionPct.toNumber(), gPrev?.surveyCompletionPct.toNumber()) },
-        { key: "upsellSales", label: "Upsell Sales", value: gCur.upsellSales, format: "number", mom: mom(gCur.upsellSales, gPrev?.upsellSales) },
-        { key: "upsellRevenue", label: "Upsell Revenue", value: gCur.upsellRevenue.toNumber(), format: "idr", mom: mom(gCur.upsellRevenue.toNumber(), gPrev?.upsellRevenue.toNumber()) },
+        { key: "signups", label: "Guests Added", value: gCur.signups, format: "number", mom: momOf(rep(gCur.signupsMom), gCur.signups, gPrev?.signups), reportedMom: rep(gCur.signupsMom) },
+        { key: "openRate", label: "Guest Journey Open Rate", value: gCur.openRatePct.toNumber() * 100, format: "pct", mom: momOf(rep(gCur.openRateMom), gCur.openRatePct.toNumber(), gPrev?.openRatePct.toNumber()), reportedMom: rep(gCur.openRateMom) },
+        { key: "ctr", label: "Guest Journey Click-through Rate", value: gCur.ctrPct.toNumber() * 100, format: "pct", mom: momOf(rep(gCur.ctrMom), gCur.ctrPct.toNumber(), gPrev?.ctrPct.toNumber()), reportedMom: rep(gCur.ctrMom) },
+        { key: "survey", label: "Pre-arrival Survey Completion", value: gCur.surveyCompletionPct.toNumber() * 100, format: "pct", mom: momOf(rep(gCur.surveyMom), gCur.surveyCompletionPct.toNumber(), gPrev?.surveyCompletionPct.toNumber()), reportedMom: rep(gCur.surveyMom) },
+        { key: "upsellSales", label: "Upsell Sales", value: gCur.upsellSales, format: "number", mom: momOf(rep(gCur.upsellSalesMom), gCur.upsellSales, gPrev?.upsellSales), reportedMom: rep(gCur.upsellSalesMom) },
+        { key: "upsellRevenue", label: "Upsell Revenue", value: gCur.upsellRevenue.toNumber(), format: "idr", mom: momOf(rep(gCur.upsellRevenueMom), gCur.upsellRevenue.toNumber(), gPrev?.upsellRevenue.toNumber()), reportedMom: rep(gCur.upsellRevenueMom) },
       ],
     };
   }
@@ -1484,6 +1492,7 @@ export async function getRestaurantPageData(
   const narrative = narrAt("RESTAURANT_OVERVIEW");
   const acquisitionNarrative = narrAt("ACQUISITION_SPLIT");
   const chopeNarrative = narrAt("CHOPE_SUMMARY");
+  const gokaiNarrative = narrAt("GOKAI_SUMMARY");
 
   return {
     ...base,
@@ -1501,6 +1510,7 @@ export async function getRestaurantPageData(
     chopeDaily,
     chopeNarrative,
     gokai,
+    gokaiNarrative,
     ads,
     spendRevenue,
     roasTrend,

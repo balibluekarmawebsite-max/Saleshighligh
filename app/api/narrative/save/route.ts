@@ -27,6 +27,7 @@ const VALID_SECTIONS: NarrativeSection[] = [
   "PROMOTIONS",
   "ACQUISITION_SPLIT",
   "CHOPE_SUMMARY",
+  "GOKAI_SUMMARY",
 ];
 
 /**

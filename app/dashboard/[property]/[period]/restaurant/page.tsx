@@ -15,6 +15,7 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { ChopeUploader } from "@/components/sales/chope-uploader";
+import { GokaiUploader } from "@/components/sales/gokai-uploader";
 import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
 import { RestaurantAcquisitionUploader } from "@/components/sales/restaurant-acquisition-uploader";
 import { RestaurantSalesUploader } from "@/components/sales/restaurant-sales-uploader";
@@ -89,7 +90,7 @@ export default async function RestaurantPage({
     );
   }
 
-  const { property, overview, meals, sources, acquisition, acquisitionDaily, acquisitionNarrative, chope, chopeDaily, chopeNarrative, gokai, tripadvisor, narrative } = data;
+  const { property, overview, meals, sources, acquisition, acquisitionDaily, acquisitionNarrative, chope, chopeDaily, chopeNarrative, gokai, gokaiNarrative, tripadvisor, narrative } = data;
   const fileBase = `${property.code}-${params.period}-restaurant`;
   const canEdit = canEditProperty(await getCurrentUser(), params.property);
 
@@ -442,11 +443,17 @@ export default async function RestaurantPage({
       </SectionCard>
 
       {/* 6 — Gokai panel */}
-      {gokai ? (
-        <SectionCard
-          title="Gokai CRM"
-          description={`Email, engagement and upsell${gokai.unit === "HOTEL" ? " (hotel-level)" : ""}`}
-        >
+      <SectionCard
+        title="Gokai CRM"
+        description={`Guest experience, engagement and upsell${gokai && gokai.unit === "HOTEL" ? " (hotel-level)" : ""}`}
+      >
+        {canEdit && (
+          <div className="mb-1">
+            <GokaiUploader property={params.property} period={params.period} initial={gokai} hasData={gokai !== null} />
+          </div>
+        )}
+
+        {gokai ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {gokai.metrics.map((m) => (
               <StatTile
@@ -457,10 +464,27 @@ export default async function RestaurantPage({
               />
             ))}
           </div>
-        </SectionCard>
-      ) : (
-        <SectionNote title="Gokai CRM" description="Email, engagement and upsell" message="No Gokai report for this period yet." />
-      )}
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No Gokai report yet{canEdit ? " — upload the Guest Experience screenshot above." : "."}
+          </p>
+        )}
+
+        {/* Summary always renders so a saved narrative is never orphaned. */}
+        <div className="mt-6 rounded-lg border border-border bg-card p-5">
+          <h3 className="text-sm font-semibold text-foreground">Gokai Upselling Tools Performance Summary</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Guest engagement &amp; conversion, revenue performance and the key insights.</p>
+          <div className="mt-3">
+            <NarrativePanel
+              block={gokaiNarrative}
+              section="GOKAI_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Gokai summary written for this period yet."
+            />
+          </div>
+        </div>
+      </SectionCard>
 
       {/* 7 — Restaurant ads */}
       <div>

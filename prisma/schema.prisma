@@ -111,6 +111,7 @@ enum NarrativeSection {
   PROMOTIONS
   ACQUISITION_SPLIT
   CHOPE_SUMMARY
+  GOKAI_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -490,6 +491,14 @@ model GokaiReport {
   upsellSales         Int
   upsellRevenue       Decimal      @db.Decimal(18, 2)
   refunds             Int
+  // Month-over-month % as REPORTED on the Gokai dashboard (signed, e.g. -34.66).
+  // Nullable: when absent, the card falls back to a computed MoM.
+  signupsMom          Decimal?     @db.Decimal(14, 4)
+  openRateMom         Decimal?     @db.Decimal(14, 4)
+  ctrMom              Decimal?     @db.Decimal(14, 4)
+  surveyMom           Decimal?     @db.Decimal(14, 4)
+  upsellSalesMom      Decimal?     @db.Decimal(14, 4)
+  upsellRevenueMom    Decimal?     @db.Decimal(14, 4)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

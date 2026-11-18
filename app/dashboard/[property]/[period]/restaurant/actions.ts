@@ -25,6 +25,8 @@ import type {
 import { extractChope, type ChopePart } from "@/lib/sales/chope-ai";
 import { saveChope } from "@/lib/sales/chope-import";
 import type { NormalChopeDailyRow, RawChopeDailyRow } from "@/lib/sales/chope-logic";
+import { extractGokai } from "@/lib/sales/gokai-ai";
+import { saveGokai } from "@/lib/sales/gokai-import";
 
 export interface GenerateResult {
   ok: boolean;
@@ -320,6 +322,54 @@ export async function saveRestaurantChopeAction(input: {
     period: input.period,
     core: input.core,
     daily: input.daily,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface GokaiExtractResult {
+  ok: boolean;
+  error?: string;
+  values?: Record<string, number>;
+}
+
+/** Editor/admin: AI-extract the Gokai metrics + MoM from text/screenshot (preview only). */
+export async function extractRestaurantGokaiAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<GokaiExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractGokai({ text: input.text, image });
+  return r.ok ? { ok: true, values: r.values } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Gokai report (six metrics + reported MoM) for a unit. */
+export async function saveRestaurantGokaiAction(input: {
+  property: string;
+  period: string;
+  unit?: string;
+  core: Record<string, unknown>;
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveGokai({
+    property: input.property,
+    period: input.period,
+    unit: input.unit,
+    core: input.core,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,
   });
