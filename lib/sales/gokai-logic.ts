@@ -104,6 +104,32 @@ export function coerceGokaiCore(raw: unknown): GokaiCore {
   };
 }
 
+/**
+ * The GokaiReport columns the uploader FORM owns: the six metrics + their six
+ * reported MoM values. It deliberately omits `productViews` and `refunds`, which
+ * the form has no inputs for (coerceGokaiCore defaults them to 0). Those two are
+ * owned by the monthly Excel import and read by the Spa page / PPTX export, and
+ * the GokaiReport row is shared per (period, unit). Using this for the UPDATE
+ * path means a form save never zeroes imported productViews/refunds on an
+ * existing row; they are only set on CREATE (where there is no prior value).
+ */
+export function gokaiFormOwnedUpdate(c: GokaiCore) {
+  return {
+    signups: c.signups,
+    openRatePct: c.openRatePct,
+    ctrPct: c.ctrPct,
+    surveyCompletionPct: c.surveyCompletionPct,
+    upsellSales: c.upsellSales,
+    upsellRevenue: c.upsellRevenue,
+    signupsMom: c.signupsMom,
+    openRateMom: c.openRateMom,
+    ctrMom: c.ctrMom,
+    surveyMom: c.surveyMom,
+    upsellSalesMom: c.upsellSalesMom,
+    upsellRevenueMom: c.upsellRevenueMom,
+  };
+}
+
 /** True when at least one metric carries data (guards an empty save). */
 export function gokaiHasData(c: GokaiCore): boolean {
   return (

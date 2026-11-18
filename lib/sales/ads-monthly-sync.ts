@@ -140,7 +140,10 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
         impressions: r.fig.impressions ?? 0,
         clicks: r.fig.clicks ?? 0,
         reach: r.fig.reach,
-        conversions: r.fig.conversions,
+        // The ads API can report fractional conversions (daily/campaign rows are
+        // Decimal(14,4)); round to a whole number for the Int column — matching
+        // the ads dashboard's integer "conversions" headline.
+        conversions: r.fig.conversions != null ? Math.round(r.fig.conversions) : null,
         trackedRevenue: r.fig.conversionValue ?? 0,
       }));
 

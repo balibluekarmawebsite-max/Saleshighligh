@@ -7,7 +7,13 @@
 
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { coerceGokaiCore, gokaiHasData, normalizeGokaiUnit, type GokaiUnit } from "@/lib/sales/gokai-logic";
+import {
+  coerceGokaiCore,
+  gokaiFormOwnedUpdate,
+  gokaiHasData,
+  normalizeGokaiUnit,
+  type GokaiUnit,
+} from "@/lib/sales/gokai-logic";
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
@@ -62,8 +68,12 @@ export async function saveGokai(input: GokaiImportInput): Promise<GokaiResult> {
 
       await tx.gokaiReport.upsert({
         where: { periodId_unit: { periodId: period.id, unit } },
+        // CREATE keeps the full shape (productViews/refunds default to 0 — the
+        // form can't set them and there is no prior value to lose). UPDATE writes
+        // only the form-owned columns so a save never zeroes productViews/refunds
+        // that the monthly Excel import populated and the Spa page/PPTX read.
         create: { periodId: period.id, unit, ...core },
-        update: { ...core },
+        update: gokaiFormOwnedUpdate(core),
       });
     });
 

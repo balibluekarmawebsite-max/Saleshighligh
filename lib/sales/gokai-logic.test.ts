@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coerceGokaiCore, gokaiHasData, normalizeGokaiUnit } from "@/lib/sales/gokai-logic";
+import { coerceGokaiCore, gokaiFormOwnedUpdate, gokaiHasData, normalizeGokaiUnit } from "@/lib/sales/gokai-logic";
 
 describe("coerceGokaiCore (the GOKAI Production October sample)", () => {
   const c = coerceGokaiCore({
@@ -57,5 +57,31 @@ describe("coerceGokaiCore (the GOKAI Production October sample)", () => {
     expect(normalizeGokaiUnit("hotel")).toBe("HOTEL");
     expect(normalizeGokaiUnit("spa")).toBe("SPA");
     expect(normalizeGokaiUnit("junk")).toBe("RESTAURANT");
+  });
+
+  it("gokaiFormOwnedUpdate omits productViews/refunds so a form save can't zero import-owned columns", () => {
+    const u = gokaiFormOwnedUpdate(coerceGokaiCore({ signups: 293, upsellRevenue: 1000 }));
+    // The two columns the form has no inputs for must NOT be in the update set.
+    expect(u).not.toHaveProperty("productViews");
+    expect(u).not.toHaveProperty("refunds");
+    // The form-owned metrics + MoM are carried through.
+    expect(u.signups).toBe(293);
+    expect(u.upsellRevenue).toBe(1000);
+    expect(Object.keys(u).sort()).toEqual(
+      [
+        "ctrMom",
+        "ctrPct",
+        "openRateMom",
+        "openRatePct",
+        "signups",
+        "signupsMom",
+        "surveyCompletionPct",
+        "surveyMom",
+        "upsellRevenue",
+        "upsellRevenueMom",
+        "upsellSales",
+        "upsellSalesMom",
+      ].sort(),
+    );
   });
 });
