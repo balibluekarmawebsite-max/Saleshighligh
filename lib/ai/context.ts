@@ -332,7 +332,7 @@ async function gokaiSummaryContext(code: string, period: string) {
   const d = await getRestaurantPageData(code, period);
   if (!d || !d.hasData || !d.gokai) return null;
   const fmtVal = (m: { value: number; format: string }) =>
-    m.format === "idr" ? money(m.value) : m.format === "pct" ? `${m.value.toFixed(3)}%` : num(m.value);
+    m.format === "idr" ? money(m.value) : m.format === "pct" ? formatPercent(m.value) : num(m.value);
   return {
     restaurant: d.property.restaurantName,
     unit: d.gokai.unit,
