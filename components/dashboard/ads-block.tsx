@@ -6,6 +6,7 @@ import { StatTile } from "@/components/dashboard/stat-tile";
 import { Card, CardContent } from "@/components/ui/card";
 import type { AdsSummary, RoasPoint } from "@/lib/dashboard-data";
 import { formatIDR, formatNumber, formatPercent } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google", META: "Meta", CORPORATE: "Corporate" };
 const PLATFORM_COLOR: Record<string, string> = { GOOGLE: "#0F4C5C", META: "#C9A227", CORPORATE: "#64748B" };
@@ -38,10 +39,11 @@ export function AdsBlock({
 
   const totalSpend = ads.totalSpend;
   const spendMix = ads.platforms;
+  const hasConversions = ads.totalConversions !== null;
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className={cn("grid gap-4 sm:grid-cols-2", hasConversions ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
         <StatTile label="Total Spend" value={formatIDR(ads.totalSpend)} />
         <StatTile label="Tracked Revenue" value={formatIDR(ads.trackedRevenue)} />
         <StatTile
@@ -49,6 +51,7 @@ export function AdsBlock({
           value={ads.roasPct !== null ? `${ads.roasPct.toFixed(0)}%` : "—"}
           sub={ads.roasRatio !== null ? `every Rp 1 → Rp ${ads.roasRatio.toFixed(2)}` : undefined}
         />
+        {hasConversions && <StatTile label="Conversions" value={formatNumber(ads.totalConversions!)} />}
         <StatTile label="Total Clicks" value={formatNumber(ads.totalClicks)} />
       </section>
 
@@ -66,6 +69,7 @@ export function AdsBlock({
                   ["Impressions", formatNumber(p.impressions)],
                   ["Clicks", formatNumber(p.clicks)],
                   ["Reach", p.reach !== null ? formatNumber(p.reach) : "—"],
+                  ...(p.conversions !== null ? [["Conversions", formatNumber(p.conversions)] as [string, string]] : []),
                   ["CTR", p.ctr !== null ? formatPercent(p.ctr) : "—"],
                   ["CPC", p.cpc !== null ? formatIDR(p.cpc) : "—"],
                 ].map(([k, v]) => (

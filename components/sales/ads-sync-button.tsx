@@ -6,16 +6,24 @@ import { useRouter } from "next/navigation";
 import { syncMonthlyAdsAction } from "@/app/dashboard/[property]/[period]/marketing/actions";
 import { cn } from "@/lib/utils";
 
+type SyncAction = (input: { property: string; period: string }) => Promise<{ ok: boolean; message: string }>;
+
 /** Pulls this month's Digital Ads & ROAS from the ads dashboard API (same source
- * as the weekly report). Shown to editors/admins. */
+ * as the weekly report). Shown to editors/admins. Defaults to the HOTEL sync;
+ * pass `action` (e.g. the restaurant-outlet sync) + `label` to reuse it for an
+ * outlet. */
 export function AdsSyncButton({
   property,
   period,
   variant = "primary",
+  action = syncMonthlyAdsAction,
+  label = "Sync ads from dashboard",
 }: {
   property: string;
   period: string;
   variant?: "primary" | "link";
+  action?: SyncAction;
+  label?: string;
 }) {
   const router = useRouter();
   const [busy, start] = useTransition();
@@ -24,7 +32,7 @@ export function AdsSyncButton({
   function run() {
     setMsg(null);
     start(async () => {
-      const r = await syncMonthlyAdsAction({ property, period });
+      const r = await action({ property, period });
       setMsg({ ok: r.ok, text: r.message });
       if (r.ok) router.refresh();
     });
@@ -43,7 +51,7 @@ export function AdsSyncButton({
             : "text-brand-teal hover:underline",
         )}
       >
-        {busy ? "Syncing…" : "Sync ads from dashboard"}
+        {busy ? "Syncing…" : label}
       </button>
       {msg && <span className={cn("text-xs", msg.ok ? "text-variance-positive" : "text-variance-negative")}>{msg.text}</span>}
     </div>

@@ -27,6 +27,7 @@ import { saveChope } from "@/lib/sales/chope-import";
 import type { NormalChopeDailyRow, RawChopeDailyRow } from "@/lib/sales/chope-logic";
 import { extractGokai } from "@/lib/sales/gokai-ai";
 import { saveGokai } from "@/lib/sales/gokai-import";
+import { runMonthlyAdsSync } from "@/lib/sales/ads-monthly-sync";
 
 export interface GenerateResult {
   ok: boolean;
@@ -375,4 +376,28 @@ export async function saveRestaurantGokaiAction(input: {
   });
   if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
   return { ok: r.ok, message: r.message };
+}
+
+/**
+ * Editor/admin: pull this month's Restaurant ads (Spend / Impressions / Reach /
+ * Clicks / ROAS, Google + Meta) from the ads dashboard — scoped to the
+ * restaurant outlet (BKeto / Botanist / Hiiragi) — and write them as the
+ * RESTAURANT-unit `AdsPerformance` rows the Restaurant Ads block reads.
+ */
+export async function syncRestaurantAdsAction(input: {
+  property: string;
+  period: string;
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await runMonthlyAdsSync({
+    property: input.property,
+    period: input.period,
+    unit: "RESTAURANT",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.body.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return r.body.ok ? { ok: true, message: r.body.message } : { ok: false, message: r.body.error };
 }

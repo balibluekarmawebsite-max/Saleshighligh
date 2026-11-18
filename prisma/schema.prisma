@@ -357,6 +357,9 @@ model AdsPerformance {
   impressions    Int
   clicks         Int
   reach          Int?
+  /// Ad-reported conversions for the period (bookings the ads dashboard
+  /// attributes). Null for legacy imports that predate the column.
+  conversions    Int?
   /// Per-platform ad-reported conversion value (used for per-platform ROAS).
   trackedRevenue Decimal      @db.Decimal(18, 2)
   /// Blended BOOKED revenue for the period (same on each row of a sync) — the

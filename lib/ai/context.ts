@@ -208,11 +208,13 @@ async function adsContext(code: string, period: string) {
     roas: a.roasPct != null ? `${a.roasPct.toFixed(0)}%` : "—",
     returnPerRupiah: a.roasRatio != null ? `Rp ${a.roasRatio.toFixed(2)} returned per Rp 1 spent` : "—",
     totalClicks: num(a.totalClicks),
+    totalConversions: a.totalConversions != null ? num(a.totalConversions) : "—",
     platforms: a.platforms.map((p) => ({
       platform: p.platform,
       spend: money(p.spend),
       impressions: num(p.impressions),
       clicks: num(p.clicks),
+      conversions: p.conversions != null ? num(p.conversions) : "—",
       trackedRevenue: money(p.trackedRevenue),
       ctr: p.ctr != null ? formatPercent(p.ctr) : "—",
       cpc: money(p.cpc),

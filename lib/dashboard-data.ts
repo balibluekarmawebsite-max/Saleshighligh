@@ -842,6 +842,7 @@ export interface AdsPlatformRow {
   impressions: number;
   clicks: number;
   reach: number | null;
+  conversions: number | null;
   trackedRevenue: number;
   ctr: number | null;
   cpc: number | null;
@@ -853,6 +854,8 @@ export interface AdsSummary {
   roasPct: number | null;
   roasRatio: number | null;
   totalClicks: number;
+  /** Total ad-reported conversions (null when no platform reported any). */
+  totalConversions: number | null;
   platforms: AdsPlatformRow[];
 }
 
@@ -925,6 +928,7 @@ type RawAd = {
   impressions: number;
   clicks: number;
   reach: number | null;
+  conversions: number | null;
   trackedRevenue: { toNumber(): number };
   bookedRevenue: { toNumber(): number } | null;
 };
@@ -957,18 +961,24 @@ function buildAdsBlock(
     const trackedRevenue = headlineAdsRevenue(sorted); // booked revenue when available
     const totalClicks = sorted.reduce((s, a) => s + a.clicks, 0);
     const roasRatio = totalSpend > 0 ? trackedRevenue / totalSpend : null;
+    const anyConversions = sorted.some((a) => a.conversions !== null);
+    const totalConversions = anyConversions
+      ? sorted.reduce((s, a) => s + (a.conversions ?? 0), 0)
+      : null;
     ads = {
       totalSpend,
       trackedRevenue,
       roasRatio,
       roasPct: roasRatio !== null ? roasRatio * 100 : null,
       totalClicks,
+      totalConversions,
       platforms: sorted.map((a) => ({
         platform: a.platform,
         spend: a.spend.toNumber(),
         impressions: a.impressions,
         clicks: a.clicks,
         reach: a.reach,
+        conversions: a.conversions,
         trackedRevenue: a.trackedRevenue.toNumber(),
         ctr: ctr(a.clicks, a.impressions),
         cpc: cpc(a.spend.toNumber(), a.clicks),

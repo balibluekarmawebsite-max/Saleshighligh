@@ -19,9 +19,14 @@ const PERIOD_RE = /^\d{4}-\d{2}$/;
 /** API platform name → AdsPlatform enum. */
 const PLATFORM_ENUM: Record<string, "GOOGLE" | "META"> = { google: "GOOGLE", meta: "META" };
 
+type AdsUnit = "HOTEL" | "RESTAURANT" | "SPA";
+
 export interface MonthlyAdsSyncInput {
   property: string;
   period: string; // YYYY-MM
+  /** Which business unit's ads to pull. HOTEL (default) queries the property
+   * code; RESTAURANT/SPA query the outlet (see outletCodeFor). */
+  unit?: AdsUnit;
   uploadedBy?: string | null;
 }
 
@@ -32,6 +37,9 @@ export interface MonthlyAdsSyncResult {
         ok: true;
         property: string;
         period: string;
+        unit: AdsUnit;
+        /** The ads-dashboard "property" code actually queried (outlet for F&B/Spa). */
+        outlet: string;
         periodId: string;
         platforms: number;
         spend: number;
@@ -41,6 +49,38 @@ export interface MonthlyAdsSyncResult {
         message: string;
       }
     | { ok: false; error: string };
+}
+
+/**
+ * The ads-dashboard "property" code to query for a given business unit. The ads
+ * dashboard lists each outlet (restaurant/spa) as its own selectable property,
+ * so the monthly sync queries it directly:
+ *   HOTEL      → the property code (BKDS / BKDU / BKV)
+ *   RESTAURANT → the restaurant outlet (BKeto / Botanist / Hiiragi)
+ *   SPA        → the spa outlet (Mudara / Flying Bamboo / Heiwa)
+ * Outlet names default to the property's restaurantName / spaName, but the ads
+ * dashboard may label them slightly differently (e.g. "Bketo" vs "BKeto").
+ * Override per property with ADS_RESTAURANT_CODES / ADS_SPA_CODES — a JSON map
+ * keyed by property code, e.g. ADS_RESTAURANT_CODES='{"BKDS":"Bketo"}'.
+ */
+function outletCodeFor(
+  unit: AdsUnit,
+  property: { code: string; restaurantName: string; spaName: string },
+): string {
+  if (unit === "HOTEL") return property.code;
+  const envName = unit === "RESTAURANT" ? "ADS_RESTAURANT_CODES" : "ADS_SPA_CODES";
+  const fallback = unit === "RESTAURANT" ? property.restaurantName : property.spaName;
+  try {
+    const raw = process.env[envName];
+    if (raw) {
+      const map = JSON.parse(raw) as Record<string, unknown>;
+      const v = map[property.code];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+  } catch {
+    // Malformed override JSON — fall back to the outlet name.
+  }
+  return fallback;
 }
 
 const fail = (status: number, error: string): MonthlyAdsSyncResult => ({ status, body: { ok: false, error } });
@@ -65,14 +105,19 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
   try {
     const code = String(input.property ?? "").trim().toUpperCase();
     if (!code) return fail(400, "property is required.");
+    const unit: AdsUnit = input.unit ?? "HOTEL";
     const date = periodDate(String(input.period ?? "").trim());
     if (!date) return fail(400, "period must be a real month in YYYY-MM form.");
     if (!isAdsSyncConfigured()) {
       return fail(503, "Ads sync is not configured — set ADS_API_KEY (and ADS_API_URL) on the server.");
     }
 
-    const property = await prisma.property.findUnique({ where: { code }, select: { id: true } });
+    const property = await prisma.property.findUnique({
+      where: { code },
+      select: { id: true, code: true, restaurantName: true, spaName: true },
+    });
     if (!property) return fail(400, `unknown property "${code}".`);
+    const outlet = outletCodeFor(unit, property);
 
     const existing = await prisma.reportPeriod.findUnique({
       where: { propertyId_period: { propertyId: property.id, period: date } },
@@ -84,7 +129,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
 
     const periodStr = date.toISOString().slice(0, 7); // normalized (trimmed) YYYY-MM
     const window = monthWindow(periodStr);
-    const fetched = await fetchAdsReport(code, window); // throws on HTTP/auth errors
+    const fetched = await fetchAdsReport(outlet, window); // throws on HTTP/auth errors
 
     const rows = fetched.platforms
       .map((p) => ({ platform: PLATFORM_ENUM[p.platform], fig: p }))
@@ -95,11 +140,12 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
         impressions: r.fig.impressions ?? 0,
         clicks: r.fig.clicks ?? 0,
         reach: r.fig.reach,
+        conversions: r.fig.conversions,
         trackedRevenue: r.fig.conversionValue ?? 0,
       }));
 
     if (rows.length === 0) {
-      return fail(422, "The ads API returned no Google/Meta platform rows for this month.");
+      return fail(422, `The ads API returned no Google/Meta platform rows for "${outlet}" this month.`);
     }
 
     // Blended BOOKED revenue for the month — the headline ROAS basis (the ads
@@ -114,18 +160,20 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
         update: {},
         select: { id: true },
       });
-      // Replace the period's HOTEL ads rows so a platform no longer returned by
-      // the ads API doesn't linger and inflate spend/ROAS.
-      await tx.adsPerformance.deleteMany({ where: { periodId: period.id, unit: "HOTEL" } });
+      // Replace this period+unit's ads rows so a platform no longer returned by
+      // the ads API doesn't linger and inflate spend/ROAS. Scoped to `unit` so a
+      // RESTAURANT/SPA sync never disturbs the HOTEL rows (and vice-versa).
+      await tx.adsPerformance.deleteMany({ where: { periodId: period.id, unit } });
       await tx.adsPerformance.createMany({
         data: rows.map((r) => ({
           periodId: period.id,
-          unit: "HOTEL" as const,
+          unit,
           platform: r.platform,
           spend: r.spend,
           impressions: r.impressions,
           clicks: r.clicks,
           reach: r.reach,
+          conversions: r.conversions,
           trackedRevenue: r.trackedRevenue,
           bookedRevenue,
         })),
@@ -134,7 +182,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
         data: {
           propertyId: property.id,
           period: date,
-          fileName: `Ads dashboard sync (${window.from}→${window.to})`,
+          fileName: `Ads dashboard sync (${unit} · ${outlet} · ${window.from}→${window.to})`,
           uploadedBy: input.uploadedBy ?? null,
           rowCounts: { ADS: rows.length },
         },
@@ -149,25 +197,30 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
 
     await logAudit("sales_ads_monthly_sync", code, {
       period: periodStr,
+      unit,
+      outlet,
       platforms: rows.length,
       spend,
       trackedRevenue,
       window,
     }).catch(() => {});
 
+    const unitLabel = unit === "HOTEL" ? "Ads" : `${unit.charAt(0) + unit.slice(1).toLowerCase()} ads`;
     return {
       status: 200,
       body: {
         ok: true,
         property: code,
         period: periodStr,
+        unit,
+        outlet,
         periodId,
         platforms: rows.length,
         spend,
         trackedRevenue,
         roasPct,
         window: fetched.window,
-        message: `Ads synced — ${rows.length} platform(s) for ${periodStr}${roasPct !== null ? ` · ROAS ${roasPct.toFixed(0)}%` : ""}.`,
+        message: `${unitLabel} synced from "${outlet}" — ${rows.length} platform(s) for ${periodStr}${roasPct !== null ? ` · ROAS ${roasPct.toFixed(0)}%` : ""}.`,
       },
     };
   } catch (e) {

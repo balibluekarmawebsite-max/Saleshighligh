@@ -14,6 +14,7 @@ import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
+import { AdsSyncButton } from "@/components/sales/ads-sync-button";
 import { ChopeUploader } from "@/components/sales/chope-uploader";
 import { GokaiUploader } from "@/components/sales/gokai-uploader";
 import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
@@ -25,6 +26,7 @@ import { RestaurantSourcesTable } from "@/components/tables/restaurant-sources-t
 import { Card, CardContent } from "@/components/ui/card";
 import { achievementPct, variancePct } from "@/lib/calculations";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
+import { syncRestaurantAdsAction } from "./actions";
 import {
   GROUP_CODE,
   getRestaurantPageData,
@@ -488,13 +490,28 @@ export default async function RestaurantPage({
 
       {/* 7 — Restaurant ads */}
       <div>
-        <h3 className="mb-3 text-lg font-semibold tracking-tight text-foreground">Restaurant Ads</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground">Restaurant Ads</h3>
+          {canEdit && (
+            <AdsSyncButton
+              property={params.property}
+              period={params.period}
+              action={syncRestaurantAdsAction}
+              variant="link"
+              label="Sync restaurant ads from dashboard"
+            />
+          )}
+        </div>
         <AdsBlock
           ads={data.ads}
           spendRevenue={data.spendRevenue}
           roasTrend={data.roasTrend}
           fileBase={`${fileBase}-ads`}
-          emptyLabel="Import the ADS tab (RESTAURANT unit) to populate ad performance."
+          emptyLabel={
+            canEdit
+              ? 'No restaurant ad data yet — click "Sync restaurant ads from dashboard" to pull Spend / Reach / Clicks / ROAS (Google + Meta) for this month.'
+              : "No restaurant ad data for this period yet."
+          }
         />
       </div>
 
