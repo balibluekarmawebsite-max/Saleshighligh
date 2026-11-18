@@ -46,6 +46,10 @@ export async function saveChope(input: ChopeImportInput): Promise<ChopeResult> {
     if (!date) return { ok: false, message: "period must be a real month in YYYY-MM form." };
 
     const core = coerceChopeCore(input.core);
+    // The daily grid is authoritative when the caller sends it (the uploader
+    // always does): an empty array clears the series. A caller that omits daily
+    // entirely leaves the stored series untouched.
+    const dailyProvided = Array.isArray(input.daily);
     const { rows: daily } = normalizeChopeDaily(input.daily ?? []);
 
     const coreHasData =
@@ -91,8 +95,9 @@ export async function saveChope(input: ChopeImportInput): Promise<ChopeResult> {
         });
       }
 
-      // Daily series — replace only when submitted.
-      if (daily.length > 0) {
+      // Daily series — the submitted grid is authoritative, so reconcile to it
+      // whenever the caller sends a daily array (an empty one clears the series).
+      if (dailyProvided) {
         await tx.chopeDaily.deleteMany({
           where: { periodId: period.id, day: { notIn: daily.map((d) => d.day) } },
         });

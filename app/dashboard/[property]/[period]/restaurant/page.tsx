@@ -340,85 +340,90 @@ export default async function RestaurantPage({
           </div>
         )}
 
-        {chope ? (
-          <div className="space-y-6">
-            {/* Overall performance */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatTile label="Fulfilled" value={formatNumber(chope.fulfilledBookings)} sub={`${formatNumber(chope.fulfilledCovers)} covers`} />
-              <StatTile label="Avg Party Size" value={chope.averagePartySize !== null ? chope.averagePartySize.toFixed(2) : "—"} sub="guests / booking" />
-              <StatTile label="Chope Revenue" value={formatIDR(chope.revenue)} sub={chope.pctOfRestaurantRevenue !== null ? `${chope.pctOfRestaurantRevenue.toFixed(2)}% of restaurant` : undefined} />
-              <StatTile label="Cancellations / No-shows" value={`${formatNumber(chope.cancelledBookings)} / ${formatNumber(chope.noShows)}`} sub={`${formatNumber(chope.cancelledCovers + chope.noShowCovers)} covers lost`} />
-            </div>
+        <div className="space-y-6">
+          {chope && (
+            <>
+              {/* Overall performance */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatTile label="Fulfilled" value={formatNumber(chope.fulfilledBookings)} sub={`${formatNumber(chope.fulfilledCovers)} covers`} />
+                <StatTile label="Avg Party Size" value={chope.averagePartySize !== null ? chope.averagePartySize.toFixed(2) : "—"} sub="guests / booking" />
+                <StatTile label="Chope Revenue" value={formatIDR(chope.revenue)} sub={chope.pctOfRestaurantRevenue !== null ? `${chope.pctOfRestaurantRevenue.toFixed(2)}% of restaurant` : undefined} />
+                <StatTile label="Cancellations / No-shows" value={`${formatNumber(chope.cancelledBookings)} / ${formatNumber(chope.noShows)}`} sub={`${formatNumber(chope.cancelledCovers + chope.noShowCovers)} covers lost`} />
+              </div>
 
-            {/* Funnel + sources */}
-            <div className="grid gap-6 lg:grid-cols-2">
-              <ExportableCard title="Traffic Summary" description="Bookings · covers by status" fileName={`${fileBase}-chope-funnel`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[320px] border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-xs font-medium text-muted-foreground">
-                        <th className="px-3 py-2 text-left">Status</th>
-                        <th className="px-3 py-2 text-right">Bookings</th>
-                        <th className="px-3 py-2 text-right">Covers</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        ["Fulfilled", chope.fulfilledBookings, chope.fulfilledCovers],
-                        ["Cancelled", chope.cancelledBookings, chope.cancelledCovers],
-                        ["No Show", chope.noShows, chope.noShowCovers],
-                        ["Upcoming", chope.upcomingBookings, chope.upcomingCovers],
-                        ["Walk-ins", chope.walkinBookings, chope.walkinCovers],
-                      ].map(([label, b, c]) => (
-                        <tr key={label as string} className="border-b border-border/60">
-                          <td className="px-3 py-2 font-medium text-foreground">{label}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(b as number)}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(c as number)}</td>
+              {/* Funnel + sources */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <ExportableCard title="Traffic Summary" description="Bookings · covers by status" fileName={`${fileBase}-chope-funnel`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[320px] border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-xs font-medium text-muted-foreground">
+                          <th className="px-3 py-2 text-left">Status</th>
+                          <th className="px-3 py-2 text-right">Bookings</th>
+                          <th className="px-3 py-2 text-right">Covers</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </ExportableCard>
+                      </thead>
+                      <tbody>
+                        {[
+                          ["Fulfilled", chope.fulfilledBookings, chope.fulfilledCovers],
+                          ["Cancelled", chope.cancelledBookings, chope.cancelledCovers],
+                          ["No Show", chope.noShows, chope.noShowCovers],
+                          ["Upcoming", chope.upcomingBookings, chope.upcomingCovers],
+                          ["Walk-ins", chope.walkinBookings, chope.walkinCovers],
+                        ].map(([label, b, c]) => (
+                          <tr key={label as string} className="border-b border-border/60">
+                            <td className="px-3 py-2 font-medium text-foreground">{label}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(b as number)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(c as number)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </ExportableCard>
 
-              <ExportableCard title="Booking Sources" description="Chope/Grab vs Restaurant channels" fileName={`${fileBase}-chope-sources`}>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[320px] border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-xs font-medium text-muted-foreground">
-                        <th className="px-3 py-2 text-left">Source</th>
-                        <th className="px-3 py-2 text-right">Bookings</th>
-                        <th className="px-3 py-2 text-right">Covers</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-border/60">
-                        <td className="px-3 py-2 font-medium text-foreground">Chope/Grab platform</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.platformBookings)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.platformCovers)}</td>
-                      </tr>
-                      <tr className="border-b border-border/60">
-                        <td className="px-3 py-2 font-medium text-foreground">Restaurant direct channels</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.directBookings)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.directCovers)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </ExportableCard>
-            </div>
+                <ExportableCard title="Booking Sources" description="Chope/Grab vs Restaurant channels" fileName={`${fileBase}-chope-sources`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[320px] border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-xs font-medium text-muted-foreground">
+                          <th className="px-3 py-2 text-left">Source</th>
+                          <th className="px-3 py-2 text-right">Bookings</th>
+                          <th className="px-3 py-2 text-right">Covers</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-border/60">
+                          <td className="px-3 py-2 font-medium text-foreground">Chope/Grab platform</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.platformBookings)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.platformCovers)}</td>
+                        </tr>
+                        <tr className="border-b border-border/60">
+                          <td className="px-3 py-2 font-medium text-foreground">Restaurant direct channels</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.directBookings)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.directCovers)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </ExportableCard>
+              </div>
+            </>
+          )}
 
-            {chopeDaily.length > 0 && (
-              <ExportableCard title="Traffic by Online Booking Sources" description="Daily online bookings — Chope/Grab vs Restaurant channels" fileName={`${fileBase}-chope-daily`}>
-                <ChopeDailyChart data={chopeDaily} />
-              </ExportableCard>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No Chope report yet{canEdit ? " — upload the four screenshots above." : "."}
-          </p>
-        )}
+          {/* Daily chart renders on its own data, independent of the report row. */}
+          {chopeDaily.length > 0 && (
+            <ExportableCard title="Traffic by Online Booking Sources" description="Daily online bookings — Chope/Grab vs Restaurant channels" fileName={`${fileBase}-chope-daily`}>
+              <ChopeDailyChart data={chopeDaily} />
+            </ExportableCard>
+          )}
+
+          {!chope && chopeDaily.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No Chope report yet{canEdit ? " — upload the four screenshots above." : "."}
+            </p>
+          )}
+        </div>
 
         {/* Summary always renders so a saved narrative is never orphaned. */}
         <div className="mt-6 rounded-lg border border-border bg-card p-5">

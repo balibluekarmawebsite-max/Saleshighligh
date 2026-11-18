@@ -14,7 +14,10 @@ describe("number coercion", () => {
     expect(toInt("11")).toBe(11);
     expect(toNum("Rp 9,805,025")).toBe(9_805_025);
     expect(toNum("9.805.025")).toBe(9_805_025); // Indonesian thousands
+    expect(toNum("Rp 450,000")).toBe(450_000); // single US-comma group = thousands
+    expect(toNum("137,5")).toBeCloseTo(137.5, 5); // single comma, short tail = decimal
     expect(toPct("5.73%")).toBeCloseTo(5.73, 5);
+    expect(toPct("5,73%")).toBeCloseTo(5.73, 5); // Indonesian decimal comma
     expect(toPct("120%")).toBe(100); // clamp
     expect(toPct("")).toBeNull();
   });
