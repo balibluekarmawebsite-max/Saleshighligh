@@ -22,6 +22,9 @@ import type {
   RawChannelRow,
   RawDailyRow,
 } from "@/lib/sales/restaurant-acquisition-logic";
+import { extractChope, type ChopePart } from "@/lib/sales/chope-ai";
+import { saveChope } from "@/lib/sales/chope-import";
+import type { NormalChopeDailyRow, RawChopeDailyRow } from "@/lib/sales/chope-logic";
 
 export interface GenerateResult {
   ok: boolean;
@@ -264,6 +267,58 @@ export async function saveRestaurantAcquisitionAction(input: {
     property: input.property,
     period: input.period,
     channels: input.channels,
+    daily: input.daily,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface ChopeExtractResult {
+  ok: boolean;
+  error?: string;
+  values?: Record<string, number | null>;
+  daily?: NormalChopeDailyRow[];
+  approximate?: boolean;
+}
+
+/** Editor/admin: AI-extract one Chope part (traffic/revenue/sources/daily) from
+ * text/screenshot (preview only). */
+export async function extractRestaurantChopeAction(input: {
+  property: string;
+  part: ChopePart;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<ChopeExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractChope({ text: input.text, image, part: input.part });
+  return r.ok ? { ok: true, values: r.values, daily: r.daily, approximate: r.approximate } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Chope report (scalar parts + daily series). */
+export async function saveRestaurantChopeAction(input: {
+  property: string;
+  period: string;
+  core: Record<string, unknown>;
+  daily?: RawChopeDailyRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveChope({
+    property: input.property,
+    period: input.period,
+    core: input.core,
     daily: input.daily,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,

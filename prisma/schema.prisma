@@ -110,6 +110,7 @@ enum NarrativeSection {
   PR
   PROMOTIONS
   ACQUISITION_SPLIT
+  CHOPE_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -178,6 +179,7 @@ model ReportPeriod {
   fnbAcquisition     FnbAcquisition[]
   fnbAcquisitionDaily FnbAcquisitionDaily[]
   chopeReports       ChopeReport[]
+  chopeDaily         ChopeDaily[]
   gokaiReports       GokaiReport[]
   spaSales           SpaSales[]
   spaTreatments      SpaTreatment[]
@@ -434,19 +436,45 @@ model FnbAcquisitionDaily {
 model ChopeReport {
   id                String  @id @default(cuid())
   periodId          String
+  // Traffic-summary funnel (bookings + covers per status).
   fulfilledBookings Int
   fulfilledCovers   Int
   cancelledBookings Int
   cancelledCovers   Int
-  noShows           Int
-  revenue           Decimal @db.Decimal(18, 2)
+  noShows           Int // no-show bookings
+  noShowCovers      Int @default(0)
+  upcomingBookings  Int @default(0)
+  upcomingCovers    Int @default(0)
+  walkinBookings    Int @default(0)
+  walkinCovers      Int @default(0)
+  // Revenue: amount + the given % of restaurant revenue (else derived on read).
+  revenue           Decimal  @db.Decimal(18, 2)
+  revenuePct        Decimal? @db.Decimal(7, 4)
+  // Booking-source split (Chope/Grab platform vs restaurant direct channels).
   platformBookings  Int
+  platformCovers    Int @default(0)
   directBookings    Int
+  directCovers      Int @default(0)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   @@unique([periodId])
   @@map("chope_reports")
+}
+
+/// Daily online bookings by source (Chope/Grab vs restaurant channels) — the
+/// "Traffic by Online Booking Sources" chart. One row per day-of-month.
+model ChopeDaily {
+  id               String @id @default(cuid())
+  periodId         String
+  day              Int
+  platformBookings Int
+  directBookings   Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, day])
+  @@map("chope_daily")
 }
 
 /// Gokai CRM / upsell report per business unit.

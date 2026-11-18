@@ -287,6 +287,39 @@ async function acquisitionContext(code: string, period: string) {
   return { restaurant: cur.property.restaurantName, previousMonth: prevMonth, channels, daily };
 }
 
+/** Chope reservations: the traffic funnel, revenue, booking-source split and
+ * daily totals, pre-formatted so the model only quotes them. */
+async function chopeContext(code: string, period: string) {
+  const d = await getRestaurantPageData(code, period);
+  if (!d || !d.hasData || !d.chope) return null;
+  const c = d.chope;
+  const bc = (bookings: number, covers: number) => ({ bookings: num(bookings), covers: num(covers) });
+  return {
+    restaurant: d.property.restaurantName,
+    trafficSummary: {
+      fulfilled: bc(c.fulfilledBookings, c.fulfilledCovers),
+      cancelled: bc(c.cancelledBookings, c.cancelledCovers),
+      noShow: bc(c.noShows, c.noShowCovers),
+      upcoming: bc(c.upcomingBookings, c.upcomingCovers),
+      walkIns: bc(c.walkinBookings, c.walkinCovers),
+    },
+    averagePartySize: c.averagePartySize != null ? `${c.averagePartySize.toFixed(2)} guests per booking` : null,
+    revenue: money(c.revenue),
+    revenueShareOfRestaurant: c.pctOfRestaurantRevenue != null ? `${c.pctOfRestaurantRevenue.toFixed(2)}%` : null,
+    bookingSources: {
+      chopeGrabPlatform: bc(c.platformBookings, c.platformCovers),
+      restaurantDirectChannels: bc(c.directBookings, c.directCovers),
+    },
+    dailyOnlineBookings: d.chopeDaily.length
+      ? {
+          days: d.chopeDaily.length,
+          chopeGrabTotal: num(d.chopeDaily.reduce((s, x) => s + x.platformBookings, 0)),
+          restaurantChannelsTotal: num(d.chopeDaily.reduce((s, x) => s + x.directBookings, 0)),
+        }
+      : null,
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -297,6 +330,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   ADS_SUMMARY: adsContext,
   SOCIAL_SUMMARY: socialContext,
   ACQUISITION_SPLIT: acquisitionContext,
+  CHOPE_SUMMARY: chopeContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

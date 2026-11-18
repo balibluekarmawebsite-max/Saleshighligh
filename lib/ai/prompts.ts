@@ -44,6 +44,22 @@ const SECTION_GUIDANCE: Record<string, string> = {
 
   SOCIAL_SUMMARY: `Summarise organic social performance by business unit and platform, citing the month-over-month changes provided. Lead each unit with its strongest movements and flag the weakest metric. Keep it to a short paragraph per unit.`,
 
+  CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
+
+Overall Booking Performance:
+- Total Fulfilled Bookings and Covers, the Average Party Size, the Chope revenue, and its % of restaurant revenue (only the figures in the context).
+
+Booking Status Breakdown:
+- One bullet per status that has data — Fulfilled, Cancelled, No Show, Upcoming, Walk-ins — each as "<Status>: <bookings> bookings | <covers> covers". Omit a status that is zero across the board.
+
+Booking Sources Breakdown:
+- "Chope/Grab Platform: <bookings> bookings | <covers> covers" and "Restaurant Direct Channels: <bookings> bookings | <covers> covers".
+
+Key Insights:
+- 2–4 short bullets interpreting booking quality (cancellations/no-shows vs fulfilled), reliance on third-party platforms vs direct channels, and one concrete opportunity for next month.
+
+Quote ONLY the figures in the context. Do not invent numbers or last-year comparisons.`,
+
   ACQUISITION_SPLIT: `Summarise the restaurant's customer acquisition mix as THREE labelled blocks. Put each heading on its own line ending with a colon, then its content, with ONE blank line between blocks. Use this exact shape:
 
 Bookings Distribution:

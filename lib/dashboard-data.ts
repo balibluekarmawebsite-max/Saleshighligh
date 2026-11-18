@@ -1165,10 +1165,27 @@ export interface ChopeSummary {
   cancelledBookings: number;
   cancelledCovers: number;
   noShows: number;
+  noShowCovers: number;
+  upcomingBookings: number;
+  upcomingCovers: number;
+  walkinBookings: number;
+  walkinCovers: number;
   revenue: number;
   platformBookings: number;
+  platformCovers: number;
   directBookings: number;
+  directCovers: number;
+  averagePartySize: number | null;
+  /** The given % of restaurant revenue, else derived from revenue / restaurant revenue. */
   pctOfRestaurantRevenue: number | null;
+  /** The raw stored % (null when not entered) — for seeding the editor. */
+  revenuePctGiven: number | null;
+}
+
+export interface ChopeDailyPoint {
+  day: number; // 1–31
+  platformBookings: number;
+  directBookings: number;
 }
 
 export interface GokaiMetric {
@@ -1213,6 +1230,8 @@ export interface RestaurantPageData {
   acquisitionDaily: AcqDailyPoint[];
   acquisitionNarrative: NarrativeBlock | null;
   chope: ChopeSummary | null;
+  chopeDaily: ChopeDailyPoint[];
+  chopeNarrative: NarrativeBlock | null;
   gokai: GokaiSummary | null;
   ads: AdsSummary | null;
   spendRevenue: { platform: string; spend: number; revenue: number }[];
@@ -1251,10 +1270,11 @@ export async function getRestaurantPageData(
           fnbAcquisition: true,
           fnbAcquisitionDaily: true,
           chopeReports: true,
+          chopeDaily: true,
           gokaiReports: true,
           adsPerformance: { where: { unit: "RESTAURANT" } },
           tripadvisorMetrics: { where: { unit: "RESTAURANT" } },
-          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT"] } } },
+          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT", "CHOPE_SUMMARY"] } } },
         },
       },
     },
@@ -1289,6 +1309,8 @@ export async function getRestaurantPageData(
       acquisitionDaily: [],
       acquisitionNarrative: null,
       chope: null,
+      chopeDaily: [],
+      chopeNarrative: null,
       gokai: null,
       ads: null,
       spendRevenue: [],
@@ -1373,15 +1395,33 @@ export async function getRestaurantPageData(
         cancelledBookings: chopeRow.cancelledBookings,
         cancelledCovers: chopeRow.cancelledCovers,
         noShows: chopeRow.noShows,
+        noShowCovers: chopeRow.noShowCovers,
+        upcomingBookings: chopeRow.upcomingBookings,
+        upcomingCovers: chopeRow.upcomingCovers,
+        walkinBookings: chopeRow.walkinBookings,
+        walkinCovers: chopeRow.walkinCovers,
         revenue: chopeRow.revenue.toNumber(),
         platformBookings: chopeRow.platformBookings,
+        platformCovers: chopeRow.platformCovers,
         directBookings: chopeRow.directBookings,
+        directCovers: chopeRow.directCovers,
+        averagePartySize:
+          chopeRow.fulfilledBookings > 0 ? chopeRow.fulfilledCovers / chopeRow.fulfilledBookings : null,
+        revenuePctGiven: chopeRow.revenuePct != null ? chopeRow.revenuePct.toNumber() : null,
+        // Prefer the given % from the screenshot; else derive from revenue.
         pctOfRestaurantRevenue:
-          restaurantRevenueActual > 0
-            ? (chopeRow.revenue.toNumber() / restaurantRevenueActual) * 100
-            : null,
+          chopeRow.revenuePct != null
+            ? chopeRow.revenuePct.toNumber()
+            : restaurantRevenueActual > 0
+              ? (chopeRow.revenue.toNumber() / restaurantRevenueActual) * 100
+              : null,
       }
     : null;
+
+  // Daily online bookings by source (Chope/Grab vs restaurant channels).
+  const chopeDaily: ChopeDailyPoint[] = [...current.chopeDaily]
+    .sort((a, b) => a.day - b.day)
+    .map((d) => ({ day: d.day, platformBookings: d.platformBookings, directBookings: d.directBookings }));
 
   // Gokai (prefer RESTAURANT unit, fall back to HOTEL)
   const pickGokai = (p: typeof current | undefined) =>
@@ -1443,6 +1483,7 @@ export async function getRestaurantPageData(
   };
   const narrative = narrAt("RESTAURANT_OVERVIEW");
   const acquisitionNarrative = narrAt("ACQUISITION_SPLIT");
+  const chopeNarrative = narrAt("CHOPE_SUMMARY");
 
   return {
     ...base,
@@ -1457,6 +1498,8 @@ export async function getRestaurantPageData(
     acquisitionDaily,
     acquisitionNarrative,
     chope,
+    chopeDaily,
+    chopeNarrative,
     gokai,
     ads,
     spendRevenue,

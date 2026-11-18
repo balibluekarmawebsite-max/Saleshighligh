@@ -26,6 +26,7 @@ const VALID_SECTIONS: NarrativeSection[] = [
   "PR",
   "PROMOTIONS",
   "ACQUISITION_SPLIT",
+  "CHOPE_SUMMARY",
 ];
 
 /**

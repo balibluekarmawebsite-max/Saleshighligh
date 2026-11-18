@@ -26,8 +26,13 @@ export function normalizeNumber(raw: unknown): number | null {
       s = s.replace(/,/g, ""); // US thousands
     }
   } else if (lastComma !== -1) {
-    // Only commas → treat as decimal (Indonesian).
-    s = s.replace(/,/g, ".");
+    // Only commas: more than one can only be thousands grouping
+    // ("9,805,025" → 9805025); a single comma is a decimal ("137,5" → 137.5).
+    if ((s.match(/,/g) ?? []).length > 1) {
+      s = s.replace(/,/g, "");
+    } else {
+      s = s.replace(",", ".");
+    }
   } else if (lastDot !== -1) {
     // Only dots: one dot with 1–2 trailing digits is a decimal; otherwise
     // dots are thousand separators (Indonesian).

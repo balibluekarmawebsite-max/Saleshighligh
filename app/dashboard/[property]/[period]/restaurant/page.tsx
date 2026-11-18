@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ActualBudgetBarChart } from "@/components/charts/actual-budget-bar-chart";
+import { ChopeDailyChart } from "@/components/charts/chope-daily-chart";
 import { CoverVsBookingChart } from "@/components/charts/cover-vs-booking-chart";
 import { RevenueMixChart } from "@/components/charts/revenue-mix-chart";
 import { AdsBlock } from "@/components/dashboard/ads-block";
@@ -13,6 +14,7 @@ import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
+import { ChopeUploader } from "@/components/sales/chope-uploader";
 import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
 import { RestaurantAcquisitionUploader } from "@/components/sales/restaurant-acquisition-uploader";
 import { RestaurantSalesUploader } from "@/components/sales/restaurant-sales-uploader";
@@ -87,7 +89,7 @@ export default async function RestaurantPage({
     );
   }
 
-  const { property, overview, meals, sources, acquisition, acquisitionDaily, acquisitionNarrative, chope, gokai, tripadvisor, narrative } = data;
+  const { property, overview, meals, sources, acquisition, acquisitionDaily, acquisitionNarrative, chope, chopeDaily, chopeNarrative, gokai, tripadvisor, narrative } = data;
   const fileBase = `${property.code}-${params.period}-restaurant`;
   const canEdit = canEditProperty(await getCurrentUser(), params.property);
 
@@ -316,57 +318,123 @@ export default async function RestaurantPage({
         </div>
       </SectionCard>
 
-      {/* 5 — Chope panel */}
-      {chope ? (
-        <SectionCard
-          title="Chope Reservations"
-          description="Reservation funnel, revenue and booking source"
-          insight={
-            chope.pctOfRestaurantRevenue !== null
-              ? `Chope contributed ${chope.pctOfRestaurantRevenue.toFixed(1)}% of restaurant revenue this period.`
-              : undefined
-          }
-        >
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile label="Fulfilled Bookings" value={formatNumber(chope.fulfilledBookings)} sub={`${formatNumber(chope.fulfilledCovers)} covers`} />
-            <StatTile label="Cancelled Bookings" value={formatNumber(chope.cancelledBookings)} sub={`${formatNumber(chope.cancelledCovers)} covers`} />
-            <StatTile label="No-shows" value={formatNumber(chope.noShows)} />
-            <StatTile
-              label="Chope Revenue"
-              value={formatIDR(chope.revenue)}
-              sub={chope.pctOfRestaurantRevenue !== null ? `${chope.pctOfRestaurantRevenue.toFixed(1)}% of restaurant revenue` : undefined}
+      {/* 5 — Chope reservations */}
+      <SectionCard
+        title="Chope Reservations"
+        description="Reservation funnel, revenue, booking sources and the daily trend"
+        insight={
+          chope && chope.pctOfRestaurantRevenue !== null
+            ? `Chope contributed ${chope.pctOfRestaurantRevenue.toFixed(2)}% of restaurant revenue this period.`
+            : undefined
+        }
+      >
+        {canEdit && (
+          <div className="mb-1">
+            <ChopeUploader
+              property={params.property}
+              period={params.period}
+              initialCore={chope}
+              initialDaily={chopeDaily}
+              hasData={chope !== null || chopeDaily.length > 0}
             />
           </div>
+        )}
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Booking source · Platform vs Direct</p>
-            <div className="flex h-5 w-full overflow-hidden rounded">
-              {(() => {
-                const total = chope.platformBookings + chope.directBookings;
-                const pw = total > 0 ? (chope.platformBookings / total) * 100 : 0;
-                return (
-                  <>
-                    <div style={{ width: `${pw}%`, backgroundColor: "#0F4C5C" }} title={`Platform: ${formatNumber(chope.platformBookings)}`} />
-                    <div style={{ width: `${100 - pw}%`, backgroundColor: "#C9A227" }} title={`Direct: ${formatNumber(chope.directBookings)}`} />
-                  </>
-                );
-              })()}
+        {chope ? (
+          <div className="space-y-6">
+            {/* Overall performance */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatTile label="Fulfilled" value={formatNumber(chope.fulfilledBookings)} sub={`${formatNumber(chope.fulfilledCovers)} covers`} />
+              <StatTile label="Avg Party Size" value={chope.averagePartySize !== null ? chope.averagePartySize.toFixed(2) : "—"} sub="guests / booking" />
+              <StatTile label="Chope Revenue" value={formatIDR(chope.revenue)} sub={chope.pctOfRestaurantRevenue !== null ? `${chope.pctOfRestaurantRevenue.toFixed(2)}% of restaurant` : undefined} />
+              <StatTile label="Cancellations / No-shows" value={`${formatNumber(chope.cancelledBookings)} / ${formatNumber(chope.noShows)}`} sub={`${formatNumber(chope.cancelledCovers + chope.noShowCovers)} covers lost`} />
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#0F4C5C" }} />
-                Platform · {formatNumber(chope.platformBookings)}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#C9A227" }} />
-                Direct · {formatNumber(chope.directBookings)}
-              </span>
+
+            {/* Funnel + sources */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <ExportableCard title="Traffic Summary" description="Bookings · covers by status" fileName={`${fileBase}-chope-funnel`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[320px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-xs font-medium text-muted-foreground">
+                        <th className="px-3 py-2 text-left">Status</th>
+                        <th className="px-3 py-2 text-right">Bookings</th>
+                        <th className="px-3 py-2 text-right">Covers</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ["Fulfilled", chope.fulfilledBookings, chope.fulfilledCovers],
+                        ["Cancelled", chope.cancelledBookings, chope.cancelledCovers],
+                        ["No Show", chope.noShows, chope.noShowCovers],
+                        ["Upcoming", chope.upcomingBookings, chope.upcomingCovers],
+                        ["Walk-ins", chope.walkinBookings, chope.walkinCovers],
+                      ].map(([label, b, c]) => (
+                        <tr key={label as string} className="border-b border-border/60">
+                          <td className="px-3 py-2 font-medium text-foreground">{label}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(b as number)}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(c as number)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </ExportableCard>
+
+              <ExportableCard title="Booking Sources" description="Chope/Grab vs Restaurant channels" fileName={`${fileBase}-chope-sources`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[320px] border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-xs font-medium text-muted-foreground">
+                        <th className="px-3 py-2 text-left">Source</th>
+                        <th className="px-3 py-2 text-right">Bookings</th>
+                        <th className="px-3 py-2 text-right">Covers</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-border/60">
+                        <td className="px-3 py-2 font-medium text-foreground">Chope/Grab platform</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.platformBookings)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.platformCovers)}</td>
+                      </tr>
+                      <tr className="border-b border-border/60">
+                        <td className="px-3 py-2 font-medium text-foreground">Restaurant direct channels</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.directBookings)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-foreground">{formatNumber(chope.directCovers)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </ExportableCard>
             </div>
+
+            {chopeDaily.length > 0 && (
+              <ExportableCard title="Traffic by Online Booking Sources" description="Daily online bookings — Chope/Grab vs Restaurant channels" fileName={`${fileBase}-chope-daily`}>
+                <ChopeDailyChart data={chopeDaily} />
+              </ExportableCard>
+            )}
           </div>
-        </SectionCard>
-      ) : (
-        <SectionNote title="Chope Reservations" description="Reservation funnel and revenue" message="No Chope report for this period yet." />
-      )}
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No Chope report yet{canEdit ? " — upload the four screenshots above." : "."}
+          </p>
+        )}
+
+        {/* Summary always renders so a saved narrative is never orphaned. */}
+        <div className="mt-6 rounded-lg border border-border bg-card p-5">
+          <h3 className="text-sm font-semibold text-foreground">Chope Booking Performance Summary</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Overall performance, status &amp; source breakdown and the key insights.</p>
+          <div className="mt-3">
+            <NarrativePanel
+              block={chopeNarrative}
+              section="CHOPE_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Chope summary written for this period yet."
+            />
+          </div>
+        </div>
+      </SectionCard>
 
       {/* 6 — Gokai panel */}
       {gokai ? (
