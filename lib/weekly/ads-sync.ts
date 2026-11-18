@@ -123,7 +123,17 @@ export async function fetchAdsReport(
     throw new Error(`Could not reach the ads API: ${err instanceof Error ? err.message : "network error"}`);
   }
   if (res.status === 401 || res.status === 403) throw new Error("The ads API rejected the key (401/403) — check ADS_API_KEY.");
-  if (!res.ok) throw new Error(`The ads API returned HTTP ${res.status}.`);
+  if (!res.ok) {
+    // Surface the API's own reason (e.g. "unknown property") so a 400 from a bad
+    // outlet code is diagnosable from the UI instead of an opaque status.
+    let detail = "";
+    try {
+      detail = (await res.text()).replace(/\s+/g, " ").trim().slice(0, 300);
+    } catch {
+      /* body unreadable — status alone */
+    }
+    throw new Error(`The ads API returned HTTP ${res.status}${detail ? `: ${detail}` : ""}.`);
+  }
 
   let json: ReportJson;
   try {

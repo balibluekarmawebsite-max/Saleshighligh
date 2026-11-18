@@ -12,7 +12,7 @@
 
 import { logAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { fetchAdsReport, isAdsSyncConfigured } from "@/lib/weekly/ads-sync";
+import { fetchAdsReport, isAdsSyncConfigured, type AdsFetchResult } from "@/lib/weekly/ads-sync";
 
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
@@ -129,7 +129,16 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
 
     const periodStr = date.toISOString().slice(0, 7); // normalized (trimmed) YYYY-MM
     const window = monthWindow(periodStr);
-    const fetched = await fetchAdsReport(outlet, window); // throws on HTTP/auth errors
+    let fetched: AdsFetchResult;
+    try {
+      fetched = await fetchAdsReport(outlet, window); // throws on HTTP/auth errors
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "could not reach the ads API.";
+      // Name the outlet code we queried — a 400 usually means this code isn't a
+      // property the ads dashboard knows (e.g. "BKeto" vs the dashboard's "Bketo").
+      // Set ADS_RESTAURANT_CODES / ADS_SPA_CODES to the exact code if so.
+      return fail(502, `${msg} (requested ads outlet "${outlet}" for ${periodStr})`);
+    }
 
     const rows = fetched.platforms
       .map((p) => ({ platform: PLATFORM_ENUM[p.platform], fig: p }))
