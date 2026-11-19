@@ -25,6 +25,9 @@ export interface AiImportSection {
   description: string;
   /** Which editor completion flag marks this section Empty/filled. */
   completionKey: WeeklyEditorSectionKey;
+  /** A sub-section sharing a letter with a primary one (e.g. Repeater Guest under
+   * C): reachable by its own id, but NOT by the shared letter in resolveSection. */
+  subsection?: boolean;
   /** Needs a target year (channel room nights). */
   needsYear?: boolean;
   /** Needs a target platform (social metrics). */
@@ -72,6 +75,17 @@ export const AI_IMPORT_SECTIONS: AiImportSection[] = [
     fields: [f("label", "Agent / Source", "text"), f("segmentGroup", "Group", "text"), f("rnSold", "RN Sold", "int"), f("grossRevenue", "Revenue", "money")],
     shape: "one object per booking agent / source",
     rules: "label is the booking agent / source name taken from the 'Reservation Name' column (e.g. Booking.com, Expedia, Agoda, Individual Reservation). Group rows with the same agent together and sum their room nights and revenue. segmentGroup is optional (a broader grouping) — use null if unknown. Do not compute ARR or % (the app derives them).",
+  },
+  {
+    id: "repeater",
+    title: "C · Repeater Guest Production",
+    description: 'Repeat guests who stayed this week, grouped by booking agent / source — same shape as Weekly Agent Production.',
+    completionKey: "C",
+    subsection: true,
+    csvTemplateId: "repeater",
+    fields: [f("label", "Agent / Source", "text"), f("rnSold", "RN Sold", "int"), f("grossRevenue", "Revenue", "money")],
+    shape: "one object per booking agent / source (repeat guests only)",
+    rules: "label is the booking agent / source name (e.g. Booking.com, Expedia, Agoda, Individual Reservation). Group rows with the same agent together and sum their room nights and revenue. Only repeat/returning guests based on stay dates within the week. Do not compute ARR or % (the app derives them).",
   },
   {
     id: "ratecode",

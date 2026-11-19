@@ -342,6 +342,7 @@ export interface WeeklyFullEditorData {
   overview: WeeklyEditorBlock[];
   monthly: SectionRow[];
   segments: SectionRow[];
+  repeaters: SectionRow[];
   rateCodes: SectionRow[];
   channelsByYear: Record<string, SectionRow[]>;
   channelYears: number[];
@@ -375,6 +376,7 @@ export async function getWeeklyFullEditorData(
       overviewBlocks: true,
       monthlyStats: true,
       segmentProductions: { orderBy: { sortOrder: "asc" } },
+      repeaterProductions: { orderBy: { sortOrder: "asc" } },
       rateCodeProductions: { orderBy: { sortOrder: "asc" } },
       channelRns: { orderBy: [{ year: "asc" }, { sortOrder: "asc" }] },
       activities: { orderBy: { sortOrder: "asc" } },
@@ -413,6 +415,7 @@ export async function getWeeklyFullEditorData(
       overview,
       monthly: emptyMonthly(),
       segments: [],
+      repeaters: [],
       rateCodes: [],
       channelsByYear: {},
       channelYears: [],
@@ -479,6 +482,12 @@ export async function getWeeklyFullEditorData(
     segmentGroup: sstr(s.segmentGroup),
     rnSold: sstr(s.rnSold),
     grossRevenue: decStr(s.grossRevenue),
+  }));
+
+  const repeaters: SectionRow[] = report.repeaterProductions.map((r) => ({
+    label: sstr(r.label),
+    rnSold: sstr(r.rnSold),
+    grossRevenue: decStr(r.grossRevenue),
   }));
 
   const rateCodes: SectionRow[] = report.rateCodeProductions.map((r) => ({
@@ -572,6 +581,7 @@ export async function getWeeklyFullEditorData(
     overview,
     monthly,
     segments,
+    repeaters,
     rateCodes,
     channelsByYear,
     channelYears,

@@ -13,7 +13,9 @@ export function resolveSection(raw: string): AiImportSection | { error: string }
   const byId = getAiImportSection(s.toLowerCase());
   if (byId) return byId;
   const key = s.toUpperCase().replace(/[\s/]/g, ""); // "E/F" → "EF"
-  const matches = AI_IMPORT_SECTIONS.filter((sec) => sec.completionKey.toUpperCase() === key);
+  // Sub-sections (e.g. Repeater Guest under C) share a letter with their primary
+  // section; a letter resolves to the primary only — sub-sections need their id.
+  const matches = AI_IMPORT_SECTIONS.filter((sec) => sec.completionKey.toUpperCase() === key && !sec.subsection);
   if (matches.length === 1) return matches[0]!;
   if (matches.length > 1) {
     return { error: `section "${raw}" is ambiguous — use a specific id (${matches.map((m) => m.id).join(", ")}).` };

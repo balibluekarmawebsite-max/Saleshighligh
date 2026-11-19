@@ -147,6 +147,17 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
         written = data.length;
         break;
       }
+      case "repeater": {
+        const data = rows.filter((r) => str(r.label)).map((r, i) => ({
+          reportWeekId: rid, label: str(r.label) as string,
+          rnSold: int(r.rnSold), grossRevenue: money(r.grossRevenue), sortOrder: i,
+        }));
+        if (data.length === 0) { written = 0; break; }
+        await tx.weeklyRepeaterProduction.deleteMany({ where: { reportWeekId: rid } });
+        await tx.weeklyRepeaterProduction.createMany({ data });
+        written = data.length;
+        break;
+      }
       case "ratecode": {
         const data = rows.filter((r) => str(r.label)).map((r, i) => ({
           reportWeekId: rid, label: str(r.label) as string,

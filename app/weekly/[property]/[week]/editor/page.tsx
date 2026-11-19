@@ -21,6 +21,7 @@ import { getWeeklyAds } from "@/lib/weekly/ads-data";
 import {
   saveRateCodes,
   saveSegments,
+  saveRepeaters,
   createWeek,
   setStatus,
 } from "@/lib/weekly/editor-actions";
@@ -165,16 +166,31 @@ export default async function WeeklyEditorPage({
     },
     {
       key: "C", code: "C", label: "Agent Production", done: data.completion.C,
-      node: withImport(
-        "segment",
-        <ProductionGrid
-          property={p} week={w} locked={readOnly}
-          title="C · Weekly Agent Production"
-          subtitle="Room nights and revenue by booking agent / source (Booking.com, Expedia, …). ARR and % share are calculated."
-          labelHeader="Agent / Source" addLabel="Add agent"
-          initial={data.segments} action={saveSegments}
-          dropZeroRevenue
-        />,
+      node: (
+        <div className="space-y-10">
+          {withImport(
+            "segment",
+            <ProductionGrid
+              property={p} week={w} locked={readOnly}
+              title="C · Weekly Agent Production"
+              subtitle="Room nights and revenue by booking agent / source (Booking.com, Expedia, …). ARR and % share are calculated."
+              labelHeader="Agent / Source" addLabel="Add agent"
+              initial={data.segments} action={saveSegments}
+              dropZeroRevenue
+            />,
+          )}
+          {withImport(
+            "repeater",
+            <ProductionGrid
+              property={p} week={w} locked={readOnly}
+              title="C · Repeater Guest"
+              subtitle="Repeat guests who stayed this week, by booking agent / source. ARR and % share are calculated."
+              labelHeader="Agent / Source" addLabel="Add agent"
+              initial={data.repeaters} action={saveRepeaters}
+              dropZeroRevenue
+            />,
+          )}
+        </div>
       ),
     },
     {
