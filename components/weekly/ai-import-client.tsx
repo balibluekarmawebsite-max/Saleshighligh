@@ -37,6 +37,7 @@ export function AiImportClient({
   aiConfigured,
   defaultYear,
   completion,
+  sectionFilled,
 }: {
   property: string;
   week: string;
@@ -45,6 +46,10 @@ export function AiImportClient({
   aiConfigured: boolean;
   defaultYear: number;
   completion: Record<WeeklyEditorSectionKey, boolean>;
+  /** Per-section-id Filled override — for sub-sections that share a completion
+   * letter with a primary section (e.g. "repeater" shares "C" with "segment"),
+   * so each card's badge reflects its OWN table, not the shared letter. */
+  sectionFilled?: Record<string, boolean>;
 }) {
   const [active, setActive] = useState<string | null>(null);
   const [workbookOpen, setWorkbookOpen] = useState(false);
@@ -79,7 +84,7 @@ export function AiImportClient({
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {AI_IMPORT_SECTIONS.filter((s) => s.id !== "social").map((s) => {
-              const done = completion[s.completionKey];
+              const done = sectionFilled?.[s.id] ?? completion[s.completionKey];
               return (
                 <div key={s.id} className="flex flex-col rounded-lg border border-border p-4">
                   <div className="mb-1 flex items-start justify-between gap-2">
