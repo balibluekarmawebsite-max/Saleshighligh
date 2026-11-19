@@ -54,22 +54,20 @@ export interface MonthlyAdsSyncResult {
 /**
  * The ads-dashboard "property" code to query for a given business unit. The ads
  * dashboard lists each outlet (restaurant/spa) as its own selectable property,
- * so the monthly sync queries it directly:
- *   HOTEL      → the property code (BKDS / BKDU / BKV)
- *   RESTAURANT → the restaurant outlet (BKeto / Botanist / Hiiragi)
- *   SPA        → the spa outlet (Mudara / Flying Bamboo / Heiwa)
- * Outlet names default to the property's restaurantName / spaName, but the ads
- * dashboard may label them slightly differently (e.g. "Bketo" vs "BKeto").
+ * keyed as the parent hotel code + a unit suffix (confirmed via the ads API's
+ * GET /api/v1/properties):
+ *   HOTEL      → the property code         (BKDS / BKDU / BKV)
+ *   RESTAURANT → `<code>-RES`              (BKDS-RES = "Bketo", BKDU-RES = "Botanist", BKV-RES = "Hiiragi")
+ *   SPA        → `<code>-SPA`              (BKDS-SPA = "Mudara", BKDU-SPA = "Flying Bamboo", BKV-SPA = "Heiwa")
  * Override per property with ADS_RESTAURANT_CODES / ADS_SPA_CODES — a JSON map
- * keyed by property code, e.g. ADS_RESTAURANT_CODES='{"BKDS":"Bketo"}'.
+ * keyed by hotel code, e.g. ADS_RESTAURANT_CODES='{"BKDS":"BKDS-RES"}' — in case
+ * the ads dashboard ever changes the scheme.
  */
-function outletCodeFor(
-  unit: AdsUnit,
-  property: { code: string; restaurantName: string; spaName: string },
-): string {
+function outletCodeFor(unit: AdsUnit, property: { code: string }): string {
   if (unit === "HOTEL") return property.code;
   const envName = unit === "RESTAURANT" ? "ADS_RESTAURANT_CODES" : "ADS_SPA_CODES";
-  const fallback = unit === "RESTAURANT" ? property.restaurantName : property.spaName;
+  const suffix = unit === "RESTAURANT" ? "-RES" : "-SPA";
+  const fallback = `${property.code}${suffix}`;
   try {
     const raw = process.env[envName];
     if (raw) {
@@ -78,7 +76,7 @@ function outletCodeFor(
       if (typeof v === "string" && v.trim()) return v.trim();
     }
   } catch {
-    // Malformed override JSON — fall back to the outlet name.
+    // Malformed override JSON — fall back to the derived `<code>-RES`/`-SPA`.
   }
   return fallback;
 }
@@ -114,7 +112,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
 
     const property = await prisma.property.findUnique({
       where: { code },
-      select: { id: true, code: true, restaurantName: true, spaName: true },
+      select: { id: true, code: true },
     });
     if (!property) return fail(400, `unknown property "${code}".`);
     const outlet = outletCodeFor(unit, property);
@@ -135,8 +133,8 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
     } catch (e) {
       const msg = e instanceof Error ? e.message : "could not reach the ads API.";
       // Name the outlet code we queried — a 400 usually means this code isn't a
-      // property the ads dashboard knows (e.g. "BKeto" vs the dashboard's "Bketo").
-      // Set ADS_RESTAURANT_CODES / ADS_SPA_CODES to the exact code if so.
+      // property the ads dashboard knows. Codes are derived as `<code>-RES` /
+      // `<code>-SPA`; override with ADS_RESTAURANT_CODES / ADS_SPA_CODES if needed.
       return fail(502, `${msg} (requested ads outlet "${outlet}" for ${periodStr})`);
     }
 
