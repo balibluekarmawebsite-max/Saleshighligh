@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { coerceTripadvisorCore, tripadvisorHasData, toInt, toUsNum } from "@/lib/sales/tripadvisor-logic";
+import { coerceTripadvisorCore, tripadvisorHasData, toInt, toDecimal } from "@/lib/sales/tripadvisor-logic";
 
 describe("coerceTripadvisorCore (the BKeto October Tripadvisor sample)", () => {
   const c = coerceTripadvisorCore({
@@ -85,8 +85,15 @@ describe("coerceTripadvisorCore (the BKeto October Tripadvisor sample)", () => {
   it("number helpers", () => {
     expect(toInt("7,090")).toBe(7090);
     expect(toInt("1,805")).toBe(1805);
-    expect(toUsNum("5.0")).toBe(5);
-    expect(toUsNum("-9%")).toBe(-9);
-    expect(toUsNum("")).toBeNull();
+    // toDecimal tolerates either decimal separator (AI dot vs manual comma).
+    expect(toDecimal("5.0")).toBe(5);
+    expect(toDecimal("4,5")).toBe(4.5); // Indonesian comma-decimal must NOT become 45
+    expect(toDecimal("-9%")).toBe(-9);
+    expect(toDecimal("-6,5")).toBe(-6.5);
+    expect(toDecimal("")).toBeNull();
+  });
+
+  it("rating tolerates a comma decimal (4,5 -> 4.5, not 5.0)", () => {
+    expect(coerceTripadvisorCore({ rating: "4,5" }).avgRating).toBe(4.5);
   });
 });

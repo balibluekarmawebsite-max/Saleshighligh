@@ -21,4 +21,4 @@ ALTER TABLE "tripadvisor_metrics"
   ADD COLUMN "mapViewsMom" DECIMAL(14,4);
 
 -- New narrative section for the AI-written Tripadvisor summary.
-ALTER TYPE "NarrativeSection" ADD VALUE 'TRIPADVISOR_SUMMARY';
+ALTER TYPE "NarrativeSection" ADD VALUE IF NOT EXISTS 'TRIPADVISOR_SUMMARY';

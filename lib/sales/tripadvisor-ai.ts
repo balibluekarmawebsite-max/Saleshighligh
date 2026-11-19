@@ -5,11 +5,7 @@
  * Reuses the weekly Groq client.
  */
 
-import {
-  coerceTripadvisorCore,
-  TRIPADVISOR_METRICS,
-  type TripadvisorCore,
-} from "@/lib/sales/tripadvisor-logic";
+import { readTripadvisorForm } from "@/lib/sales/tripadvisor-logic";
 import { groqChat, isGroqConfigured, parseJsonLoose, type GroqImage } from "@/lib/weekly/groq";
 
 const SYSTEM = `You read a Tripadvisor LISTING PERFORMANCE report (for a restaurant) from pasted text or a screenshot and return STRICT JSON. The report has three tabs: Performance, Reviews, and Listing engagement.
@@ -54,9 +50,6 @@ export interface TripadvisorExtractResult {
   values?: Record<string, number>;
 }
 
-/** Keys on TripadvisorCore that are plain counts (always a number, default 0). */
-type CountKey = (typeof TRIPADVISOR_METRICS)[number]["valueField"];
-
 export async function extractTripadvisor(
   input: { text?: string | null; image?: GroqImage | null },
 ): Promise<TripadvisorExtractResult> {
@@ -82,21 +75,9 @@ export async function extractTripadvisor(
       maxTokens: 1500,
     });
     const parsed = parseJsonLoose(raw) as Record<string, unknown>;
-    const core = coerceTripadvisorCore(parsed);
-
-    // Flatten to the uploader's form fields. Counts always seed (the report shows
-    // 0s explicitly); rating/rank/total/MoM seed only when actually read.
-    const values: Record<string, number> = {};
-    const put = (k: string, v: number | null) => {
-      if (v != null) values[k] = v;
-    };
-    put("rating", core.avgRating > 0 ? core.avgRating : null);
-    put("rank", core.rank);
-    put("totalInMarket", core.totalInMarket);
-    for (const m of TRIPADVISOR_METRICS) {
-      values[m.valueField] = core[m.valueField as CountKey];
-      if (m.momField) put(m.momField, core[m.momField as keyof TripadvisorCore] as number | null);
-    }
+    // Seed ONLY the fields the model actually read — a partial paste (one tab)
+    // must not overwrite another tab's values with 0 on save.
+    const values = readTripadvisorForm(parsed);
 
     if (Object.keys(values).length === 0) {
       return { ok: false, error: "No Tripadvisor metrics could be read from that input — check the format and try again." };
