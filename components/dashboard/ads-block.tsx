@@ -22,12 +22,15 @@ export function AdsBlock({
   roasTrend,
   fileBase,
   emptyLabel = "Import the ADS tab to populate ad performance.",
+  showRoasTrend = true,
 }: {
   ads: AdsSummary | null;
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   roasTrend: RoasPoint[];
   fileBase: string;
   emptyLabel?: string;
+  /** Show the 6-month ROAS trend card (default true; hidden on the restaurant page). */
+  showRoasTrend?: boolean;
 }) {
   if (!ads) {
     return (
@@ -112,13 +115,15 @@ export function AdsBlock({
         </ExportableCard>
       </div>
 
-      <ExportableCard title="6-Month ROAS Trend" description="Return on ad spend over time" fileName={`${fileBase}-roas-trend`}>
-        {roasTrend.length > 1 ? (
-          <RoasTrendChart data={roasTrend} />
-        ) : (
-          <p className="text-sm text-muted-foreground">Only one month of data so far — the trend appears once more periods are imported.</p>
-        )}
-      </ExportableCard>
+      {showRoasTrend && (
+        <ExportableCard title="6-Month ROAS Trend" description="Return on ad spend over time" fileName={`${fileBase}-roas-trend`}>
+          {roasTrend.length > 1 ? (
+            <RoasTrendChart data={roasTrend} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Only one month of data so far — the trend appears once more periods are imported.</p>
+          )}
+        </ExportableCard>
+      )}
     </div>
   );
 }

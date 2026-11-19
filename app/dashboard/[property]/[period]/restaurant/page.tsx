@@ -507,6 +507,7 @@ export default async function RestaurantPage({
           spendRevenue={data.spendRevenue}
           roasTrend={data.roasTrend}
           fileBase={`${fileBase}-ads`}
+          showRoasTrend={false}
           emptyLabel={
             canEdit
               ? 'No restaurant ad data yet — click "Sync restaurant ads from dashboard" to pull Spend / Reach / Clicks / ROAS (Google + Meta) for this month.'
