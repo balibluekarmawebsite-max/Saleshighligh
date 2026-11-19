@@ -112,6 +112,7 @@ enum NarrativeSection {
   ACQUISITION_SPLIT
   CHOPE_SUMMARY
   GOKAI_SUMMARY
+  TRIPADVISOR_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -572,6 +573,31 @@ model TripadvisorMetrics {
   phoneCalls    Int
   menuViews     Int?
   mapViews      Int
+
+  /// Listing ranking: "#<rank> of <totalInMarket> <noun> in <area>". Nullable —
+  /// older/HOTEL rows predate it.
+  rank               Int?
+  totalInMarket      Int?
+  /// Extra engagement metrics from the Tripadvisor listing report (nullable).
+  qrReviews          Int?
+  photoViews         Int?
+  videoViews         Int?
+  specialOfferClicks Int?
+  updateViews        Int?
+
+  /// Reported month-over-month % the Tripadvisor report prints per metric
+  /// (signed, "vs previous period"; null when not entered). Preferred over
+  /// computed MoM on the read path.
+  impressionsMom        Decimal? @db.Decimal(14, 4)
+  pageVisitorsMom       Decimal? @db.Decimal(14, 4)
+  photoViewsMom         Decimal? @db.Decimal(14, 4)
+  videoViewsMom         Decimal? @db.Decimal(14, 4)
+  specialOfferClicksMom Decimal? @db.Decimal(14, 4)
+  updateViewsMom        Decimal? @db.Decimal(14, 4)
+  menuViewsMom          Decimal? @db.Decimal(14, 4)
+  phoneCallsMom         Decimal? @db.Decimal(14, 4)
+  websiteClicksMom      Decimal? @db.Decimal(14, 4)
+  mapViewsMom           Decimal? @db.Decimal(14, 4)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

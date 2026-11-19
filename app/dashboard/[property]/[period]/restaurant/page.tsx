@@ -17,6 +17,7 @@ import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { AdsSyncButton } from "@/components/sales/ads-sync-button";
 import { ChopeUploader } from "@/components/sales/chope-uploader";
 import { GokaiUploader } from "@/components/sales/gokai-uploader";
+import { TripadvisorUploader } from "@/components/sales/tripadvisor-uploader";
 import { RestaurantOverviewPanel } from "@/components/sales/restaurant-overview-panel";
 import { RestaurantAcquisitionUploader } from "@/components/sales/restaurant-acquisition-uploader";
 import { RestaurantSalesUploader } from "@/components/sales/restaurant-sales-uploader";
@@ -92,7 +93,7 @@ export default async function RestaurantPage({
     );
   }
 
-  const { property, overview, meals, sources, acquisition, acquisitionDaily, acquisitionNarrative, chope, chopeDaily, chopeNarrative, gokai, gokaiNarrative, tripadvisor, narrative } = data;
+  const { property, overview, meals, sources, acquisition, acquisitionDaily, acquisitionNarrative, chope, chopeDaily, chopeNarrative, gokai, gokaiNarrative, tripadvisor, tripadvisorNarrative, narrative } = data;
   const fileBase = `${property.code}-${params.period}-restaurant`;
   const canEdit = canEditProperty(await getCurrentUser(), params.property);
 
@@ -517,19 +518,55 @@ export default async function RestaurantPage({
       </div>
 
       {/* 8 — Restaurant Tripadvisor */}
-      {tripadvisor ? (
-        <TripadvisorBlock
-          title="Restaurant Tripadvisor"
-          rank={tripadvisor.rank}
-          totalInMarket={tripadvisor.totalInMarket}
-          rating={tripadvisor.rating}
-          area={tripadvisor.area}
-          noun={tripadvisor.noun}
-          metrics={tripadvisor.metrics}
-        />
-      ) : (
-        <SectionNote title="Restaurant Tripadvisor" description="Listing performance" message="No restaurant Tripadvisor data for this period yet." />
-      )}
+      <div className="space-y-4">
+        {canEdit && (
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">Restaurant Tripadvisor</h3>
+            <TripadvisorUploader
+              property={params.property}
+              period={params.period}
+              initial={tripadvisor}
+              hasData={tripadvisor !== null}
+            />
+          </div>
+        )}
+        {tripadvisor ? (
+          <TripadvisorBlock
+            title="Restaurant Tripadvisor"
+            rank={tripadvisor.rank}
+            totalInMarket={tripadvisor.totalInMarket}
+            rating={tripadvisor.rating}
+            area={tripadvisor.area}
+            noun={tripadvisor.noun}
+            metrics={tripadvisor.metrics}
+          />
+        ) : (
+          <SectionNote
+            title="Restaurant Tripadvisor"
+            description="Listing performance"
+            message={
+              canEdit
+                ? "No restaurant Tripadvisor data yet — upload a screenshot or paste the listing report above."
+                : "No restaurant Tripadvisor data for this period yet."
+            }
+          />
+        )}
+
+        {/* Summary always renders so a saved narrative is never orphaned. */}
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h3 className="text-sm font-semibold text-foreground">Tripadvisor Performance Summary</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Overall performance, recent trends, engagement and the key takeaways.</p>
+          <div className="mt-3">
+            <NarrativePanel
+              block={tripadvisorNarrative}
+              section="TRIPADVISOR_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Tripadvisor summary written for this period yet."
+            />
+          </div>
+        </div>
+      </div>
 
     </div>
   );

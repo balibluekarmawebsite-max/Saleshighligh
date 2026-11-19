@@ -27,6 +27,8 @@ import { saveChope } from "@/lib/sales/chope-import";
 import type { NormalChopeDailyRow, RawChopeDailyRow } from "@/lib/sales/chope-logic";
 import { extractGokai } from "@/lib/sales/gokai-ai";
 import { saveGokai } from "@/lib/sales/gokai-import";
+import { extractTripadvisor } from "@/lib/sales/tripadvisor-ai";
+import { saveTripadvisor } from "@/lib/sales/tripadvisor-import";
 import { runMonthlyAdsSync } from "@/lib/sales/ads-monthly-sync";
 
 export interface GenerateResult {
@@ -400,4 +402,51 @@ export async function syncRestaurantAdsAction(input: {
   });
   if (r.body.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
   return r.body.ok ? { ok: true, message: r.body.message } : { ok: false, message: r.body.error };
+}
+
+export interface TripadvisorExtractActionResult {
+  ok: boolean;
+  error?: string;
+  values?: Record<string, number>;
+}
+
+/** Editor/admin: AI-extract the Tripadvisor listing metrics from text/screenshot (preview only). */
+export async function extractRestaurantTripadvisorAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<TripadvisorExtractActionResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractTripadvisor({ text: input.text, image });
+  return r.ok ? { ok: true, values: r.values } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Restaurant Tripadvisor listing report. */
+export async function saveRestaurantTripadvisorAction(input: {
+  property: string;
+  period: string;
+  core: Record<string, unknown>;
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveTripadvisor({
+    property: input.property,
+    period: input.period,
+    unit: "RESTAURANT",
+    core: input.core,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/restaurant`);
+  return { ok: r.ok, message: r.message };
 }

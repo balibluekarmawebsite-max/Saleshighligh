@@ -346,6 +346,26 @@ async function gokaiSummaryContext(code: string, period: string) {
   };
 }
 
+async function tripadvisorSummaryContext(code: string, period: string) {
+  const d = await getRestaurantPageData(code, period);
+  if (!d || !d.hasData || !d.tripadvisor) return null;
+  const t = d.tripadvisor;
+  return {
+    restaurant: d.property.restaurantName,
+    area: t.area,
+    ranking:
+      t.rank != null
+        ? `#${t.rank}${t.totalInMarket != null ? ` of ${num(t.totalInMarket)} ${t.noun} in ${t.area}` : ""}`
+        : null,
+    rating: t.rating != null ? `${t.rating.toFixed(1)}/5` : null,
+    metrics: t.metrics.map((m) => ({
+      metric: m.label,
+      value: num(m.value),
+      monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,
+    })),
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -358,6 +378,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   ACQUISITION_SPLIT: acquisitionContext,
   CHOPE_SUMMARY: chopeContext,
   GOKAI_SUMMARY: gokaiSummaryContext,
+  TRIPADVISOR_SUMMARY: tripadvisorSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

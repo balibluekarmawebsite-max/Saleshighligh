@@ -898,6 +898,8 @@ export interface TripMetric {
   label: string;
   value: number;
   mom: number | null;
+  /** Raw stored reported MoM (for seeding the editor); absent when computed. */
+  reportedMom?: number | null;
 }
 
 export interface MarketingPageData {
@@ -1251,6 +1253,7 @@ export interface RestaurantPageData {
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   roasTrend: RoasPoint[];
   tripadvisor: TripadvisorSummary | null;
+  tripadvisorNarrative: NarrativeBlock | null;
   narrative: NarrativeBlock | null;
 }
 
@@ -1288,7 +1291,7 @@ export async function getRestaurantPageData(
           gokaiReports: true,
           adsPerformance: { where: { unit: "RESTAURANT" } },
           tripadvisorMetrics: { where: { unit: "RESTAURANT" } },
-          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT", "CHOPE_SUMMARY", "GOKAI_SUMMARY"] } } },
+          narrativeContent: { where: { section: { in: ["RESTAURANT_OVERVIEW", "ACQUISITION_SPLIT", "CHOPE_SUMMARY", "GOKAI_SUMMARY", "TRIPADVISOR_SUMMARY"] } } },
         },
       },
     },
@@ -1331,6 +1334,7 @@ export async function getRestaurantPageData(
       spendRevenue: [],
       roasTrend: [],
       tripadvisor: null,
+      tripadvisorNarrative: null,
       narrative: null,
     };
   }
@@ -1468,29 +1472,43 @@ export async function getRestaurantPageData(
   const asc = [...property.periods].reverse();
   const { ads, spendRevenue, roasTrend } = buildAdsBlock(current.adsPerformance, asc);
 
-  // Tripadvisor (unit=RESTAURANT). Per-outlet ranking is not modelled, so
-  // rank/total stay null until sourced; rating + engagement come from the row.
+  // Tripadvisor (unit=RESTAURANT). Rank/rating + all engagement metrics come from
+  // the row; each metric's MoM prefers the Tripadvisor report's own reported MoM
+  // and falls back to a computed month-over-month when a prior month exists.
   const tm = current.tripadvisorMetrics[0];
   const prevTm = previous?.tripadvisorMetrics[0];
   let tripadvisor: TripadvisorSummary | null = null;
   if (tm) {
-    const mom = (cur: number, prev: number | undefined) =>
-      prev === undefined ? null : momChange(cur, prev);
-    const menuMom =
-      tm.menuViews != null && prevTm?.menuViews != null ? momChange(tm.menuViews, prevTm.menuViews) : null;
+    const rep = (d: { toNumber(): number } | null) => (d == null ? null : d.toNumber());
+    const momOf = (reported: number | null, cur: number, prev: number | undefined) =>
+      reported != null ? reported : prev === undefined ? null : momChange(cur, prev);
+    const metric = (
+      key: string,
+      label: string,
+      value: number,
+      reported: number | null,
+      prev: number | undefined,
+    ): TripMetric => ({ key, label, value, mom: momOf(reported, value, prev), reportedMom: reported });
+    const n = (v: number | null | undefined): number | undefined => (v == null ? undefined : v);
     tripadvisor = {
-      rank: null,
-      totalInMarket: null,
+      rank: tm.rank,
+      totalInMarket: tm.totalInMarket,
       rating: tm.avgRating.toNumber(),
       area: property.area,
       noun: "restaurants",
       metrics: [
-        { key: "impressions", label: "Impressions", value: tm.impressions, mom: mom(tm.impressions, prevTm?.impressions) },
-        { key: "pageVisitors", label: "Page Visitors", value: tm.pageVisitors, mom: mom(tm.pageVisitors, prevTm?.pageVisitors) },
-        { key: "newReviews", label: "New Reviews", value: tm.newReviews, mom: mom(tm.newReviews, prevTm?.newReviews) },
-        { key: "menuViews", label: "Menu Views", value: tm.menuViews ?? 0, mom: menuMom },
-        { key: "websiteClicks", label: "Website Clicks", value: tm.websiteClicks, mom: mom(tm.websiteClicks, prevTm?.websiteClicks) },
-        { key: "phoneCalls", label: "Phone Calls", value: tm.phoneCalls, mom: mom(tm.phoneCalls, prevTm?.phoneCalls) },
+        metric("impressions", "Listing Impressions", tm.impressions, rep(tm.impressionsMom), prevTm?.impressions),
+        metric("pageVisitors", "Unique Page Visitors", tm.pageVisitors, rep(tm.pageVisitorsMom), prevTm?.pageVisitors),
+        metric("newReviews", "New Reviews", tm.newReviews, null, prevTm?.newReviews),
+        metric("qrReviews", "QR Code Reviews", tm.qrReviews ?? 0, null, n(prevTm?.qrReviews)),
+        metric("photoViews", "Photo Views", tm.photoViews ?? 0, rep(tm.photoViewsMom), n(prevTm?.photoViews)),
+        metric("videoViews", "Video Views", tm.videoViews ?? 0, rep(tm.videoViewsMom), n(prevTm?.videoViews)),
+        metric("specialOfferClicks", "Special Offer Clicks", tm.specialOfferClicks ?? 0, rep(tm.specialOfferClicksMom), n(prevTm?.specialOfferClicks)),
+        metric("updateViews", "Update Views", tm.updateViews ?? 0, rep(tm.updateViewsMom), n(prevTm?.updateViews)),
+        metric("menuViews", "Menu Views", tm.menuViews ?? 0, rep(tm.menuViewsMom), n(prevTm?.menuViews)),
+        metric("phoneCalls", "Phone Calls", tm.phoneCalls, rep(tm.phoneCallsMom), prevTm?.phoneCalls),
+        metric("websiteClicks", "Website Clicks", tm.websiteClicks, rep(tm.websiteClicksMom), prevTm?.websiteClicks),
+        metric("mapViews", "Map Views", tm.mapViews, rep(tm.mapViewsMom), prevTm?.mapViews),
       ],
     };
   }
@@ -1503,6 +1521,7 @@ export async function getRestaurantPageData(
   const acquisitionNarrative = narrAt("ACQUISITION_SPLIT");
   const chopeNarrative = narrAt("CHOPE_SUMMARY");
   const gokaiNarrative = narrAt("GOKAI_SUMMARY");
+  const tripadvisorNarrative = narrAt("TRIPADVISOR_SUMMARY");
 
   return {
     ...base,
@@ -1525,6 +1544,7 @@ export async function getRestaurantPageData(
     spendRevenue,
     roasTrend,
     tripadvisor,
+    tripadvisorNarrative,
     narrative,
   };
 }

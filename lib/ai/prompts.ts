@@ -57,6 +57,22 @@ Key Insights:
 
 Quote ONLY the figures in the context; never write "movement not available" or similar — simply omit the change when it is absent. Do not invent numbers.`,
 
+  TRIPADVISOR_SUMMARY: `Summarise the restaurant's Tripadvisor listing performance for the month. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Overall Performance:
+- State the ranking and rating from the context, e.g. "Ranked #1 of 483 restaurants in Seminyak with a 5.0/5 rating.". If the ranking is absent, lead with the rating.
+
+Customer Engagement:
+- One bullet each for the engagement metrics (menu views, map views, website clicks, phone calls, photo/video views) with value and month-over-month change, e.g. "Menu Views: 48 (+7.00% vs last month)". Omit the change when it is absent.
+
+Digital Presence:
+- Listing Impressions and Unique Page Visitors, each with value and month-over-month change.
+
+Key Insights:
+- 2–4 short bullets: what rose, what dipped, and ONE concrete action to improve contact actions (calls/website clicks) or visibility next month.
+
+Quote ONLY the figures in the context; simply omit a change when it is absent. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:
