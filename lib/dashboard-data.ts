@@ -1473,23 +1473,20 @@ export async function getRestaurantPageData(
   const { ads, spendRevenue, roasTrend } = buildAdsBlock(current.adsPerformance, asc);
 
   // Tripadvisor (unit=RESTAURANT). Rank/rating + all engagement metrics come from
-  // the row; each metric's MoM prefers the Tripadvisor report's own reported MoM
-  // and falls back to a computed month-over-month when a prior month exists.
+  // the row. MoM is ONLY the Tripadvisor report's own "vs previous period" % — we
+  // do not compute a month-over-month, so a metric the report shows without an
+  // arrow (new reviews, etc.) simply shows no change, matching the report.
   const tm = current.tripadvisorMetrics[0];
-  const prevTm = previous?.tripadvisorMetrics[0];
   let tripadvisor: TripadvisorSummary | null = null;
   if (tm) {
     const rep = (d: { toNumber(): number } | null) => (d == null ? null : d.toNumber());
-    const momOf = (reported: number | null, cur: number, prev: number | undefined) =>
-      reported != null ? reported : prev === undefined ? null : momChange(cur, prev);
-    const metric = (
-      key: string,
-      label: string,
-      value: number,
-      reported: number | null,
-      prev: number | undefined,
-    ): TripMetric => ({ key, label, value, mom: momOf(reported, value, prev), reportedMom: reported });
-    const n = (v: number | null | undefined): number | undefined => (v == null ? undefined : v);
+    const metric = (key: string, label: string, value: number, reported: number | null): TripMetric => ({
+      key,
+      label,
+      value,
+      mom: reported,
+      reportedMom: reported,
+    });
     tripadvisor = {
       rank: tm.rank,
       totalInMarket: tm.totalInMarket,
@@ -1497,18 +1494,18 @@ export async function getRestaurantPageData(
       area: property.area,
       noun: "restaurants",
       metrics: [
-        metric("impressions", "Listing Impressions", tm.impressions, rep(tm.impressionsMom), prevTm?.impressions),
-        metric("pageVisitors", "Unique Page Visitors", tm.pageVisitors, rep(tm.pageVisitorsMom), prevTm?.pageVisitors),
-        metric("newReviews", "New Reviews", tm.newReviews, null, prevTm?.newReviews),
-        metric("qrReviews", "QR Code Reviews", tm.qrReviews ?? 0, null, n(prevTm?.qrReviews)),
-        metric("photoViews", "Photo Views", tm.photoViews ?? 0, rep(tm.photoViewsMom), n(prevTm?.photoViews)),
-        metric("videoViews", "Video Views", tm.videoViews ?? 0, rep(tm.videoViewsMom), n(prevTm?.videoViews)),
-        metric("specialOfferClicks", "Special Offer Clicks", tm.specialOfferClicks ?? 0, rep(tm.specialOfferClicksMom), n(prevTm?.specialOfferClicks)),
-        metric("updateViews", "Update Views", tm.updateViews ?? 0, rep(tm.updateViewsMom), n(prevTm?.updateViews)),
-        metric("menuViews", "Menu Views", tm.menuViews ?? 0, rep(tm.menuViewsMom), n(prevTm?.menuViews)),
-        metric("phoneCalls", "Phone Calls", tm.phoneCalls, rep(tm.phoneCallsMom), prevTm?.phoneCalls),
-        metric("websiteClicks", "Website Clicks", tm.websiteClicks, rep(tm.websiteClicksMom), prevTm?.websiteClicks),
-        metric("mapViews", "Map Views", tm.mapViews, rep(tm.mapViewsMom), prevTm?.mapViews),
+        metric("impressions", "Listing Impressions", tm.impressions, rep(tm.impressionsMom)),
+        metric("pageVisitors", "Unique Page Visitors", tm.pageVisitors, rep(tm.pageVisitorsMom)),
+        metric("newReviews", "New Reviews", tm.newReviews, null),
+        metric("qrReviews", "QR Code Reviews", tm.qrReviews ?? 0, null),
+        metric("photoViews", "Photo Views", tm.photoViews ?? 0, rep(tm.photoViewsMom)),
+        metric("videoViews", "Video Views", tm.videoViews ?? 0, rep(tm.videoViewsMom)),
+        metric("specialOfferClicks", "Special Offer Clicks", tm.specialOfferClicks ?? 0, rep(tm.specialOfferClicksMom)),
+        metric("updateViews", "Update Views", tm.updateViews ?? 0, rep(tm.updateViewsMom)),
+        metric("menuViews", "Menu Views", tm.menuViews ?? 0, rep(tm.menuViewsMom)),
+        metric("phoneCalls", "Phone Calls", tm.phoneCalls, rep(tm.phoneCallsMom)),
+        metric("websiteClicks", "Website Clicks", tm.websiteClicks, rep(tm.websiteClicksMom)),
+        metric("mapViews", "Map Views", tm.mapViews, rep(tm.mapViewsMom)),
       ],
     };
   }

@@ -39,7 +39,11 @@ Return ONLY this JSON (no prose, no code fences). Use null for anything not show
 }
 
 Rules:
-- Each "...Mom" is the metric's "vs previous period" percentage shown next to its value. A DOWN / red arrow (▼) means NEGATIVE ("▼ 9%" -> -9); an UP / green arrow (▲) means POSITIVE ("▲ 25%" -> 25). A dash "—" or no arrow means null.
+- Each "...Mom" is the metric's "vs previous period" percentage shown next to its value. Look at EACH metric's arrow separately and read its direction carefully:
+  - a DOWN / red / ▼ / ↓ arrow means the value FELL, so the percent is NEGATIVE: "↓ 9%" -> -9, "↓ 6%" -> -6, "↓ 100%" -> -100.
+  - an UP / green / ▲ / ↑ arrow means the value ROSE, so the percent is POSITIVE: "↑ 25%" -> 25, "↑ 7%" -> 7.
+  - a dash "—", "0%" with no arrow, or no arrow at all means null.
+  Do not default to positive — a red/down arrow MUST produce a negative number. Different metrics on the same page often move in different directions.
 - Strip "#", "of", "%", and thousands separators: "7,090" -> 7090, "#1 of 483" -> rank 1, total 483.
 - Ignore asset-inventory counts such as "1805 photos" or "1 video" — those are NOT photoViews/videoViews, which are the VIEW numbers (e.g. 700, 0).
 - All values are whole numbers except rating (one decimal) and the MoM percentages.`;

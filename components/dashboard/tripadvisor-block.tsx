@@ -49,7 +49,7 @@ export function TripadvisorBlock({
             key={m.key}
             label={m.label}
             value={formatNumber(m.value)}
-            sub={m.mom !== null ? <MoMBadge value={m.mom} /> : "no prior month"}
+            sub={m.mom !== null ? <MoMBadge value={m.mom} /> : undefined}
           />
         ))}
       </div>
