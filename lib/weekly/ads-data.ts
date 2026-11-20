@@ -100,11 +100,13 @@ function buildSummary(blended: WeeklyAdsRow, platforms: WeeklyAdsRow[]): WeeklyA
 
   const recommendations: string[] = [];
   const withRoas = platforms.filter((p) => p.roas != null);
+  let best: WeeklyAdsRow | null = null;
   if (withRoas.length >= 2) {
-    const best = withRoas.reduce((a, b) => ((b.roas ?? 0) > (a.roas ?? 0) ? b : a));
-    recommendations.push(`Shift a larger share of budget toward ${shortName(best.label)}, where ROAS and conversions are strongest.`);
+    best = withRoas.reduce((a, b) => ((b.roas ?? 0) > (a.roas ?? 0) ? b : a));
+    recommendations.push(`Shift a larger share of budget toward ${shortName(best.label)}, where ROAS is strongest.`);
   }
-  const zeroConv = platforms.find((p) => (p.spend ?? 0) > 0 && (p.conversions ?? 0) === 0);
+  // Exclude the best-ROAS platform so we never both praise and flag the same one.
+  const zeroConv = platforms.find((p) => p !== best && (p.spend ?? 0) > 0 && (p.conversions ?? 0) === 0);
   if (zeroConv) {
     recommendations.push(`Refresh ${shortName(zeroConv.label)} creative and targeting to unlock conversions and improve ROAS.`);
   }

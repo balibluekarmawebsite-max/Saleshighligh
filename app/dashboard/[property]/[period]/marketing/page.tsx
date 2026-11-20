@@ -18,8 +18,8 @@ import { periodLabel } from "@/lib/labels";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google", META: "Meta", CORPORATE: "Corporate" };
-const PLATFORM_COLOR: Record<string, string> = { GOOGLE: "#0F4C5C", META: "#C9A227", CORPORATE: "#64748B" };
+const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google", META: "Meta", OPENAI: "OpenAI", CORPORATE: "Corporate" };
+const PLATFORM_COLOR: Record<string, string> = { GOOGLE: "#0F4C5C", META: "#C9A227", OPENAI: "#10A37F", CORPORATE: "#64748B" };
 
 export default async function MarketingPage({
   params,
