@@ -135,10 +135,20 @@ export function GridCell({
 }
 
 /** Section title + subtitle in the editor's display-serif style. */
-export function SectionHeading({ title, subtitle }: { title: string; subtitle?: string }) {
+export function SectionHeading({
+  title,
+  subtitle,
+  meta,
+}: {
+  title: string;
+  subtitle?: string;
+  /** A short line (e.g. the report period) shown directly under the title. */
+  meta?: string;
+}) {
   return (
     <div className="min-w-0">
       <h2 className="font-serif text-xl font-semibold text-foreground">{title}</h2>
+      {meta && <p className="mt-0.5 text-sm font-medium text-brand-teal">{meta}</p>}
       {subtitle && <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>}
     </div>
   );

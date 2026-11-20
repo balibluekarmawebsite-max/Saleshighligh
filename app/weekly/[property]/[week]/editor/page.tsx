@@ -184,7 +184,7 @@ export default async function WeeklyEditorPage({
               property={p} week={w} locked={readOnly}
               title="C · Weekly Agent Production"
               subtitle="Room nights and revenue by booking agent / source (Booking.com, Expedia, …). ARR and % share are calculated."
-              note={`Same period as this weekly report — ${periodSpan}. Grouped by reservation (creation) date.`}
+              note={periodSpan}
               labelHeader="Agent / Source" addLabel="Add agent"
               initial={data.segments} action={saveSegments}
               dropZeroRevenue
@@ -196,7 +196,7 @@ export default async function WeeklyEditorPage({
               property={p} week={w} locked={readOnly}
               title="C · Repeater Guest"
               subtitle="Repeat guests, by booking agent / source. ARR and % share are calculated."
-              note={`Based on the whole month of this report — ${reportMonth}. (A November-period report is filled with November.)`}
+              note={reportMonth}
               labelHeader="Agent / Source" addLabel="Add agent"
               initial={data.repeaters} action={saveRepeaters}
               dropZeroRevenue
@@ -208,7 +208,7 @@ export default async function WeeklyEditorPage({
               property={p} week={w} locked={readOnly}
               title="C · Stayed Guest per Segment"
               subtitle="Guests who stayed, by market segment (Corporate, Leisure, OTA, …). ARR and % share are calculated."
-              note={`Same period as this weekly report — ${periodSpan}. Based on guest stay dates.`}
+              note={periodSpan}
               labelHeader="Market Segment" addLabel="Add segment"
               initial={data.stayedSegments} action={saveStayedSegments}
               dropZeroRevenue
