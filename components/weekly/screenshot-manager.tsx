@@ -24,26 +24,50 @@ type SaveState = "idle" | "saving" | "saved" | "error";
  * respond". Falls back to the original file on any failure, or if re-encoding
  * wouldn't actually shrink it.
  */
-async function compressImage(file: File, maxDim = 2000, quality = 0.85): Promise<File> {
+/**
+ * Shrink a screenshot in the browser so the upload POST stays small enough to
+ * clear a conservative reverse-proxy body limit (nginx defaults to 1 MB). Steps
+ * the max dimension down — then, only if still over target, the JPEG quality —
+ * until the encoded size is under `targetBytes`, keeping text legible for the AI
+ * as long as possible. Returns the smallest encoding tried (or the original if
+ * it is already smaller / anything fails).
+ */
+async function compressImage(
+  file: File,
+  { maxDim = 2000, targetBytes = 900_000 }: { maxDim?: number; targetBytes?: number } = {},
+): Promise<File> {
   if (typeof document === "undefined" || !file.type.startsWith("image/")) return file;
+  if (file.size <= targetBytes && file.type === "image/jpeg") return file;
   try {
     const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-    const w = Math.max(1, Math.round(bitmap.width * scale));
-    const h = Math.max(1, Math.round(bitmap.height * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, w, h);
+    const encode = (dim: number, quality: number): Promise<Blob | null> => {
+      const scale = Math.min(1, dim / Math.max(bitmap.width, bitmap.height));
+      const w = Math.max(1, Math.round(bitmap.width * scale));
+      const h = Math.max(1, Math.round(bitmap.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return Promise.resolve(null);
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    };
+
+    let best: Blob | null = null;
+    // Prefer shrinking dimensions (preserves text crispness) at a high quality;
+    // drop quality only as a last resort on the smallest dimension.
+    const attempts: Array<[number, number]> = [
+      [maxDim, 0.85], [1700, 0.82], [1500, 0.82], [1300, 0.8], [1100, 0.78], [1100, 0.65],
+    ];
+    for (const [dim, q] of attempts) {
+      const blob = await encode(dim, q);
+      if (blob && (!best || blob.size < best.size)) best = blob;
+      if (blob && blob.size <= targetBytes) break;
+    }
     bitmap.close?.();
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", quality),
-    );
-    if (!blob || blob.size >= file.size) return file;
+    if (!best || best.size >= file.size) return file;
     const name = file.name.replace(/\.[a-z0-9]+$/i, "") + ".jpg";
-    return new File([blob], name, { type: "image/jpeg" });
+    return new File([best], name, { type: "image/jpeg" });
   } catch {
     return file;
   }
