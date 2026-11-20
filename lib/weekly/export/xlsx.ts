@@ -480,6 +480,43 @@ function productionSheet(
   });
 }
 
+/**
+ * Section C on a single sheet: Weekly Agent Production, then the Repeater Guest
+ * and Stayed-Guest-per-Segment sub-sections stacked below it (each shown only
+ * when it has rows), separated by a blank spacer row.
+ */
+function sectionCSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
+  const ws = wb.addWorksheet("C-Production");
+  const cols = (labelHeader: string): Col[] => [
+    { h: labelHeader, w: 34, a: "L" },
+    { h: "RN Sold", w: 11, a: "R", f: NUM },
+    { h: "Gross Revenue", w: 18, a: "R", f: MONEY },
+    { h: "ARR", w: 14, a: "R", f: MONEY },
+    { h: "%", w: 9, a: "R", f: PCT },
+  ];
+  const block = (
+    title: string,
+    labelHeader: string,
+    prod: { rows: WeeklyProductionRow[]; totals: { rn: number; revenue: number; arr: number | null } },
+  ) => {
+    table(ws, {
+      title,
+      cols: cols(labelHeader),
+      rows: productionRows(prod.rows),
+      total: ["Total", prod.totals.rn, money(prod.totals.revenue), money(prod.totals.arr), prod.rows.length ? 1 : null],
+    });
+  };
+  block("C · Weekly Production by Agent", "Agent / Source", d.segments);
+  if (d.repeaterGuests.rows.length > 0) {
+    ws.addRow([]);
+    block("C · Repeater Guest", "Agent / Source", d.repeaterGuests);
+  }
+  if (d.stayedSegments.rows.length > 0) {
+    ws.addRow([]);
+    block("C · Stayed Guest per Segment", "Market Segment", d.stayedSegments);
+  }
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function channelsSheet(wb: ExcelJS.Workbook, d: WeeklyExportData) {
@@ -803,11 +840,7 @@ export async function buildWeeklyXlsxBuffer(
   coverSheet(wb, d);
   if (show("overview")) await overviewSheet(wb, d, show("screenshots"), show("ads"));
   if (show("monthly")) monthlySheet(wb, d);
-  if (show("segments")) {
-    productionSheet(wb, "C-Agent", "C · Weekly Production by Agent", "Agent / Source", d.segments);
-    if (d.repeaterGuests.rows.length > 0) productionSheet(wb, "C-Repeater", "C · Repeater Guest", "Agent / Source", d.repeaterGuests);
-    if (d.stayedSegments.rows.length > 0) productionSheet(wb, "C-Stayed Segment", "C · Stayed Guest per Segment", "Market Segment", d.stayedSegments);
-  }
+  if (show("segments")) sectionCSheet(wb, d);
   if (show("ratecodes")) productionSheet(wb, "D-RateCode", "D · Rate Code / Promotion", "Promotion", d.rateCodes);
   if (show("channels")) channelsSheet(wb, d);
   if (show("departments")) {
