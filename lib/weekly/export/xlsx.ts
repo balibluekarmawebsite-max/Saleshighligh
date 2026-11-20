@@ -315,9 +315,9 @@ function adsDashboardBlock(ws: ExcelJS.Worksheet, ads: WeeklyAdsData, ncol: numb
   }
   ws.addRow([]);
 
-  // Google vs Meta — in-cell data bars behind Spend / Revenue / ROAS.
+  // Spend by platform — in-cell data bars behind Spend / Revenue / ROAS.
   if (ads.platforms.length > 0) {
-    const gvm = ws.addRow(["Google vs Meta"]);
+    const gvm = ws.addRow(["Spend by platform"]);
     gvm.getCell(1).font = { name: FONT, bold: true, size: 11, color: { argb: TEAL } };
     const vcols: Col[] = [
       { h: "Platform", w: 20, a: "L" },

@@ -71,17 +71,19 @@ export interface WeeklyAdsData {
   hasData: boolean;
 }
 
-const PLATFORM_ORDER: Record<string, number> = { blended: 0, google: 1, meta: 2 };
-const CAMPAIGN_PLATFORM: Record<string, string> = { google: "Google", meta: "Meta" };
+const PLATFORM_ORDER: Record<string, number> = { blended: 0, google: 1, meta: 2, openai: 3 };
+const CAMPAIGN_PLATFORM: Record<string, string> = { google: "Google", meta: "Meta", openai: "OpenAI" };
 
 const money = (n: number | null) => (n == null ? "—" : formatIDRCompact(n));
 const int = (n: number | null) => (n == null ? "—" : formatNumber(Math.round(n)));
 const x = (n: number | null) => (n == null ? "—" : `${n.toFixed(2)}×`);
 
-/** A grounded headline / highlights / recommendations block from the figures. */
+/** Short platform name for prose: "Google Ads" → "Google", "Meta (Facebook / Instagram)" → "Meta", "OpenAI" → "OpenAI". */
+const shortName = (label: string) => label.replace(/\s*\(.*\)\s*$/, "").replace(/ Ads$/, "");
+
+/** A grounded headline / highlights / recommendations block from the figures.
+ * Covers every per-platform split row (Google, Meta, OpenAI, …) generically. */
 function buildSummary(blended: WeeklyAdsRow, platforms: WeeklyAdsRow[]): WeeklyAdsSummary {
-  const g = platforms.find((p) => p.platform === "google") ?? null;
-  const m = platforms.find((p) => p.platform === "meta") ?? null;
   const roasStr = blended.roas == null ? "—" : blended.roas.toFixed(2);
 
   const headline =
@@ -91,16 +93,20 @@ function buildSummary(blended: WeeklyAdsRow, platforms: WeeklyAdsRow[]): WeeklyA
   const highlights: string[] = [
     `Revenue & ROAS — ${money(blended.revenue)} generated from ${money(blended.spend)} spend, a return of ${x(blended.roas)}.`,
   ];
-  if (g) highlights.push(`Google — ${x(g.roas)} ROAS, ${int(g.clicks)} clicks and ${int(g.conversions)} conversions from ${money(g.spend)} spend.`);
-  if (m) highlights.push(`Meta — ${money(m.spend)} spend, ${int(m.clicks)} clicks, ${int(m.conversions)} conversions, a ROAS of ${x(m.roas)}.`);
+  for (const p of platforms) {
+    highlights.push(`${shortName(p.label)} — ${money(p.spend)} spend, ${int(p.clicks)} clicks, ${int(p.conversions)} conversions, a ROAS of ${x(p.roas)}.`);
+  }
   highlights.push(`Engagement — CTR ${blended.ctr == null ? "—" : blended.ctr.toFixed(2) + "%"}, CPC ${money(blended.cpc)}.`);
 
   const recommendations: string[] = [];
-  if (g && m && (g.roas ?? 0) > (m.roas ?? 0)) {
-    recommendations.push("Shift a larger share of budget toward Google, where ROAS and conversions are strongest.");
+  const withRoas = platforms.filter((p) => p.roas != null);
+  if (withRoas.length >= 2) {
+    const best = withRoas.reduce((a, b) => ((b.roas ?? 0) > (a.roas ?? 0) ? b : a));
+    recommendations.push(`Shift a larger share of budget toward ${shortName(best.label)}, where ROAS and conversions are strongest.`);
   }
-  if (m && (m.conversions ?? 0) === 0) {
-    recommendations.push("Refresh Meta creative and targeting to unlock conversions and improve ROAS.");
+  const zeroConv = platforms.find((p) => (p.spend ?? 0) > 0 && (p.conversions ?? 0) === 0);
+  if (zeroConv) {
+    recommendations.push(`Refresh ${shortName(zeroConv.label)} creative and targeting to unlock conversions and improve ROAS.`);
   }
   recommendations.push("Monitor CPC and CTR; adjust bids or ad relevance to maintain efficient spend.");
 

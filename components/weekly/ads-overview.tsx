@@ -11,13 +11,16 @@ const num = (n: number | null) => (n == null ? "—" : formatNumber(Math.round(n
 const pct = (n: number | null) => (n == null ? "—" : `${n.toFixed(2)}%`);
 const roas = (n: number | null) => (n == null ? "—" : `${n.toFixed(2)}×`);
 
+/** Bar colour per ad platform. OpenAI uses its brand green. */
+const PLATFORM_BAR: Record<string, string> = { google: "#0F4C5C", meta: "#C9A227", openai: "#10A37F" };
+
 /** Rich Digital Ads & ROAS preview wrapped in a titled dashboard card. */
 export function AdsOverview({ ads }: { ads: WeeklyAdsData }) {
   if (!ads.hasData || !ads.blended) return null;
   return (
     <SectionCard
       title="Digital Ads & ROAS"
-      description={ads.window.from ? `Ads window ${ads.window.from} → ${ads.window.to}` : "Google & Meta performance"}
+      description={ads.window.from ? `Ads window ${ads.window.from} → ${ads.window.to}` : "Platform performance"}
     >
       <AdsOverviewBody ads={ads} />
     </SectionCard>
@@ -104,10 +107,10 @@ export function AdsOverviewBody({ ads }: { ads: WeeklyAdsData }) {
           </div>
         )}
 
-        {/* Google vs Meta */}
+        {/* Spend by platform */}
         {ads.platforms.length > 0 && (
           <div>
-            <p className="mb-2 text-sm font-medium text-foreground">Google vs Meta</p>
+            <p className="mb-2 text-sm font-medium text-foreground">Spend by platform</p>
             <div className="space-y-3">
               {ads.platforms.map((p) => (
                 <div key={p.platform}>
@@ -119,8 +122,11 @@ export function AdsOverviewBody({ ads }: { ads: WeeklyAdsData }) {
                   </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary">
                     <div
-                      className={p.platform === "google" ? "h-full rounded-full bg-brand-teal" : "h-full rounded-full bg-brand-gold"}
-                      style={{ width: `${Math.max(2, Math.round(((p.spend ?? 0) / maxSpend) * 100))}%` }}
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.max(2, Math.round(((p.spend ?? 0) / maxSpend) * 100))}%`,
+                        backgroundColor: PLATFORM_BAR[p.platform] ?? "#64748B",
+                      }}
                     />
                   </div>
                 </div>

@@ -17,7 +17,7 @@ import { fetchAdsReport, isAdsSyncConfigured, type AdsFetchResult } from "@/lib/
 const PERIOD_RE = /^\d{4}-\d{2}$/;
 
 /** API platform name → AdsPlatform enum. */
-const PLATFORM_ENUM: Record<string, "GOOGLE" | "META"> = { google: "GOOGLE", meta: "META" };
+const PLATFORM_ENUM: Record<string, "GOOGLE" | "META" | "OPENAI"> = { google: "GOOGLE", meta: "META", openai: "OPENAI" };
 
 type AdsUnit = "HOTEL" | "RESTAURANT" | "SPA";
 
@@ -140,7 +140,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
 
     const rows = fetched.platforms
       .map((p) => ({ platform: PLATFORM_ENUM[p.platform], fig: p }))
-      .filter((r): r is { platform: "GOOGLE" | "META"; fig: (typeof fetched.platforms)[number] } => !!r.platform)
+      .filter((r): r is { platform: "GOOGLE" | "META" | "OPENAI"; fig: (typeof fetched.platforms)[number] } => !!r.platform)
       .map((r) => ({
         platform: r.platform,
         spend: r.fig.spend ?? 0,
@@ -155,7 +155,7 @@ export async function runMonthlyAdsSync(input: MonthlyAdsSyncInput): Promise<Mon
       }));
 
     if (rows.length === 0) {
-      return fail(422, `The ads API returned no Google/Meta platform rows for "${outlet}" this month.`);
+      return fail(422, `The ads API returned no Google/Meta/OpenAI platform rows for "${outlet}" this month.`);
     }
 
     // Blended BOOKED revenue for the month — the headline ROAS basis (the ads

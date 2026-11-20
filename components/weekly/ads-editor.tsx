@@ -17,9 +17,9 @@ const s = (n: number | null | undefined) => (n === null || n === undefined ? "" 
 function seedGrid(data: WeeklyAdsData): Record<string, Row> {
   const by: Record<string, { spend: number | null; revenue: number | null; conversions: number | null; impressions: number | null; clicks: number | null } | null> = {
     blended: data.blended,
-    google: data.platforms.find((p) => p.platform === "google") ?? null,
-    meta: data.platforms.find((p) => p.platform === "meta") ?? null,
   };
+  // Seed every per-platform split row (Google, Meta, OpenAI, …) generically.
+  for (const p of data.platforms) by[p.platform] = p;
   return Object.fromEntries(
     AD_PLATFORMS.map((p) => {
       const r = by[p.id];

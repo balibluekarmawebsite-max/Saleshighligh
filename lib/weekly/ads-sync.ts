@@ -149,7 +149,7 @@ export async function fetchAdsReport(
       spend: n(p.spend), conversionValue: n(p.conversionValue), conversions: n(p.conversions),
       impressions: ri(p.impressions), reach: ri(p.reach), clicks: ri(p.clicks),
     }))
-    .filter((p) => p.platform === "google" || p.platform === "meta");
+    .filter((p) => p.platform === "google" || p.platform === "meta" || p.platform === "openai");
 
   const daily: AdsDailyFigures[] = (json.timeseries ?? []).map((d) => ({
     date: String(d.date ?? ""),

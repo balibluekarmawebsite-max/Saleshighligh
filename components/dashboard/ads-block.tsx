@@ -8,8 +8,8 @@ import type { AdsSummary, RoasPoint } from "@/lib/dashboard-data";
 import { formatIDR, formatNumber, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google", META: "Meta", CORPORATE: "Corporate" };
-const PLATFORM_COLOR: Record<string, string> = { GOOGLE: "#0F4C5C", META: "#C9A227", CORPORATE: "#64748B" };
+const PLATFORM_LABEL: Record<string, string> = { GOOGLE: "Google", META: "Meta", OPENAI: "OpenAI", CORPORATE: "Corporate" };
+const PLATFORM_COLOR: Record<string, string> = { GOOGLE: "#0F4C5C", META: "#C9A227", OPENAI: "#10A37F", CORPORATE: "#64748B" };
 
 /**
  * Paid-advertising block shared by the Marketing (hotel) and Restaurant pages.

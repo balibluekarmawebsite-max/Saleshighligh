@@ -65,6 +65,7 @@ enum BusinessUnit {
 enum AdsPlatform {
   GOOGLE
   META
+  OPENAI
   CORPORATE
 }
 

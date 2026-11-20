@@ -921,7 +921,7 @@ export interface MarketingPageData {
   } | null;
 }
 
-const ADS_PLATFORM_ORDER = ["GOOGLE", "META", "CORPORATE"];
+const ADS_PLATFORM_ORDER = ["GOOGLE", "META", "OPENAI", "CORPORATE"];
 const RANK_PLATFORMS = ["BOOKING", "EXPEDIA", "TRIPADVISOR"] as const;
 
 type RawAd = {
