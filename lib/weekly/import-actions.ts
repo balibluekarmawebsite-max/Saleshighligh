@@ -395,6 +395,20 @@ export async function applyWeeklyImport(formData: FormData): Promise<ApplyResult
           written = r.count;
           break;
         }
+        case "stayedsegment": {
+          await tx.weeklyStayedSegmentProduction.deleteMany({ where: { reportWeekId: rid } });
+          const r = await tx.weeklyStayedSegmentProduction.createMany({
+            data: parsed.rows.map((row, i) => ({
+              reportWeekId: rid,
+              label: String(row.label ?? ""),
+              rnSold: num(row.rnSold),
+              grossRevenue: num(row.grossRevenue),
+              sortOrder: i,
+            })),
+          });
+          written = r.count;
+          break;
+        }
         case "ratecode": {
           await tx.weeklyRateCodeProduction.deleteMany({ where: { reportWeekId: rid } });
           const r = await tx.weeklyRateCodeProduction.createMany({

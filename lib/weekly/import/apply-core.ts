@@ -158,6 +158,17 @@ export async function applyImportRows(input: ApplyImportInput): Promise<number> 
         written = data.length;
         break;
       }
+      case "stayedsegment": {
+        const data = rows.filter((r) => str(r.label)).map((r, i) => ({
+          reportWeekId: rid, label: str(r.label) as string,
+          rnSold: int(r.rnSold), grossRevenue: money(r.grossRevenue), sortOrder: i,
+        }));
+        if (data.length === 0) { written = 0; break; }
+        await tx.weeklyStayedSegmentProduction.deleteMany({ where: { reportWeekId: rid } });
+        await tx.weeklyStayedSegmentProduction.createMany({ data });
+        written = data.length;
+        break;
+      }
       case "ratecode": {
         const data = rows.filter((r) => str(r.label)).map((r, i) => ({
           reportWeekId: rid, label: str(r.label) as string,

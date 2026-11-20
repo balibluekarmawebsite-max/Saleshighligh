@@ -56,7 +56,7 @@ export default async function WeeklyImportPage({
         aiConfigured={isGroqConfigured()}
         defaultYear={data.week.year}
         completion={data.completion}
-        sectionFilled={{ repeater: data.repeaters.length > 0 }}
+        sectionFilled={{ repeater: data.repeaters.length > 0, stayedsegment: data.stayedSegments.length > 0 }}
       />
     </div>
   );

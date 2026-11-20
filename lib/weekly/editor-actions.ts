@@ -678,6 +678,38 @@ export async function saveRepeaters(
   return { ok: true, message: "Saved." };
 }
 
+/** Section C sub-section — replace all Stayed Guest per Segment rows. */
+export async function saveStayedSegments(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const property = String(formData.get("property") ?? "").toUpperCase();
+  const week = String(formData.get("week") ?? "");
+  const guard = await authReportForWrite(property, week);
+  if ("error" in guard) return guard.error;
+  const rows = parseRows(formData);
+  if (!rows) return { ok: false, message: "Could not read the rows." };
+
+  const data = rows
+    .filter((r) => str(r.label))
+    .map((r, i) => ({
+      reportWeekId: guard.id,
+      label: str(r.label) as string,
+      rnSold: int(r.rnSold),
+      grossRevenue: money(r.grossRevenue),
+      sortOrder: i,
+    }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.weeklyStayedSegmentProduction.deleteMany({ where: { reportWeekId: guard.id } });
+    if (data.length) await tx.weeklyStayedSegmentProduction.createMany({ data });
+  });
+
+  await logAudit("weekly_stayed_segments_save", `${property} ${week}`, { rows: data.length });
+  revalidatePath(`/weekly/${property}/${week}/editor`);
+  return { ok: true, message: "Saved." };
+}
+
 export async function saveRateCodes(
   _prev: ActionResult | null,
   formData: FormData,

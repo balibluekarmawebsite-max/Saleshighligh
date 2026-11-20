@@ -88,6 +88,17 @@ export const AI_IMPORT_SECTIONS: AiImportSection[] = [
     rules: "label is the booking agent / source name (e.g. Booking.com, Expedia, Agoda, Individual Reservation). Group rows with the same agent together and sum their room nights and revenue. Only repeat/returning guests based on stay dates within the week. Do not compute ARR or % (the app derives them).",
   },
   {
+    id: "stayedsegment",
+    title: "C · Stayed Guest per Segment",
+    description: "Guests who stayed this week, grouped by market segment (Corporate, Leisure, OTA, …) — room nights and revenue per segment.",
+    completionKey: "C",
+    subsection: true,
+    csvTemplateId: "stayedsegment",
+    fields: [f("label", "Market Segment", "text"), f("rnSold", "RN Sold", "int"), f("grossRevenue", "Revenue", "money")],
+    shape: "one object per market segment",
+    rules: "label is the market segment name (e.g. Corporate, Leisure, Government, OTA, Travel Agent, Wholesale, Complimentary, House Use). Group rows with the same segment together and sum their room nights and revenue. Base it on the guests who STAYED within the week (stay dates), not booking creation date. Do not compute ARR or % (the app derives them).",
+  },
+  {
     id: "ratecode",
     title: "D · Rate Code / Promotion",
     description: "Room nights and revenue per rate code / promotion.",

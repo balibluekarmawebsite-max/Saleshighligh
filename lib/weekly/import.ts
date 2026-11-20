@@ -5,7 +5,7 @@
  * the SheetJS read + the database write live in import-actions.ts.
  */
 
-export type WeeklyImportSectionId = "monthly" | "segment" | "repeater" | "ratecode" | "channel";
+export type WeeklyImportSectionId = "monthly" | "segment" | "repeater" | "stayedsegment" | "ratecode" | "channel";
 
 export type ColType = "int" | "number" | "string";
 
@@ -79,6 +79,16 @@ export const IMPORT_SPECS: ImportSpec[] = [
     id: "repeater",
     title: "Section C — Repeater Guest Production",
     hint: "One row per booking agent / source for repeat guests who stayed this week.",
+    columns: [
+      { header: "label", key: "label", type: "string", required: true },
+      { header: "rn_sold", key: "rnSold", type: "int" },
+      { header: "gross_revenue", key: "grossRevenue", type: "number" },
+    ],
+  },
+  {
+    id: "stayedsegment",
+    title: "Section C — Stayed Guest per Segment",
+    hint: "One row per market segment (Corporate, Leisure, OTA, …) for guests who stayed this week.",
     columns: [
       { header: "label", key: "label", type: "string", required: true },
       { header: "rn_sold", key: "rnSold", type: "int" },

@@ -895,6 +895,7 @@ model WeeklyReport {
   segmentProductions  WeeklySegmentProduction[]
   rateCodeProductions WeeklyRateCodeProduction[]
   repeaterProductions WeeklyRepeaterProduction[]
+  stayedSegmentProductions WeeklyStayedSegmentProduction[]
   channelRns          WeeklyChannelRn[]
   ownerRepeaters      WeeklyOwnerRepeater[]
   ownerChannelMix     WeeklyOwnerChannelMix[]
@@ -1102,6 +1103,25 @@ model WeeklyRepeaterProduction {
 
   @@index([reportWeekId])
   @@map("weekly_repeater_productions")
+}
+
+/// Section C sub-section: Stayed Guest per Segment (room nights + revenue by
+/// market segment — Corporate, Leisure, OTA, … — for guests who stayed during
+/// the week). Same shape as WeeklySegmentProduction; ARR and % are derived.
+model WeeklyStayedSegmentProduction {
+  id           String   @id @default(cuid())
+  reportWeekId String
+  label        String
+  rnSold       Int?
+  grossRevenue Decimal? @db.Decimal(16, 2)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reportWeek WeeklyReport @relation(fields: [reportWeekId], references: [id], onDelete: Cascade)
+
+  @@index([reportWeekId])
+  @@map("weekly_stayed_segment_productions")
 }
 
 /// Sections E/F — Channel Inside (room nights): one row per source per year,

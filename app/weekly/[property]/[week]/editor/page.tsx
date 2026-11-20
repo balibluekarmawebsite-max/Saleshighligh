@@ -22,6 +22,7 @@ import {
   saveRateCodes,
   saveSegments,
   saveRepeaters,
+  saveStayedSegments,
   createWeek,
   setStatus,
 } from "@/lib/weekly/editor-actions";
@@ -187,6 +188,17 @@ export default async function WeeklyEditorPage({
               subtitle="Repeat guests who stayed this week, by booking agent / source. ARR and % share are calculated."
               labelHeader="Agent / Source" addLabel="Add agent"
               initial={data.repeaters} action={saveRepeaters}
+              dropZeroRevenue
+            />,
+          )}
+          {withImport(
+            "stayedsegment",
+            <ProductionGrid
+              property={p} week={w} locked={readOnly}
+              title="C · Stayed Guest per Segment"
+              subtitle="Guests who stayed this week, by market segment (Corporate, Leisure, OTA, …). ARR and % share are calculated."
+              labelHeader="Market Segment" addLabel="Add segment"
+              initial={data.stayedSegments} action={saveStayedSegments}
               dropZeroRevenue
             />,
           )}
