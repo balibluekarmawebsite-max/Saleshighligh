@@ -803,7 +803,11 @@ export async function buildWeeklyXlsxBuffer(
   coverSheet(wb, d);
   if (show("overview")) await overviewSheet(wb, d, show("screenshots"), show("ads"));
   if (show("monthly")) monthlySheet(wb, d);
-  if (show("segments")) productionSheet(wb, "C-Agent", "C · Weekly Production by Agent", "Agent / Source", d.segments);
+  if (show("segments")) {
+    productionSheet(wb, "C-Agent", "C · Weekly Production by Agent", "Agent / Source", d.segments);
+    if (d.repeaterGuests.rows.length > 0) productionSheet(wb, "C-Repeater", "C · Repeater Guest", "Agent / Source", d.repeaterGuests);
+    if (d.stayedSegments.rows.length > 0) productionSheet(wb, "C-Stayed Segment", "C · Stayed Guest per Segment", "Market Segment", d.stayedSegments);
+  }
   if (show("ratecodes")) productionSheet(wb, "D-RateCode", "D · Rate Code / Promotion", "Promotion", d.rateCodes);
   if (show("channels")) channelsSheet(wb, d);
   if (show("departments")) {

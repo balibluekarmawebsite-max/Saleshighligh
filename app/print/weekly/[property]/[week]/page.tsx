@@ -76,7 +76,7 @@ export default async function WeeklyPrintPage({
   const sel = searchParams.sections ? new Set(searchParams.sections.split(",")) : null;
   const show = (id: string) => !sel || sel.has(id);
 
-  const { property, week, overview, monthly, segments, rateCodes, channels, social, ads, screenshots, departments } = data;
+  const { property, week, overview, monthly, segments, repeaterGuests, stayedSegments, rateCodes, channels, social, ads, screenshots, departments } = data;
   const activities = [...departments.sales, ...departments.ecommerce];
 
   // Block-attached screenshots render inline under their Overview block; the
@@ -159,6 +159,30 @@ export default async function WeeklyPrintPage({
             rows={[
               ...segments.rows.map((s) => [s.label, s.group ?? EMPTY, num(s.rnSold), money(s.grossRevenue), money(s.arr), share(s.share)]),
               ["TOTAL", "", num(segments.totals.rn), money(segments.totals.revenue), money(segments.totals.arr), share(100)],
+            ]}
+          />
+        </Section>
+      )}
+
+      {show("segments") && repeaterGuests.rows.length > 0 && (
+        <Section title="C · Repeater Guest">
+          <Table
+            head={["Agent / Source", "Room Nights", "Revenue", "ARR", "Share"]}
+            rows={[
+              ...repeaterGuests.rows.map((r) => [r.label, num(r.rnSold), money(r.grossRevenue), money(r.arr), share(r.share)]),
+              ["TOTAL", num(repeaterGuests.totals.rn), money(repeaterGuests.totals.revenue), money(repeaterGuests.totals.arr), share(100)],
+            ]}
+          />
+        </Section>
+      )}
+
+      {show("segments") && stayedSegments.rows.length > 0 && (
+        <Section title="C · Stayed Guest per Segment">
+          <Table
+            head={["Market Segment", "Room Nights", "Revenue", "ARR", "Share"]}
+            rows={[
+              ...stayedSegments.rows.map((r) => [r.label, num(r.rnSold), money(r.grossRevenue), money(r.arr), share(r.share)]),
+              ["TOTAL", num(stayedSegments.totals.rn), money(stayedSegments.totals.revenue), money(stayedSegments.totals.arr), share(100)],
             ]}
           />
         </Section>

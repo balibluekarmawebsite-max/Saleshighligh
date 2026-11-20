@@ -132,7 +132,7 @@ export async function buildWeeklyDocx(
   sections: Set<string> | null,
 ): Promise<Buffer> {
   const show = (id: string) => !sections || sections.has(id);
-  const { property, week, overview, monthly, segments, rateCodes, channels, social, ads, screenshots, departments } = data;
+  const { property, week, overview, monthly, segments, repeaterGuests, stayedSegments, rateCodes, channels, social, ads, screenshots, departments } = data;
   const activities = [
     ...departments.sales.map((a) => ({ dept: "Sales", ...a })),
     ...departments.ecommerce.map((a) => ({ dept: "E-commerce", ...a })),
@@ -203,6 +203,34 @@ export async function buildWeeklyDocx(
         [
           ...segments.rows.map((s) => [s.label, s.group ?? EMPTY, num(s.rnSold), money(s.grossRevenue), money(s.arr), share(s.share)]),
           ["TOTAL", "", num(t.rn), money(t.revenue), money(t.arr), share(100)],
+        ],
+      ),
+    );
+  }
+
+  if (show("segments") && repeaterGuests.rows.length > 0) {
+    const t = repeaterGuests.totals;
+    children.push(sectionHeading("C · Repeater Guest"));
+    children.push(
+      table(
+        ["Agent / Source", "Room Nights", "Revenue", "ARR", "Share"],
+        [
+          ...repeaterGuests.rows.map((r) => [r.label, num(r.rnSold), money(r.grossRevenue), money(r.arr), share(r.share)]),
+          ["TOTAL", num(t.rn), money(t.revenue), money(t.arr), share(100)],
+        ],
+      ),
+    );
+  }
+
+  if (show("segments") && stayedSegments.rows.length > 0) {
+    const t = stayedSegments.totals;
+    children.push(sectionHeading("C · Stayed Guest per Segment"));
+    children.push(
+      table(
+        ["Market Segment", "Room Nights", "Revenue", "ARR", "Share"],
+        [
+          ...stayedSegments.rows.map((r) => [r.label, num(r.rnSold), money(r.grossRevenue), money(r.arr), share(r.share)]),
+          ["TOTAL", num(t.rn), money(t.revenue), money(t.arr), share(100)],
         ],
       ),
     );

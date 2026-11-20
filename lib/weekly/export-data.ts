@@ -128,6 +128,8 @@ export interface WeeklyExportData {
   overview: { key: string; heading: string; body: string | null; aiDraft: boolean }[];
   monthly: { rows: WeeklyMonthlyRow[]; totals: MonthlyTotals };
   segments: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
+  repeaterGuests: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
+  stayedSegments: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
   rateCodes: { rows: WeeklyProductionRow[]; totals: ProductionTotals };
   channels: { rows: WeeklyChannelRow[]; ytdTotal: number };
   channelsByYear: WeeklyChannelYearBlock[];
@@ -192,6 +194,8 @@ export async function getWeeklyExportData(
       overviewBlocks: true,
       monthlyStats: { orderBy: { month: "asc" } },
       segmentProductions: { orderBy: { sortOrder: "asc" } },
+      repeaterProductions: { orderBy: { sortOrder: "asc" } },
+      stayedSegmentProductions: { orderBy: { sortOrder: "asc" } },
       rateCodeProductions: { orderBy: { sortOrder: "asc" } },
       channelRns: { orderBy: { sortOrder: "asc" } },
       socialMetrics: { orderBy: { sortOrder: "asc" } },
@@ -281,6 +285,32 @@ export async function getWeeklyExportData(
       share: sharePercent(revenue, segTotals.revenue),
     };
   });
+
+  // ── Section C sub-sections: Repeater Guest + Stayed Guest per Segment ────────
+  // Same tentative-booking rule as Agent Production: a row with room nights but
+  // zero revenue is left off the report; totals/shares cover confirmed rows only.
+  const buildProduction = (
+    src: { label: string; rnSold: number | null; grossRevenue: { toNumber(): number } | null }[],
+  ): { rows: WeeklyProductionRow[]; totals: ProductionTotals } => {
+    const confirmed = src.filter((r) => (dec(r.grossRevenue) ?? 0) > 0);
+    const totals = productionTotals(
+      confirmed.map((r) => ({ rnSold: r.rnSold, grossRevenue: dec(r.grossRevenue) })),
+    );
+    const rows: WeeklyProductionRow[] = confirmed.map((r) => {
+      const revenue = dec(r.grossRevenue);
+      return {
+        label: r.label,
+        group: null,
+        rnSold: r.rnSold,
+        grossRevenue: revenue,
+        arr: rate(revenue, r.rnSold),
+        share: sharePercent(revenue, totals.revenue),
+      };
+    });
+    return { rows, totals };
+  };
+  const repeaterGuests = buildProduction(report.repeaterProductions);
+  const stayedSegments = buildProduction(report.stayedSegmentProductions);
 
   // ── Section D: rate code / promotion production ─────────────────────────────
   const rcTotals = productionTotals(
@@ -436,6 +466,8 @@ export async function getWeeklyExportData(
     overview: overviewOut,
     monthly: { rows: monthlyRows, totals: monthlyTotalsRow },
     segments: { rows: segmentRows, totals: segTotals },
+    repeaterGuests,
+    stayedSegments,
     rateCodes: { rows: rateCodeRows, totals: rcTotals },
     channels: { rows: channelRows, ytdTotal: channelYtdTotal },
     channelsByYear,
