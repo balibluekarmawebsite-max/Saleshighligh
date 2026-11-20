@@ -113,6 +113,15 @@ export default async function WeeklyEditorPage({
   const { week } = data;
   const locked = week.locked;
   const readOnly = locked || !canEdit;
+  // Period helpers for the Section C "what period to fill" notes: the Fri–Thu
+  // span this report covers, and the calendar month the report falls in (for the
+  // monthly Repeater Guest sub-section).
+  const periodSpan = weekLabel(w);
+  const reportMonth = new Date(`${w}T00:00:00.000Z`).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
   // Units the editor can copy a group-wide section into (the other properties
   // they have edit access to). Empty when they can't edit this property.
   const copyTargets = canEdit
@@ -175,6 +184,7 @@ export default async function WeeklyEditorPage({
               property={p} week={w} locked={readOnly}
               title="C · Weekly Agent Production"
               subtitle="Room nights and revenue by booking agent / source (Booking.com, Expedia, …). ARR and % share are calculated."
+              note={`Same period as this weekly report — ${periodSpan}. Grouped by reservation (creation) date.`}
               labelHeader="Agent / Source" addLabel="Add agent"
               initial={data.segments} action={saveSegments}
               dropZeroRevenue
@@ -185,7 +195,8 @@ export default async function WeeklyEditorPage({
             <ProductionGrid
               property={p} week={w} locked={readOnly}
               title="C · Repeater Guest"
-              subtitle="Repeat guests who stayed this week, by booking agent / source. ARR and % share are calculated."
+              subtitle="Repeat guests, by booking agent / source. ARR and % share are calculated."
+              note={`Based on the whole month of this report — ${reportMonth}. (A November-period report is filled with November.)`}
               labelHeader="Agent / Source" addLabel="Add agent"
               initial={data.repeaters} action={saveRepeaters}
               dropZeroRevenue
@@ -196,7 +207,8 @@ export default async function WeeklyEditorPage({
             <ProductionGrid
               property={p} week={w} locked={readOnly}
               title="C · Stayed Guest per Segment"
-              subtitle="Guests who stayed this week, by market segment (Corporate, Leisure, OTA, …). ARR and % share are calculated."
+              subtitle="Guests who stayed, by market segment (Corporate, Leisure, OTA, …). ARR and % share are calculated."
+              note={`Same period as this weekly report — ${periodSpan}. Based on guest stay dates.`}
               labelHeader="Market Segment" addLabel="Add segment"
               initial={data.stayedSegments} action={saveStayedSegments}
               dropZeroRevenue

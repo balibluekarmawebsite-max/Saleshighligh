@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormState } from "react-dom";
-import { Plus, X } from "lucide-react";
+import { Info, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { rate, sharePercent } from "@/lib/weekly/calculations";
@@ -31,6 +31,7 @@ export function ProductionGrid({
   locked,
   title,
   subtitle,
+  note,
   labelHeader,
   addLabel,
   initial,
@@ -42,6 +43,8 @@ export function ProductionGrid({
   locked: boolean;
   title: string;
   subtitle: string;
+  /** A short "what period to fill" instruction shown under the subtitle. */
+  note?: string;
   labelHeader: string;
   addLabel: string;
   initial: Row[];
@@ -74,6 +77,12 @@ export function ProductionGrid({
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <SectionHeading title={title} subtitle={subtitle} />
+            {note && (
+              <p className="mt-1 flex items-start gap-1.5 text-xs text-brand-teal">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span>{note}</span>
+              </p>
+            )}
             {dropZeroRevenue && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Sources with zero revenue are tentative bookings — shown dimmed and left off the report.

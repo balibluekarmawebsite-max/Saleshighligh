@@ -79,13 +79,13 @@ export const AI_IMPORT_SECTIONS: AiImportSection[] = [
   {
     id: "repeater",
     title: "C · Repeater Guest Production",
-    description: 'Repeat guests who stayed this week, grouped by booking agent / source — same shape as Weekly Agent Production.',
+    description: 'Repeat guests for the month of the report period, grouped by booking agent / source — same shape as Weekly Agent Production.',
     completionKey: "C",
     subsection: true,
     csvTemplateId: "repeater",
     fields: [f("label", "Agent / Source", "text"), f("rnSold", "RN Sold", "int"), f("grossRevenue", "Revenue", "money")],
     shape: "one object per booking agent / source (repeat guests only)",
-    rules: "label is the booking agent / source name (e.g. Booking.com, Expedia, Agoda, Individual Reservation). Group rows with the same agent together and sum their room nights and revenue. Only repeat/returning guests based on stay dates within the week. Do not compute ARR or % (the app derives them).",
+    rules: "label is the booking agent / source name (e.g. Booking.com, Expedia, Agoda, Individual Reservation). Group rows with the same agent together and sum their room nights and revenue. These are repeat/returning guests for the WHOLE MONTH of the report period (e.g. a November-period report covers all of November), not just the week. Do not compute ARR or % (the app derives them).",
   },
   {
     id: "stayedsegment",
