@@ -80,6 +80,8 @@ export interface GokaiCore {
   surveyMom: number | null;
   upsellSalesMom: number | null;
   upsellRevenueMom: number | null;
+  productViewsMom: number | null;
+  refundsMom: number | null;
 }
 
 /** Coerce the (possibly partial, possibly AI-keyed) Gokai figures into the full
@@ -101,6 +103,8 @@ export function coerceGokaiCore(raw: unknown): GokaiCore {
     surveyMom: signed(o, "surveyMom", "surveyCompletionMom"),
     upsellSalesMom: signed(o, "upsellSalesMom"),
     upsellRevenueMom: signed(o, "upsellRevenueMom"),
+    productViewsMom: signed(o, "productViewsMom"),
+    refundsMom: signed(o, "refundsMom"),
   };
 }
 
@@ -145,6 +149,8 @@ export function gokaiSpaFormOwnedUpdate(c: GokaiCore) {
     refunds: c.refunds,
     upsellSalesMom: c.upsellSalesMom,
     upsellRevenueMom: c.upsellRevenueMom,
+    productViewsMom: c.productViewsMom,
+    refundsMom: c.refundsMom,
   };
 }
 

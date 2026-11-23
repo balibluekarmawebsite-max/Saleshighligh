@@ -1710,15 +1710,18 @@ export async function getSpaPageData(
   let gokai: GokaiSummary | null = null;
   if (gCur) {
     const gPrev = previous?.gokaiReports.find((g) => g.unit === gCur.unit);
-    const mom = (cur: number, prev: number | undefined) =>
-      prev === undefined ? null : momChange(cur, prev);
+    const rep = (d: Prisma.Decimal | null) => (d != null ? d.toNumber() : null);
+    // Prefer the MoM % reported on each Gokai card (e.g. Product Views
+    // "+87.5% from last month"); else compute it from the previous period.
+    const momOf = (reported: number | null, cur: number, prev: number | undefined) =>
+      reported != null ? reported : prev === undefined ? null : momChange(cur, prev);
     gokai = {
       unit: gCur.unit,
       metrics: [
-        { key: "productViews", label: "Product Views", value: gCur.productViews, format: "number", mom: mom(gCur.productViews, gPrev?.productViews) },
-        { key: "upsellSales", label: "Upsell Sales", value: gCur.upsellSales, format: "number", mom: mom(gCur.upsellSales, gPrev?.upsellSales) },
-        { key: "upsellRevenue", label: "Upsell Revenue", value: gCur.upsellRevenue.toNumber(), format: "idr", mom: mom(gCur.upsellRevenue.toNumber(), gPrev?.upsellRevenue.toNumber()) },
-        { key: "refunds", label: "Refunds", value: gCur.refunds, format: "number", mom: mom(gCur.refunds, gPrev?.refunds) },
+        { key: "productViews", label: "Product Views", value: gCur.productViews, format: "number", mom: momOf(rep(gCur.productViewsMom), gCur.productViews, gPrev?.productViews), reportedMom: rep(gCur.productViewsMom) },
+        { key: "upsellSales", label: "Upsell Sales", value: gCur.upsellSales, format: "number", mom: momOf(rep(gCur.upsellSalesMom), gCur.upsellSales, gPrev?.upsellSales), reportedMom: rep(gCur.upsellSalesMom) },
+        { key: "upsellRevenue", label: "Upsell Revenue", value: gCur.upsellRevenue.toNumber(), format: "idr", mom: momOf(rep(gCur.upsellRevenueMom), gCur.upsellRevenue.toNumber(), gPrev?.upsellRevenue.toNumber()), reportedMom: rep(gCur.upsellRevenueMom) },
+        { key: "refunds", label: "Refunds", value: gCur.refunds, format: "number", mom: momOf(rep(gCur.refundsMom), gCur.refunds, gPrev?.refunds), reportedMom: rep(gCur.refundsMom) },
       ],
     };
   }

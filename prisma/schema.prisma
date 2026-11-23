@@ -504,6 +504,10 @@ model GokaiReport {
   surveyMom           Decimal?     @db.Decimal(14, 4)
   upsellSalesMom      Decimal?     @db.Decimal(14, 4)
   upsellRevenueMom    Decimal?     @db.Decimal(14, 4)
+  // Reported MoM for the spa "Upsell Analytics" cards that have no restaurant
+  // equivalent (Product Views / Refunds each print their own "% from last month").
+  productViewsMom     Decimal?     @db.Decimal(14, 4)
+  refundsMom          Decimal?     @db.Decimal(14, 4)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 

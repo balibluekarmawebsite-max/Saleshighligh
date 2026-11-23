@@ -11,7 +11,7 @@ import { groqChat, isGroqConfigured, parseJsonLoose, type GroqImage } from "@/li
 const SYSTEM = `You read a Gokai CRM report ("Guest Experience" or "Upsell Analytics") and return STRICT JSON. Each metric card shows a value and often a month-over-month change (an up/green or down/red arrow + a percentage). The report may show any of the cards below; include ONLY the keys for cards that are actually present and omit the rest.
 
 Return ONLY this JSON (no prose, no code fences):
-{"signups":<int>,"openRatePct":<number>,"ctrPct":<number>,"surveyCompletionPct":<number>,"productViews":<int>,"upsellSales":<int>,"upsellRevenue":<int>,"refunds":<int>,"signupsMom":<number>,"openRateMom":<number>,"ctrMom":<number>,"surveyMom":<number>,"upsellSalesMom":<number>,"upsellRevenueMom":<number>}
+{"signups":<int>,"openRatePct":<number>,"ctrPct":<number>,"surveyCompletionPct":<number>,"productViews":<int>,"upsellSales":<int>,"upsellRevenue":<int>,"refunds":<int>,"signupsMom":<number>,"openRateMom":<number>,"ctrMom":<number>,"surveyMom":<number>,"upsellSalesMom":<number>,"upsellRevenueMom":<number>,"productViewsMom":<number>,"refundsMom":<number>}
 
 Metric cards → keys:
 - "Guests Added" → signups
@@ -25,7 +25,8 @@ Metric cards → keys:
 
 Rules:
 - Percentages (openRatePct, ctrPct, surveyCompletionPct) are PERCENT NUMBERS exactly as shown: "40.816%" -> 40.816, "6.78%" -> 6.78. Do NOT convert to a ratio.
-- Each "<metric>Mom" is the "% from last month" on that card as a SIGNED percent: a GREEN / UP arrow is POSITIVE (+8.519 -> 8.519); a RED / DOWN arrow is NEGATIVE ("34.664% from last month" with a down arrow -> -34.664). Keep the exact magnitude even when large (e.g. -349800000).
+- EVERY card can print a "% from last month" — the Upsell Analytics cards (Product Views, Sales, Revenue, Refunds) included. Capture each as "<metric>Mom": productViewsMom, upsellSalesMom, upsellRevenueMom, refundsMom (and the guest-experience ones).
+- Each "<metric>Mom" is the "% from last month" on that card as a SIGNED percent: a GREEN / UP arrow is POSITIVE (+87.5 -> 87.5); a RED / DOWN arrow is NEGATIVE ("34.664% from last month" with a down arrow -> -34.664, "400 % from last month" with a down arrow -> -400). Keep the exact magnitude even when large (e.g. -349800000). A card that reads "0 % from last month" -> 0.
 - Omit a key you cannot read. Never invent numbers. Return ONLY the JSON.`;
 
 const RATE_KEYS: Record<string, string[]> = {
@@ -38,8 +39,10 @@ const MOM_KEYS: Record<string, string[]> = {
   openRateMom: ["openRateMom"],
   ctrMom: ["ctrMom", "clickThroughRateMom"],
   surveyMom: ["surveyMom", "surveyCompletionMom"],
-  upsellSalesMom: ["upsellSalesMom"],
-  upsellRevenueMom: ["upsellRevenueMom"],
+  upsellSalesMom: ["upsellSalesMom", "salesMom"],
+  upsellRevenueMom: ["upsellRevenueMom", "revenueMom"],
+  productViewsMom: ["productViewsMom", "productViewMom", "viewsMom"],
+  refundsMom: ["refundsMom", "refundMom"],
 };
 
 const pick = (o: Record<string, unknown>, keys: string[]): unknown => {

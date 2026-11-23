@@ -15,8 +15,8 @@ interface Metric {
   key: string;
   label: string;
   valueField: string;
-  /** The reported-MoM column, or null for cards that have none (Product Views /
-   *  Refunds): the Spa page computes their MoM from the prior period. */
+  /** The reported-MoM column, or null for a card that prints no "% from last
+   *  month" (none at present — every Gokai card carries one). */
   momField: string | null;
   hint: string;
 }
@@ -33,10 +33,10 @@ const RESTAURANT_METRICS: Metric[] = [
 
 /** Spa: the "Upsell Analytics" four-card report the Spa page displays. */
 const SPA_METRICS: Metric[] = [
-  { key: "productViews", label: "Product Views", valueField: "productViews", momField: null, hint: "e.g. 135" },
+  { key: "productViews", label: "Product Views", valueField: "productViews", momField: "productViewsMom", hint: "e.g. 135" },
   { key: "upsellSales", label: "Upsell Sales", valueField: "upsellSales", momField: "upsellSalesMom", hint: "transactions" },
   { key: "upsellRevenue", label: "Upsell Revenue", valueField: "upsellRevenue", momField: "upsellRevenueMom", hint: "IDR" },
-  { key: "refunds", label: "Refunds", valueField: "refunds", momField: null, hint: "e.g. 0" },
+  { key: "refunds", label: "Refunds", valueField: "refunds", momField: "refundsMom", hint: "e.g. 0" },
 ];
 
 const UNITS = ["RESTAURANT", "HOTEL", "SPA"] as const;
