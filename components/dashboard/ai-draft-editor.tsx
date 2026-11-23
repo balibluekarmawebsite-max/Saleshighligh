@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { SaveState } from "@/lib/ai/use-narrative-draft";
 
 const DEFAULT_FOOTER =
-  "Saving updates this period's narrative and keeps a version history; reload to see it applied. Admin auth for editing lands in a later phase.";
+  "Saving updates this period's narrative and keeps a version history; the preview above updates on save. Admin auth for editing lands in a later phase.";
 
 /** Editable AI-draft buffer with Save / Discard, shared by the narrative panels. */
 export function AiDraftEditor({

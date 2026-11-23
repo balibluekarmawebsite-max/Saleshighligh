@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
@@ -10,6 +11,7 @@ export type SaveState = "idle" | "saving" | "saved" | "error";
  * (so `aiGenerated` is set correctly), and saves via /api/narrative/save.
  */
 export function useNarrativeDraft(section: string, property: string, period: string) {
+  const router = useRouter();
   const [draft, setDraftState] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [edited, setEdited] = useState(false);
@@ -81,7 +83,16 @@ export function useNarrativeDraft(section: string, property: string, period: str
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section, property, period, content: draft, aiGenerated: !edited }),
       });
-      setSaveState(res.ok ? "saved" : "error");
+      if (res.ok) {
+        // Re-fetch the server component so the saved text appears in the
+        // read-only preview immediately, then collapse the draft editor — the
+        // populated preview is now the source of truth (no manual reload).
+        setSaveState("saved");
+        router.refresh();
+        discard();
+      } else {
+        setSaveState("error");
+      }
     } catch {
       setSaveState("error");
     }
