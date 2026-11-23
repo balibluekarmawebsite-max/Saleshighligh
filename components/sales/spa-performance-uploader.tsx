@@ -126,7 +126,12 @@ export function SpaPerformanceUploader({
     startBusy(async () => {
       const r = await saveSpaPerformanceAction({ property, period, segments });
       setMsg({ ok: r.ok, text: r.message });
-      if (r.ok) router.refresh();
+      if (r.ok) {
+        // Processed: collapse the uploader to the toggle button and let the
+        // refreshed preview table below show the saved figures.
+        setOpen(false);
+        router.refresh();
+      }
     });
   }
 
@@ -220,9 +225,11 @@ export function SpaPerformanceUploader({
           </thead>
           <tbody>
             {SPA_SEGMENTS.map((seg) => {
-              const cA = toInt(grid[seg].coversActual) ?? 0;
-              const rA = toNum(grid[seg].revenueActual) ?? 0;
-              const rB = toNum(grid[seg].revenueBudget) ?? 0;
+              // Clamp the same way save does, so the per-row preview never
+              // disagrees with the stored value on a stray negative.
+              const cA = Math.max(0, toInt(grid[seg].coversActual) ?? 0);
+              const rA = Math.max(0, toNum(grid[seg].revenueActual) ?? 0);
+              const rB = Math.max(0, toNum(grid[seg].revenueBudget) ?? 0);
               const avg = avgCheck(rA, cA);
               const ach = variancePct(rA, rB);
               return (

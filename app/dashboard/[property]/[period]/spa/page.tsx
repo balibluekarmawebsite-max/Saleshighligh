@@ -173,6 +173,15 @@ export default async function SpaPage({
           description="Covers, average check and revenue vs budget by guest segment"
           insight={segments.length > 0 ? segInsight : undefined}
         >
+          {/* Upload / AI edit on top; the preview table sits below it. */}
+          {canEdit && (
+            <SpaPerformanceUploader
+              property={params.property}
+              period={params.period}
+              initial={segments}
+              hasData={segments.length > 0}
+            />
+          )}
           {segments.length > 0 ? (
             <>
               <SpaSegmentTable segments={segments} />
@@ -189,18 +198,11 @@ export default async function SpaPage({
               )}
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              In-House / Outside / Inclusion — no data for this period yet
-              {canEdit ? " · upload a screenshot or paste the table below." : "."}
-            </p>
-          )}
-          {canEdit && (
-            <SpaPerformanceUploader
-              property={params.property}
-              period={params.period}
-              initial={segments}
-              hasData={segments.length > 0}
-            />
+            !canEdit && (
+              <p className="text-sm text-muted-foreground">
+                In-House / Outside / Inclusion — no data for this period yet.
+              </p>
+            )
           )}
         </SectionCard>
 
