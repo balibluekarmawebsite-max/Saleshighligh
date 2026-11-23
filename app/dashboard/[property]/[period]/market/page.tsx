@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 
+import { AvailabilityTrendChart } from "@/components/charts/availability-trend-chart";
 import { BookingWindowChart } from "@/components/charts/booking-window-chart";
 import { ForecastOccupancyChart } from "@/components/charts/forecast-occupancy-chart";
 import { MarketAreaChart } from "@/components/charts/market-area-chart";
@@ -12,6 +13,8 @@ import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { Sparkline } from "@/components/dashboard/sparkline";
+import { StatTile } from "@/components/dashboard/stat-tile";
+import { BookingOverviewUploader } from "@/components/sales/booking-overview-uploader";
 import { BookingWindowUploader } from "@/components/sales/booking-window-uploader";
 import { MarketAreaUploader } from "@/components/sales/market-area-uploader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,8 +64,14 @@ export default async function MarketPage({
     );
   }
 
-  const { property, pace, paceAsOf, forecasts, revenueForecast, revenueForecastCumulativeGap, supply, demandRange, marketArea, bookingWindow, narrative, marketAreaNarrative, bookingWindowNarrative, alerts } = data;
+  const { property, pace, paceAsOf, forecasts, revenueForecast, revenueForecastCumulativeGap, supply, demandRange, marketArea, bookingWindow, bookingOverview, narrative, marketAreaNarrative, bookingWindowNarrative, bookingOverviewNarrative, alerts } = data;
   const fileBase = `${property.code}-${params.period}-market`;
+
+  const availTrendData = (bookingOverview?.availability ?? []).map((a) => ({
+    month: a.monthLabel,
+    yourPct: a.yourPct,
+    marketPct: a.marketPct,
+  }));
 
   const bookingWindowChartData = (bookingWindow?.buckets ?? []).map((b) => ({
     bucket: b.bucket,
@@ -239,6 +248,105 @@ export default async function MarketPage({
           </div>
         </div>
       </SectionCard>
+
+      {/* 3b — Booking.com Overview (search performance funnel) */}
+      <div className="space-y-4">
+        {canEdit && (
+          <BookingOverviewUploader
+            property={params.property}
+            period={params.period}
+            initial={bookingOverview}
+            hasData={bookingOverview !== null}
+          />
+        )}
+        {bookingOverview ? (
+          <>
+            <SectionCard
+              title="Booking.com Overview"
+              description={`How searches turn into bookings vs market (${bookingOverview.windowLabel})${bookingOverview.dataAsOf ? ` · data as of ${dateFmt.format(new Date(bookingOverview.dataAsOf))}` : ""}`}
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <StatTile
+                  label="Search results views"
+                  value={formatNumber(bookingOverview.searchResultsViews)}
+                  sub={bookingOverview.searchResultsViewsVsMkt !== null ? <MoMBadge value={bookingOverview.searchResultsViewsVsMkt} /> : "vs market n/a"}
+                />
+                <StatTile
+                  label="Property page visits"
+                  value={formatNumber(bookingOverview.propertyPageVisits)}
+                  sub={bookingOverview.propertyPageVisitsVsMkt !== null ? <MoMBadge value={bookingOverview.propertyPageVisitsVsMkt} /> : "vs market n/a"}
+                />
+                <StatTile
+                  label="Bookings made"
+                  value={formatNumber(bookingOverview.bookingsMade)}
+                  sub={bookingOverview.bookingsMadeVsMkt !== null ? <MoMBadge value={bookingOverview.bookingsMadeVsMkt} /> : "vs market n/a"}
+                />
+                <StatTile
+                  label="Search-to-page conversion"
+                  value={`${bookingOverview.searchToPagePct.toFixed(2)}%`}
+                  sub={
+                    <span className="inline-flex items-center gap-1.5">
+                      {bookingOverview.searchToPageVsMkt !== null && <MoMBadge value={bookingOverview.searchToPageVsMkt} />}
+                      {bookingOverview.searchToPageMarketPct !== null && <span className="text-muted-foreground">mkt {bookingOverview.searchToPageMarketPct.toFixed(2)}%</span>}
+                    </span>
+                  }
+                />
+                <StatTile
+                  label="Page-to-booking conversion"
+                  value={`${bookingOverview.pageToBookingPct.toFixed(2)}%`}
+                  sub={
+                    <span className="inline-flex items-center gap-1.5">
+                      {bookingOverview.pageToBookingVsMkt !== null && <MoMBadge value={bookingOverview.pageToBookingVsMkt} />}
+                      {bookingOverview.pageToBookingMarketPct !== null && <span className="text-muted-foreground">mkt {bookingOverview.pageToBookingMarketPct.toFixed(2)}%</span>}
+                    </span>
+                  }
+                />
+                <StatTile
+                  label="Availability for search"
+                  value={`${bookingOverview.availabilityPct.toFixed(2)}%`}
+                  sub={bookingOverview.availabilityVsMkt !== null ? <MoMBadge value={bookingOverview.availabilityVsMkt} /> : "vs market n/a"}
+                />
+              </div>
+            </SectionCard>
+            {availTrendData.length > 1 && (
+              <ExportableCard
+                title="Availability for Search — Trend"
+                description="Your availability vs market, monthly"
+                fileName={`${fileBase}-availability`}
+              >
+                <AvailabilityTrendChart data={availTrendData} />
+              </ExportableCard>
+            )}
+          </>
+        ) : (
+          <SectionNote
+            title="Booking.com Overview"
+            description="Booking.com search performance, property vs market"
+            message={
+              canEdit
+                ? "No Booking.com Overview yet — attach the search-performance screenshots above to compile it."
+                : "No Booking.com Overview for this period yet."
+            }
+          />
+        )}
+
+        {/* Booking.com search performance summary */}
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">Booking.com Search Performance Summary</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Overall search performance, key insights and the summary.</p>
+            </div>
+            <NarrativePanel
+              block={bookingOverviewNarrative}
+              section="BOOKING_OVERVIEW_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Booking.com search performance summary written for this period yet."
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* 4 — Market Area Update (Booking.com property vs market) */}
       <div className="space-y-4">

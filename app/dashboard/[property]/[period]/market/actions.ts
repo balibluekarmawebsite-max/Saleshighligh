@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
+import { extractBookingOverview } from "@/lib/sales/booking-overview-ai";
+import { saveBookingOverview } from "@/lib/sales/booking-overview-import";
+import type { BookingOverviewCore, NormalAvailRow, RawAvailRow } from "@/lib/sales/booking-overview-logic";
 import { extractBookingWindow } from "@/lib/sales/booking-window-ai";
 import { saveBookingWindow } from "@/lib/sales/booking-window-import";
 import type {
@@ -108,6 +111,55 @@ export async function saveBookingWindowAction(input: {
     period: input.period,
     meta: input.meta,
     rows: input.rows,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/market`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface BookingOverviewExtractActionResult {
+  ok: boolean;
+  error?: string;
+  core?: BookingOverviewCore;
+  avail?: NormalAvailRow[];
+}
+
+/** Editor/admin: AI-extract the Booking.com Overview (preview only). */
+export async function extractBookingOverviewAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<BookingOverviewExtractActionResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractBookingOverview({ text: input.text, image });
+  return r.ok ? { ok: true, core: r.core, avail: r.avail } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Booking.com Overview (funnel + availability trend). */
+export async function saveBookingOverviewAction(input: {
+  property: string;
+  period: string;
+  core: Record<string, unknown>;
+  avail: RawAvailRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveBookingOverview({
+    property: input.property,
+    period: input.period,
+    core: input.core,
+    avail: input.avail,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,
   });

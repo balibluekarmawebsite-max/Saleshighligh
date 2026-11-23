@@ -118,6 +118,7 @@ enum NarrativeSection {
   TRIPADVISOR_SPA_SUMMARY
   MARKET_AREA_SUMMARY
   BOOKING_WINDOW_SUMMARY
+  BOOKING_OVERVIEW_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -198,6 +199,8 @@ model ReportPeriod {
   marketSupply       MarketSupply[]
   marketAreaStats    MarketAreaStat[]
   bookingWindowStats BookingWindowStat[]
+  bookingOverview       BookingOverview?
+  bookingOverviewAvail  BookingOverviewAvail[]
   narrativeContent   NarrativeContent[]
   narrativeVersions  NarrativeVersion[]
   influencerCollabs  InfluencerCollab[]
@@ -731,6 +734,53 @@ model BookingWindowStat {
 
   @@unique([periodId, bucket])
   @@map("booking_window_stats")
+}
+
+/// Booking.com "Overview": the search → property-page → booking funnel and
+/// search-availability, property vs the overall market. One row per period.
+/// "VsMkt" columns are the Booking.com "vs market" % (signed); conversion/market
+/// columns are percents (0–100).
+model BookingOverview {
+  id       String    @id @default(cuid())
+  periodId String    @unique
+  windowLabel String
+  dataAsOf    DateTime? @db.Date
+
+  searchResultsViews      Int
+  searchResultsViewsVsMkt Decimal? @db.Decimal(14, 4)
+  propertyPageVisits      Int
+  propertyPageVisitsVsMkt Decimal? @db.Decimal(14, 4)
+  bookingsMade            Int
+  bookingsMadeVsMkt       Decimal? @db.Decimal(14, 4)
+
+  searchToPagePct        Decimal  @db.Decimal(9, 4)
+  searchToPageMarketPct  Decimal? @db.Decimal(9, 4)
+  searchToPageVsMkt      Decimal? @db.Decimal(14, 4)
+  pageToBookingPct       Decimal  @db.Decimal(9, 4)
+  pageToBookingMarketPct Decimal? @db.Decimal(9, 4)
+  pageToBookingVsMkt     Decimal? @db.Decimal(14, 4)
+
+  availabilityPct   Decimal  @db.Decimal(9, 4)
+  availabilityVsMkt Decimal? @db.Decimal(14, 4)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@map("booking_overviews")
+}
+
+/// Monthly search-availability trend (property vs market) for the Booking.com
+/// Overview. Keyed by the report period (periodId), like the other market series.
+model BookingOverviewAvail {
+  id        String   @id @default(cuid())
+  periodId  String
+  statMonth DateTime @db.Date
+  yourPct   Decimal  @db.Decimal(9, 4)
+  marketPct Decimal  @db.Decimal(9, 4)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, statMonth])
+  @@map("booking_overview_avail")
 }
 
 // ─── Narrative & partnerships ────────────────────────────────────────────────

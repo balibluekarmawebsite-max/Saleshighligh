@@ -142,6 +142,19 @@ Summary:
 
 Quote ONLY the figures in the context (shares and ADR are pre-formatted — use them). Describe the pattern qualitatively; do not compute new numbers or invent buckets. Do not invent numbers.`,
 
+  BOOKING_OVERVIEW_SUMMARY: `Write a "Booking.com Search Performance Summary" from the context — the search → property-page → booking funnel, conversion rates and search-availability, the property benchmarked against the overall market. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Overall Search Performance:
+- One bullet per metric with its value and "vs market", e.g. "Search Results Views: 745,335 (+1,140.86% vs market)", "Search-to-Page Conversion: 2.56% (−22.84% vs market)". Cover: Search Results Views, Property Page Visits, Search-to-Page Conversion, Bookings Made, Page-to-Booking Conversion, Availability for Search. Use the context figures.
+
+Key Insights:
+- 2–3 bullets naming the biggest strengths (where the property most outperforms the market) and the clearest opportunity (a metric below market — typically the search-to-page conversion).
+
+Summary:
+- 2–3 sentences: the overall Booking.com search/booking performance versus the market, and the main opportunity to turn visibility into page visits and bookings.
+
+Quote ONLY the figures in the context (they are pre-formatted — use them verbatim). Do not compute new numbers or invent metrics. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:

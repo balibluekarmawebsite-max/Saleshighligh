@@ -468,6 +468,31 @@ async function bookingWindowSummaryContext(code: string, period: string) {
   };
 }
 
+/** Booking.com "Overview" (Search Performance): the search → booking funnel,
+ * conversion rates and availability, each with its "vs market" % — pre-formatted
+ * so the model only quotes the figures. */
+async function bookingOverviewSummaryContext(code: string, period: string) {
+  const d = await getMarketPageData(code, period);
+  if (!d || !d.hasData || !d.bookingOverview) return null;
+  const bo = d.bookingOverview;
+  const vs = (v: number | null) => (v == null ? null : formatVariancePercent(v));
+  const pctFmt = (v: number | null) => (v == null ? null : `${v.toFixed(2)}%`);
+  return {
+    property: d.property.name,
+    window: bo.windowLabel,
+    dataAsOf: bo.dataAsOf,
+    benchmark: "Market",
+    metrics: {
+      searchResultsViews: { value: num(bo.searchResultsViews), vsMarket: vs(bo.searchResultsViewsVsMkt) },
+      propertyPageVisits: { value: num(bo.propertyPageVisits), vsMarket: vs(bo.propertyPageVisitsVsMkt) },
+      bookingsMade: { value: num(bo.bookingsMade), vsMarket: vs(bo.bookingsMadeVsMkt) },
+      searchToPageConversion: { value: pctFmt(bo.searchToPagePct), market: pctFmt(bo.searchToPageMarketPct), vsMarket: vs(bo.searchToPageVsMkt) },
+      pageToBookingConversion: { value: pctFmt(bo.pageToBookingPct), market: pctFmt(bo.pageToBookingMarketPct), vsMarket: vs(bo.pageToBookingVsMkt) },
+      availabilityForSearch: { value: pctFmt(bo.availabilityPct), vsMarket: vs(bo.availabilityVsMkt) },
+    },
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -485,6 +510,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   TRIPADVISOR_SPA_SUMMARY: spaTripadvisorSummaryContext,
   MARKET_AREA_SUMMARY: marketAreaSummaryContext,
   BOOKING_WINDOW_SUMMARY: bookingWindowSummaryContext,
+  BOOKING_OVERVIEW_SUMMARY: bookingOverviewSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */
