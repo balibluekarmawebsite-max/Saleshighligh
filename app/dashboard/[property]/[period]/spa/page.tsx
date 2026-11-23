@@ -375,16 +375,13 @@ export default async function SpaPage({
       {/* 6 — Spa Tripadvisor (upload + listing block + AI summary) */}
       <div className="space-y-4">
         {canEdit && (
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">Spa Tripadvisor</h3>
-            <TripadvisorUploader
-              property={params.property}
-              period={params.period}
-              initial={tripadvisor}
-              hasData={tripadvisor !== null}
-              saveAction={saveSpaTripadvisorAction}
-            />
-          </div>
+          <TripadvisorUploader
+            property={params.property}
+            period={params.period}
+            initial={tripadvisor}
+            hasData={tripadvisor !== null}
+            saveAction={saveSpaTripadvisorAction}
+          />
         )}
         {tripadvisor ? (
           <TripadvisorBlock
