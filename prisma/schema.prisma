@@ -115,6 +115,7 @@ enum NarrativeSection {
   GOKAI_SUMMARY
   GOKAI_SPA_SUMMARY
   TRIPADVISOR_SUMMARY
+  TRIPADVISOR_SPA_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -596,6 +597,7 @@ model TripadvisorMetrics {
   /// computed MoM on the read path.
   impressionsMom        Decimal? @db.Decimal(14, 4)
   pageVisitorsMom       Decimal? @db.Decimal(14, 4)
+  newReviewsMom         Decimal? @db.Decimal(14, 4)
   photoViewsMom         Decimal? @db.Decimal(14, 4)
   videoViewsMom         Decimal? @db.Decimal(14, 4)
   specialOfferClicksMom Decimal? @db.Decimal(14, 4)

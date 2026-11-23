@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type TripadvisorMetrics } from "@prisma/client";
 import { unstable_noStore as noStore } from "next/cache";
 
 import { achievementPct, avgCheck, cpc, ctr, momChange } from "@/lib/calculations";
@@ -1221,8 +1221,56 @@ export interface TripadvisorSummary {
   totalInMarket: number | null;
   rating: number | null;
   area: string;
-  noun: string; // "restaurants"
+  noun: string; // "restaurants" | "Spas & Wellness" | …
   metrics: TripMetric[];
+}
+
+/**
+ * Build a TripadvisorSummary from a TripadvisorMetrics row (or null when the
+ * period has none). Each metric prefers the report's own "vs previous period" %;
+ * the block renders the same whatever the unit. `includeMenuViews` is false for
+ * the spa (a spa listing has no menu). Shared by the restaurant and spa reads so
+ * both stay identical.
+ */
+function buildTripadvisorSummary(
+  tm: TripadvisorMetrics | undefined,
+  area: string,
+  noun: string,
+  opts?: { includeMenuViews?: boolean },
+): TripadvisorSummary | null {
+  if (!tm) return null;
+  const rep = (d: Prisma.Decimal | null) => (d == null ? null : d.toNumber());
+  const metric = (key: string, label: string, value: number, reported: number | null): TripMetric => ({
+    key,
+    label,
+    value,
+    mom: reported,
+    reportedMom: reported,
+  });
+  const metrics: TripMetric[] = [
+    metric("impressions", "Listing Impressions", tm.impressions, rep(tm.impressionsMom)),
+    metric("pageVisitors", "Unique Page Visitors", tm.pageVisitors, rep(tm.pageVisitorsMom)),
+    metric("newReviews", "New Reviews", tm.newReviews, rep(tm.newReviewsMom)),
+    metric("qrReviews", "QR Code Reviews", tm.qrReviews ?? 0, null),
+    metric("photoViews", "Photo Views", tm.photoViews ?? 0, rep(tm.photoViewsMom)),
+    metric("videoViews", "Video Views", tm.videoViews ?? 0, rep(tm.videoViewsMom)),
+    metric("specialOfferClicks", "Special Offer Clicks", tm.specialOfferClicks ?? 0, rep(tm.specialOfferClicksMom)),
+    metric("updateViews", "Update Views", tm.updateViews ?? 0, rep(tm.updateViewsMom)),
+    ...(opts?.includeMenuViews === false
+      ? []
+      : [metric("menuViews", "Menu Views", tm.menuViews ?? 0, rep(tm.menuViewsMom))]),
+    metric("phoneCalls", "Phone Calls", tm.phoneCalls, rep(tm.phoneCallsMom)),
+    metric("websiteClicks", "Website Clicks", tm.websiteClicks, rep(tm.websiteClicksMom)),
+    metric("mapViews", "Map Views", tm.mapViews, rep(tm.mapViewsMom)),
+  ];
+  return {
+    rank: tm.rank,
+    totalInMarket: tm.totalInMarket,
+    rating: tm.avgRating.toNumber(),
+    area,
+    noun,
+    metrics,
+  };
 }
 
 export interface RestaurantPageData {
@@ -1476,39 +1524,7 @@ export async function getRestaurantPageData(
   // the row. MoM is ONLY the Tripadvisor report's own "vs previous period" % — we
   // do not compute a month-over-month, so a metric the report shows without an
   // arrow (new reviews, etc.) simply shows no change, matching the report.
-  const tm = current.tripadvisorMetrics[0];
-  let tripadvisor: TripadvisorSummary | null = null;
-  if (tm) {
-    const rep = (d: { toNumber(): number } | null) => (d == null ? null : d.toNumber());
-    const metric = (key: string, label: string, value: number, reported: number | null): TripMetric => ({
-      key,
-      label,
-      value,
-      mom: reported,
-      reportedMom: reported,
-    });
-    tripadvisor = {
-      rank: tm.rank,
-      totalInMarket: tm.totalInMarket,
-      rating: tm.avgRating.toNumber(),
-      area: property.area,
-      noun: "restaurants",
-      metrics: [
-        metric("impressions", "Listing Impressions", tm.impressions, rep(tm.impressionsMom)),
-        metric("pageVisitors", "Unique Page Visitors", tm.pageVisitors, rep(tm.pageVisitorsMom)),
-        metric("newReviews", "New Reviews", tm.newReviews, null),
-        metric("qrReviews", "QR Code Reviews", tm.qrReviews ?? 0, null),
-        metric("photoViews", "Photo Views", tm.photoViews ?? 0, rep(tm.photoViewsMom)),
-        metric("videoViews", "Video Views", tm.videoViews ?? 0, rep(tm.videoViewsMom)),
-        metric("specialOfferClicks", "Special Offer Clicks", tm.specialOfferClicks ?? 0, rep(tm.specialOfferClicksMom)),
-        metric("updateViews", "Update Views", tm.updateViews ?? 0, rep(tm.updateViewsMom)),
-        metric("menuViews", "Menu Views", tm.menuViews ?? 0, rep(tm.menuViewsMom)),
-        metric("phoneCalls", "Phone Calls", tm.phoneCalls, rep(tm.phoneCallsMom)),
-        metric("websiteClicks", "Website Clicks", tm.websiteClicks, rep(tm.websiteClicksMom)),
-        metric("mapViews", "Map Views", tm.mapViews, rep(tm.mapViewsMom)),
-      ],
-    };
-  }
+  const tripadvisor = buildTripadvisorSummary(current.tripadvisorMetrics[0], property.area, "restaurants");
 
   const narrAt = (section: string) => {
     const n = current.narrativeContent.find((x) => x.section === section);
@@ -1587,8 +1603,10 @@ export interface SpaPageData {
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   roasTrend: RoasPoint[];
   gokai: GokaiSummary | null;
+  tripadvisor: TripadvisorSummary | null;
   narrative: NarrativeBlock | null;
   gokaiNarrative: NarrativeBlock | null;
+  tripadvisorNarrative: NarrativeBlock | null;
 }
 
 const SPA_SEGMENT_ORDER = ["IN_HOUSE", "OUTSIDE", "INCLUSION"];
@@ -1612,7 +1630,8 @@ export async function getSpaPageData(
           spaTreatments: { orderBy: { revenue: "desc" } },
           gokaiReports: true,
           adsPerformance: { where: { unit: "SPA" } },
-          narrativeContent: { where: { section: { in: ["SPA_OVERVIEW", "GOKAI_SPA_SUMMARY"] } } },
+          tripadvisorMetrics: { where: { unit: "SPA" } },
+          narrativeContent: { where: { section: { in: ["SPA_OVERVIEW", "GOKAI_SPA_SUMMARY", "TRIPADVISOR_SPA_SUMMARY"] } } },
         },
       },
     },
@@ -1646,8 +1665,10 @@ export async function getSpaPageData(
       spendRevenue: [],
       roasTrend: [],
       gokai: null,
+      tripadvisor: null,
       narrative: null,
       gokaiNarrative: null,
+      tripadvisorNarrative: null,
     };
   }
   const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
@@ -1730,8 +1751,17 @@ export async function getSpaPageData(
     const n = current.narrativeContent.find((x) => x.section === section);
     return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
   };
+  // Tripadvisor (unit=SPA; a spa listing has no menu views)
+  const tripadvisor = buildTripadvisorSummary(
+    current.tripadvisorMetrics[0],
+    property.area,
+    "Spas & Wellness",
+    { includeMenuViews: false },
+  );
+
   const narrative = narrBlock("SPA_OVERVIEW");
   const gokaiNarrative = narrBlock("GOKAI_SPA_SUMMARY");
+  const tripadvisorNarrative = narrBlock("TRIPADVISOR_SPA_SUMMARY");
 
   return {
     ...base,
@@ -1745,8 +1775,10 @@ export async function getSpaPageData(
     spendRevenue,
     roasTrend,
     gokai,
+    tripadvisor,
     narrative,
     gokaiNarrative,
+    tripadvisorNarrative,
   };
 }
 

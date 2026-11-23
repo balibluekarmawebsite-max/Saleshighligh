@@ -86,6 +86,22 @@ Key Insights:
 
 Quote ONLY the figures in the context; simply omit a change when it is absent. Do not invent numbers.`,
 
+  TRIPADVISOR_SPA_SUMMARY: `Summarise the SPA's Tripadvisor listing performance for the month. The context is the spa listing (ranked among "Spas & Wellness"). Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Overall Performance:
+- State the ranking and rating from the context, e.g. "Ranked #3 of 200 Spas & Wellness in Seminyak with a 5.0/5 rating.". If the ranking is absent, lead with the rating.
+
+Page Traffic:
+- Listing Impressions and Unique Page Visitors, each with value and month-over-month change.
+
+Reviews & Engagement:
+- New Reviews (with its change), QR Code Reviews, and any other engagement metrics present (photo/video views, website clicks, phone calls, map views) with value and month-over-month change. Omit the change when it is absent.
+
+Key Insights:
+- 2–4 short bullets: what rose, what dipped, and ONE concrete action to improve visibility or grow reviews next month.
+
+This is the SPA listing — do NOT mention menu views or restaurant metrics. Quote ONLY the figures in the context; simply omit a change when it is absent. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:

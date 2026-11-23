@@ -17,6 +17,7 @@ import { saveSpaTreatments } from "@/lib/sales/spa-treatments-import";
 import type { NormalTreatmentRow, RawTreatmentRow } from "@/lib/sales/spa-treatments-logic";
 import { runMonthlyAdsSync } from "@/lib/sales/ads-monthly-sync";
 import { saveGokai } from "@/lib/sales/gokai-import";
+import { saveTripadvisor } from "@/lib/sales/tripadvisor-import";
 
 export interface GenerateResult {
   ok: boolean;
@@ -255,6 +256,28 @@ export async function saveSpaGokaiAction(input: {
     property: input.property,
     period: input.period,
     unit: input.unit,
+    core: input.core,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
+  return { ok: r.ok, message: r.message };
+}
+
+/** Editor/admin: save the Spa Tripadvisor listing report (unit=SPA). */
+export async function saveSpaTripadvisorAction(input: {
+  property: string;
+  period: string;
+  core: Record<string, unknown>;
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveTripadvisor({
+    property: input.property,
+    period: input.period,
+    unit: "SPA",
     core: input.core,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,

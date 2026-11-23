@@ -41,16 +41,26 @@ function formFromInitial(initial: TripadvisorSummary | null): Form {
   return f;
 }
 
+type SaveTripadvisorAction = (input: {
+  property: string;
+  period: string;
+  core: Record<string, unknown>;
+}) => Promise<{ ok: boolean; message: string }>;
+
 export function TripadvisorUploader({
   property,
   period,
   initial,
   hasData,
+  saveAction = saveRestaurantTripadvisorAction,
 }: {
   property: string;
   period: string;
   initial: TripadvisorSummary | null;
   hasData: boolean;
+  /** Save action — defaults to the restaurant one; the spa page passes its own
+   *  so the save writes the SPA unit and revalidates the spa route. */
+  saveAction?: SaveTripadvisorAction;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(!hasData);
@@ -97,7 +107,7 @@ export function TripadvisorUploader({
     setBusyKind("save");
     void (async () => {
       try {
-        const r = await saveRestaurantTripadvisorAction({ property, period, core: form });
+        const r = await saveAction({ property, period, core: form });
         setMsg({ ok: r.ok, text: r.message });
         if (r.ok) router.refresh();
       } finally {

@@ -30,6 +30,7 @@ const VALID_SECTIONS: NarrativeSection[] = [
   "GOKAI_SUMMARY",
   "GOKAI_SPA_SUMMARY",
   "TRIPADVISOR_SUMMARY",
+  "TRIPADVISOR_SPA_SUMMARY",
 ];
 
 /**

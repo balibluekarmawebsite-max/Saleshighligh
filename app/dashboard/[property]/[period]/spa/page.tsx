@@ -10,11 +10,13 @@ import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { TripadvisorBlock } from "@/components/dashboard/tripadvisor-block";
 import { AdsSyncButton } from "@/components/sales/ads-sync-button";
 import { GokaiUploader } from "@/components/sales/gokai-uploader";
 import { SpaOverviewPanel } from "@/components/sales/spa-overview-panel";
 import { SpaPerformanceUploader } from "@/components/sales/spa-performance-uploader";
 import { SpaTreatmentsUploader } from "@/components/sales/spa-treatments-uploader";
+import { TripadvisorUploader } from "@/components/sales/tripadvisor-uploader";
 import { SpaSegmentTable } from "@/components/tables/spa-segment-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
@@ -27,7 +29,7 @@ import {
 import { formatIDR, formatNumber, formatPercent, formatVariancePercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
-import { saveSpaGokaiAction, syncSpaAdsAction } from "./actions";
+import { saveSpaGokaiAction, saveSpaTripadvisorAction, syncSpaAdsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +87,7 @@ export default async function SpaPage({
     );
   }
 
-  const { property, overview, segments, treatments, treatmentsAll, gokai, narrative, gokaiNarrative } = data;
+  const { property, overview, segments, treatments, treatmentsAll, gokai, tripadvisor, narrative, gokaiNarrative, tripadvisorNarrative } = data;
   const fileBase = `${property.code}-${params.period}-spa`;
 
   const avgCheckAboveBudget =
@@ -369,6 +371,58 @@ export default async function SpaPage({
           </div>
         </div>
       </SectionCard>
+
+      {/* 6 — Spa Tripadvisor (upload + listing block + AI summary) */}
+      <div className="space-y-4">
+        {canEdit && (
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">Spa Tripadvisor</h3>
+            <TripadvisorUploader
+              property={params.property}
+              period={params.period}
+              initial={tripadvisor}
+              hasData={tripadvisor !== null}
+              saveAction={saveSpaTripadvisorAction}
+            />
+          </div>
+        )}
+        {tripadvisor ? (
+          <TripadvisorBlock
+            title="Spa Tripadvisor"
+            rank={tripadvisor.rank}
+            totalInMarket={tripadvisor.totalInMarket}
+            rating={tripadvisor.rating}
+            area={tripadvisor.area}
+            noun={tripadvisor.noun}
+            metrics={tripadvisor.metrics}
+          />
+        ) : (
+          <SectionNote
+            title="Spa Tripadvisor"
+            description="Listing performance"
+            message={
+              canEdit
+                ? "No spa Tripadvisor data yet — upload a screenshot or paste the listing report above."
+                : "No spa Tripadvisor data for this period yet."
+            }
+          />
+        )}
+
+        {/* Summary always renders so a saved narrative is never orphaned. */}
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h3 className="text-sm font-semibold text-foreground">Spa Tripadvisor Performance Summary</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Overall performance, page traffic, reviews and the key insights.</p>
+          <div className="mt-3">
+            <NarrativePanel
+              block={tripadvisorNarrative}
+              section="TRIPADVISOR_SPA_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Tripadvisor summary written for this period yet."
+            />
+          </div>
+        </div>
+      </div>
 
     </div>
   );

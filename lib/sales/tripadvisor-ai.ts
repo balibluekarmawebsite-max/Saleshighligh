@@ -28,6 +28,7 @@ Return ONLY this JSON (no prose, no code fences). Use null for anything not show
   "websiteClicks": <int|null>,
   "mapViews": <int|null>,
   "impressionsMom": <number|null>, "pageVisitorsMom": <number|null>,
+  "newReviewsMom": <number|null>,
   "photoViewsMom": <number|null>, "videoViewsMom": <number|null>,
   "specialOfferClicksMom": <number|null>, "updateViewsMom": <number|null>,
   "menuViewsMom": <number|null>, "phoneCallsMom": <number|null>,

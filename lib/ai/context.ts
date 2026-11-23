@@ -400,6 +400,29 @@ async function tripadvisorSummaryContext(code: string, period: string) {
   };
 }
 
+/** Tripadvisor for the SPA page: the spa listing (Spas & Wellness ranking),
+ * sourced from the spa fetch. Separate from the restaurant builder so the spa
+ * summary describes the spa listing, not the restaurant's. */
+async function spaTripadvisorSummaryContext(code: string, period: string) {
+  const d = await getSpaPageData(code, period);
+  if (!d || !d.hasData || !d.tripadvisor) return null;
+  const t = d.tripadvisor;
+  return {
+    spa: d.property.spaName,
+    area: t.area,
+    ranking:
+      t.rank != null
+        ? `#${t.rank}${t.totalInMarket != null ? ` of ${num(t.totalInMarket)} ${t.noun} in ${t.area}` : ""}`
+        : null,
+    rating: t.rating != null ? `${t.rating.toFixed(1)}/5` : null,
+    metrics: t.metrics.map((m) => ({
+      metric: m.label,
+      value: num(m.value),
+      monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,
+    })),
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -414,6 +437,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   GOKAI_SUMMARY: gokaiSummaryContext,
   GOKAI_SPA_SUMMARY: spaGokaiSummaryContext,
   TRIPADVISOR_SUMMARY: tripadvisorSummaryContext,
+  TRIPADVISOR_SPA_SUMMARY: spaTripadvisorSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

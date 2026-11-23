@@ -88,6 +88,7 @@ export interface TripadvisorCore {
   // Reported MoM (signed %, null when not entered)
   impressionsMom: number | null;
   pageVisitorsMom: number | null;
+  newReviewsMom: number | null;
   photoViewsMom: number | null;
   videoViewsMom: number | null;
   specialOfferClicksMom: number | null;
@@ -121,6 +122,7 @@ export function coerceTripadvisorCore(raw: unknown): TripadvisorCore {
     mapViews: count(o, "mapViews", "directions"),
     impressionsMom: signed(o, "impressionsMom"),
     pageVisitorsMom: signed(o, "pageVisitorsMom"),
+    newReviewsMom: signed(o, "newReviewsMom"),
     photoViewsMom: signed(o, "photoViewsMom"),
     videoViewsMom: signed(o, "videoViewsMom"),
     specialOfferClicksMom: signed(o, "specialOfferClicksMom"),
@@ -158,7 +160,7 @@ export function tripadvisorHasData(c: TripadvisorCore): boolean {
 export const TRIPADVISOR_METRICS = [
   { key: "impressions", label: "Listing Impressions", valueField: "impressions", momField: "impressionsMom" },
   { key: "pageVisitors", label: "Unique Page Visitors", valueField: "pageVisitors", momField: "pageVisitorsMom" },
-  { key: "newReviews", label: "New Reviews", valueField: "newReviews", momField: null },
+  { key: "newReviews", label: "New Reviews", valueField: "newReviews", momField: "newReviewsMom" },
   { key: "qrReviews", label: "QR Code Reviews", valueField: "qrReviews", momField: null },
   { key: "photoViews", label: "Photo Views", valueField: "photoViews", momField: "photoViewsMom" },
   { key: "videoViews", label: "Video Views", valueField: "videoViews", momField: "videoViewsMom" },
