@@ -15,16 +15,22 @@ export function useNarrativeDraft(section: string, property: string, period: str
   const [edited, setEdited] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
-  async function generate() {
+  /**
+   * Stream a fresh AI draft. Pass the editor's current text as `userText` to
+   * run in OPTIMISE mode — the model refines that draft (grounded in the data)
+   * rather than writing from scratch.
+   */
+  async function generate(userText?: string) {
     setStreaming(true);
     setEdited(false);
     setSaveState("idle");
     setDraftState("");
     try {
+      const optimise = userText?.trim() ? userText : undefined;
       const res = await fetch("/api/narrative", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, property, period }),
+        body: JSON.stringify({ section, property, period, userText: optimise }),
       });
       if (!res.ok || !res.body) {
         let message = "AI generation is unavailable.";

@@ -19,11 +19,13 @@ export async function POST(req: NextRequest) {
   let section: string;
   let property: string;
   let period: string;
+  let userText: string;
   try {
-    const body = (await req.json()) as { section?: string; property?: string; period?: string };
+    const body = (await req.json()) as { section?: string; property?: string; period?: string; userText?: string };
     section = body.section ?? "";
     property = body.property ?? "";
     period = body.period ?? "";
+    userText = typeof body.userText === "string" ? body.userText : "";
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
@@ -61,12 +63,17 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Unknown property "${property}".` }, { status: 404 });
   }
 
-  const system = systemPromptFor(section);
+  // Trim the editor's draft to a sane ceiling so a huge paste can't blow the
+  // context window; empty → generate-from-scratch, non-empty → optimise mode.
+  const draftText = userText.trim().slice(0, 8000);
+  const optimise = draftText.length > 0;
+  const system = systemPromptFor(section, optimise);
   const userContent =
     `Report period: ${ctx.period}\n` +
     `Property: ${ctx.property.name} (${ctx.property.code}), ${ctx.property.area}\n` +
     `Restaurant: ${ctx.property.restaurantName} · Spa: ${ctx.property.spaName}\n\n` +
-    `Context JSON — the only figures you may cite:\n${JSON.stringify(ctx.data, null, 2)}`;
+    `Context JSON — the only figures you may cite:\n${JSON.stringify(ctx.data, null, 2)}` +
+    (optimise ? `\n\nEditor's current draft to optimise:\n${draftText}` : "");
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

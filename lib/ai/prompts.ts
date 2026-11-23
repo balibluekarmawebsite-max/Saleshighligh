@@ -35,10 +35,21 @@ const SECTION_GUIDANCE: Record<string, string> = {
 "☹️ " followed by what needs improvement.
 "💡 " followed by the key takeaways. The takeaways MUST be concrete, actionable recommendations grounded in the data (for example: themed dinners to lift dinner covers, a targeted promotion for a weak booking source). Keep each of the three sections to 2–4 sentences.`,
 
-  SPA_OVERVIEW: `Produce exactly three sections, each on its own line and prefixed with the given emoji:
-"😊 " followed by what went well this month.
-"☹️ " followed by what needs improvement.
-"💡 " followed by the key takeaways. The takeaways MUST be concrete, actionable recommendations grounded in the data (for example: promoting the strongest treatment, an inclusion-package push for a weak segment). Keep each of the three sections to 2–4 sentences.`,
+  SPA_OVERVIEW: `Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its "- " bullets, with ONE blank line between blocks:
+
+Key Challenges:
+- 2–4 bullets on what softened or underperformed this month — cite the covers, revenue, average-check and guest-segment figures from the context (e.g. revenue vs budget / last year, lower in-house covers).
+
+Positive Highlights:
+- 2–4 bullets on what went well — the strongest guest segment, top treatments, average check, or revenue achievement, each with its figure from the context.
+
+Marketing Focus:
+- 2–4 concrete, actionable recommendations grounded in the data (for example: promote the strongest treatment, an inclusion-package push for a weak segment, outside-guest acquisition to lift covers).
+
+Key Takeaway:
+- One short paragraph tying the month together and naming the single next priority.
+
+Quote ONLY the figures in the context; omit a comparison when its figure is absent. Do not invent numbers.`,
 
   ADS_SUMMARY: `Write a short overview paragraph that interprets ROAS in plain language (for example, "every Rp 1 spent returned Rp X"), then a compact platform-by-platform breakdown of spend, clicks and return, then a one-sentence conclusion on where budget is working hardest.`,
 
@@ -134,11 +145,21 @@ const PLAN_LABELS: Record<string, string> = {
   PROMOTIONS: "ongoing promotions summary",
 };
 
-/** The section-specific system prompt, combined with the shared guardrails. */
-export function systemPromptFor(section: string): string {
-  const specific = SECTION_GUIDANCE[section];
-  if (specific) return `${GUARDRAILS}\n\nSection: ${section}.\n${specific}`;
+/**
+ * Appended when the editor asked the AI to OPTIMISE their own draft (their text
+ * is included at the end of the user message, after the context JSON) rather
+ * than write from scratch.
+ */
+const OPTIMISE_GUIDE = `OPTIMISE MODE: the editor's current draft is included at the end, after the context JSON. Rewrite that draft into the exact format described above. Preserve the editor's facts, intent and any specific points they raise; improve the structure, concision and professional hospitality English; and enrich it using ONLY figures present in the context JSON. Do not drop their substantive points unless the data contradicts them, and never invent numbers.`;
 
-  const label = PLAN_LABELS[section] ?? section.replace(/_/g, " ").toLowerCase();
-  return `${GUARDRAILS}\n\nSection: ${section}.\nDraft a concise, forward-looking ${label} for the coming month, grounded in the performance context provided. Where the context shows a weakness, propose a concrete action; where it shows strength, propose how to sustain it. Keep it to a few short paragraphs.`;
+/** The section-specific system prompt, combined with the shared guardrails. */
+export function systemPromptFor(section: string, optimise = false): string {
+  const specific = SECTION_GUIDANCE[section];
+  const base = specific
+    ? `${GUARDRAILS}\n\nSection: ${section}.\n${specific}`
+    : (() => {
+        const label = PLAN_LABELS[section] ?? section.replace(/_/g, " ").toLowerCase();
+        return `${GUARDRAILS}\n\nSection: ${section}.\nDraft a concise, forward-looking ${label} for the coming month, grounded in the performance context provided. Where the context shows a weakness, propose a concrete action; where it shows strength, propose how to sustain it. Keep it to a few short paragraphs.`;
+      })();
+  return optimise ? `${base}\n\n${OPTIMISE_GUIDE}` : base;
 }

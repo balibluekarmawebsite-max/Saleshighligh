@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { ExportableCard } from "@/components/dashboard/exportable-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { MoMBadge } from "@/components/dashboard/mom-badge";
-import { NarrativeColumns } from "@/components/dashboard/narrative-columns";
+import { OverviewEditorPanel } from "@/components/dashboard/overview-editor-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { SpaSegmentTable } from "@/components/tables/spa-segment-table";
@@ -270,14 +270,16 @@ export default async function SpaPage({
         <SectionNote title="Gokai CRM" description="Product engagement and upsell" message="No Gokai report for this period yet." />
       )}
 
-      {/* 6 — Narrative */}
+      {/* 6 — Overview narrative (editable text box + AI optimise) */}
       <Card>
         <CardContent className="space-y-4 p-6">
           <div>
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">Spa Narrative</h3>
-            <p className="mt-1 text-sm text-muted-foreground">What went well, what needs work, and the key takeaways.</p>
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">Overview</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Write the month&rsquo;s spa overview, or optimise your draft with AI — grounded in the figures above.
+            </p>
           </div>
-          <NarrativeColumns block={narrative} section="SPA_OVERVIEW" property={params.property} period={params.period} />
+          <OverviewEditorPanel block={narrative} section="SPA_OVERVIEW" property={params.property} period={params.period} />
         </CardContent>
       </Card>
     </div>
