@@ -71,7 +71,15 @@ export function parseAsOfDate(v: unknown): string | null {
   }
   const t = Date.parse(s);
   if (Number.isNaN(t)) return null;
-  return new Date(t).toISOString().slice(0, 10);
+  // Date.parse of a date-only human string ("3 November 2026") yields LOCAL
+  // midnight; read the calendar day back with LOCAL getters (not toISOString,
+  // which would re-express in UTC and shift the day by one on a non-UTC server
+  // such as the Bali VPS, UTC+8).
+  const d = new Date(t);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export interface RawBookingWindowRow {
