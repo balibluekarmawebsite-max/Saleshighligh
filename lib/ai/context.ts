@@ -331,14 +331,27 @@ async function chopeContext(code: string, period: string) {
 /** Gokai CRM: the six guest-experience metrics with their reported (or computed)
  * month-over-month change, pre-formatted so the model only quotes them. */
 async function gokaiSummaryContext(code: string, period: string) {
-  const d = await getRestaurantPageData(code, period);
-  if (!d || !d.hasData || !d.gokai) return null;
+  // Gokai is a property-level CRM, surfaced on both the restaurant and spa
+  // pages. Prefer the restaurant page's pick (RESTAURANT → HOTEL); if that
+  // period has no gokai, fall back to the spa page's pick (SPA → HOTEL) so a
+  // spa-uploaded report still grounds the summary.
+  const r = await getRestaurantPageData(code, period);
+  let gokai = r && r.hasData ? r.gokai : null;
+  let outlet = r?.property.restaurantName ?? "";
+  if (!gokai) {
+    const s = await getSpaPageData(code, period);
+    if (s && s.hasData && s.gokai) {
+      gokai = s.gokai;
+      outlet = s.property.spaName;
+    }
+  }
+  if (!gokai) return null;
   const fmtVal = (m: { value: number; format: string }) =>
     m.format === "idr" ? money(m.value) : m.format === "pct" ? formatPercent(m.value) : num(m.value);
   return {
-    restaurant: d.property.restaurantName,
-    unit: d.gokai.unit,
-    metrics: d.gokai.metrics.map((m) => ({
+    outlet,
+    unit: gokai.unit,
+    metrics: gokai.metrics.map((m) => ({
       metric: m.label,
       value: fmtVal(m),
       monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,

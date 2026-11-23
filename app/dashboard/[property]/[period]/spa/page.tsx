@@ -7,9 +7,11 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { ExportableCard } from "@/components/dashboard/exportable-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { MoMBadge } from "@/components/dashboard/mom-badge";
+import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { AdsSyncButton } from "@/components/sales/ads-sync-button";
+import { GokaiUploader } from "@/components/sales/gokai-uploader";
 import { SpaOverviewPanel } from "@/components/sales/spa-overview-panel";
 import { SpaPerformanceUploader } from "@/components/sales/spa-performance-uploader";
 import { SpaTreatmentsUploader } from "@/components/sales/spa-treatments-uploader";
@@ -25,7 +27,7 @@ import {
 import { formatIDR, formatNumber, formatPercent, formatVariancePercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
-import { syncSpaAdsAction } from "./actions";
+import { saveSpaGokaiAction, syncSpaAdsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +85,7 @@ export default async function SpaPage({
     );
   }
 
-  const { property, overview, segments, treatments, treatmentsAll, gokai, narrative } = data;
+  const { property, overview, segments, treatments, treatmentsAll, gokai, narrative, gokaiNarrative } = data;
   const fileBase = `${property.code}-${params.period}-spa`;
 
   const avgCheckAboveBudget =
@@ -312,26 +314,61 @@ export default async function SpaPage({
         />
       </div>
 
-      {/* 5 — Gokai panel */}
-      {gokai ? (
-        <SectionCard title="Gokai CRM" description={`Product engagement and upsell${gokai.unit === "HOTEL" ? " (hotel-level)" : ""}`}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {gokai.metrics.map((m) => (
-              <StatTile
-                key={m.key}
-                label={m.label}
-                value={fmtGokai(m)}
-                sub={m.mom !== null ? <MoMBadge value={m.mom} /> : "no prior month"}
-              />
-            ))}
+      {/* 5 — Gokai CRM (upload + AI metrics + summary) */}
+      <SectionCard
+        title="Gokai CRM"
+        description={`Product engagement and upsell${gokai && gokai.unit === "HOTEL" ? " (hotel-level)" : ""}`}
+      >
+        {canEdit && (
+          <div className="mb-1">
+            <GokaiUploader
+              property={params.property}
+              period={params.period}
+              initial={gokai}
+              hasData={gokai !== null}
+              defaultUnit="SPA"
+              saveAction={saveSpaGokaiAction}
+            />
           </div>
-          <p className="text-xs text-muted-foreground">
-            A top-viewed-products breakdown isn&apos;t captured in the data model yet — product views are shown in aggregate above.
+        )}
+
+        {gokai ? (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {gokai.metrics.map((m) => (
+                <StatTile
+                  key={m.key}
+                  label={m.label}
+                  value={fmtGokai(m)}
+                  sub={m.mom !== null ? <MoMBadge value={m.mom} /> : "no prior month"}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              A top-viewed-products breakdown isn&apos;t captured in the data model yet — product views are shown in aggregate above.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No Gokai report yet{canEdit ? " — upload the Guest Experience screenshot above." : "."}
           </p>
-        </SectionCard>
-      ) : (
-        <SectionNote title="Gokai CRM" description="Product engagement and upsell" message="No Gokai report for this period yet." />
-      )}
+        )}
+
+        {/* Summary always renders so a saved narrative is never orphaned. */}
+        <div className="mt-6 rounded-lg border border-border bg-card p-5">
+          <h3 className="text-sm font-semibold text-foreground">Gokai Upselling Tools Performance Summary</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Guest engagement &amp; conversion, revenue performance and the key insights.</p>
+          <div className="mt-3">
+            <NarrativePanel
+              block={gokaiNarrative}
+              section="GOKAI_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Gokai summary written for this period yet."
+            />
+          </div>
+        </div>
+      </SectionCard>
 
     </div>
   );

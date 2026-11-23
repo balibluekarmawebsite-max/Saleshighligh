@@ -1588,6 +1588,7 @@ export interface SpaPageData {
   roasTrend: RoasPoint[];
   gokai: GokaiSummary | null;
   narrative: NarrativeBlock | null;
+  gokaiNarrative: NarrativeBlock | null;
 }
 
 const SPA_SEGMENT_ORDER = ["IN_HOUSE", "OUTSIDE", "INCLUSION"];
@@ -1611,7 +1612,7 @@ export async function getSpaPageData(
           spaTreatments: { orderBy: { revenue: "desc" } },
           gokaiReports: true,
           adsPerformance: { where: { unit: "SPA" } },
-          narrativeContent: { where: { section: "SPA_OVERVIEW" } },
+          narrativeContent: { where: { section: { in: ["SPA_OVERVIEW", "GOKAI_SUMMARY"] } } },
         },
       },
     },
@@ -1646,6 +1647,7 @@ export async function getSpaPageData(
       roasTrend: [],
       gokai: null,
       narrative: null,
+      gokaiNarrative: null,
     };
   }
   const previous = property.periods.find((p) => p.period.getTime() < selectedDate.getTime());
@@ -1721,8 +1723,12 @@ export async function getSpaPageData(
     };
   }
 
-  const narr = current.narrativeContent[0];
-  const narrative = narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null;
+  const narrBlock = (section: string): NarrativeBlock | null => {
+    const n = current.narrativeContent.find((x) => x.section === section);
+    return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
+  };
+  const narrative = narrBlock("SPA_OVERVIEW");
+  const gokaiNarrative = narrBlock("GOKAI_SUMMARY");
 
   return {
     ...base,
@@ -1737,6 +1743,7 @@ export async function getSpaPageData(
     roasTrend,
     gokai,
     narrative,
+    gokaiNarrative,
   };
 }
 

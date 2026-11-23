@@ -16,6 +16,7 @@ import { extractSpaTreatments } from "@/lib/sales/spa-treatments-ai";
 import { saveSpaTreatments } from "@/lib/sales/spa-treatments-import";
 import type { NormalTreatmentRow, RawTreatmentRow } from "@/lib/sales/spa-treatments-logic";
 import { runMonthlyAdsSync } from "@/lib/sales/ads-monthly-sync";
+import { saveGokai } from "@/lib/sales/gokai-import";
 
 export interface GenerateResult {
   ok: boolean;
@@ -236,4 +237,28 @@ export async function syncSpaAdsAction(input: {
   });
   if (r.body.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
   return r.body.ok ? { ok: true, message: r.body.message } : { ok: false, message: r.body.error };
+}
+
+/** Editor/admin: save the Gokai report (six metrics + reported MoM) for a unit,
+ * from the Spa page (defaults the uploader to the SPA unit). */
+export async function saveSpaGokaiAction(input: {
+  property: string;
+  period: string;
+  unit?: string;
+  core: Record<string, unknown>;
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveGokai({
+    property: input.property,
+    period: input.period,
+    unit: input.unit,
+    core: input.core,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
+  return { ok: r.ok, message: r.message };
 }

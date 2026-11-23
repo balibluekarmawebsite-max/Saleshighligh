@@ -41,20 +41,34 @@ function formFromInitial(initial: GokaiSummary | null): Form {
   return f;
 }
 
+type SaveGokaiAction = (input: {
+  property: string;
+  period: string;
+  unit?: string;
+  core: Record<string, unknown>;
+}) => Promise<{ ok: boolean; message: string }>;
+
 export function GokaiUploader({
   property,
   period,
   initial,
   hasData,
+  defaultUnit = "RESTAURANT",
+  saveAction = saveRestaurantGokaiAction,
 }: {
   property: string;
   period: string;
   initial: GokaiSummary | null;
   hasData: boolean;
+  /** Unit pre-selected when there is no saved report yet (e.g. "SPA" on the spa page). */
+  defaultUnit?: Unit;
+  /** Save action — defaults to the restaurant one; the spa page passes its own
+   *  so the save revalidates the spa route. */
+  saveAction?: SaveGokaiAction;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(!hasData);
-  const [unit, setUnit] = useState<Unit>(((initial?.unit as Unit) ?? "RESTAURANT"));
+  const [unit, setUnit] = useState<Unit>(((initial?.unit as Unit) ?? defaultUnit));
   const [form, setForm] = useState<Form>(() => formFromInitial(initial));
   const [text, setText] = useState("");
   const [image, setImage] = useState<UploadImage>(null);
@@ -98,7 +112,7 @@ export function GokaiUploader({
     setBusyKind("save");
     void (async () => {
       try {
-        const r = await saveRestaurantGokaiAction({ property, period, unit, core: form });
+        const r = await saveAction({ property, period, unit, core: form });
         setMsg({ ok: r.ok, text: r.message });
         if (r.ok) router.refresh();
       } finally {
