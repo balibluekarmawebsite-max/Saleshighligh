@@ -17,6 +17,7 @@ export function TripadvisorBlock({
   area,
   noun,
   metrics,
+  hideZeroMetrics = false,
 }: {
   title?: string;
   description?: string;
@@ -26,7 +27,13 @@ export function TripadvisorBlock({
   area: string;
   noun: string; // "hotels" | "restaurants" | …
   metrics: TripMetric[];
+  /** Hide engagement tiles with no data (value 0 and no reported MoM), so an
+   *  empty listing report doesn't render a wall of zeros. */
+  hideZeroMetrics?: boolean;
 }) {
+  const shownMetrics = hideZeroMetrics
+    ? metrics.filter((m) => m.value !== 0 || m.mom != null)
+    : metrics;
   return (
     <SectionCard title={title} description={description ?? `${noun[0]?.toUpperCase()}${noun.slice(1)} listing performance`}>
       <div className="rounded-lg bg-secondary/50 p-4">
@@ -44,7 +51,7 @@ export function TripadvisorBlock({
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {metrics.map((m) => (
+        {shownMetrics.map((m) => (
           <StatTile
             key={m.key}
             label={m.label}

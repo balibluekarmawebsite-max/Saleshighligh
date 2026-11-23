@@ -415,11 +415,15 @@ async function spaTripadvisorSummaryContext(code: string, period: string) {
         ? `#${t.rank}${t.totalInMarket != null ? ` of ${num(t.totalInMarket)} ${t.noun} in ${t.area}` : ""}`
         : null,
     rating: t.rating != null ? `${t.rating.toFixed(1)}/5` : null,
-    metrics: t.metrics.map((m) => ({
-      metric: m.label,
-      value: num(m.value),
-      monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,
-    })),
+    // Only metrics with data — a zero with no reported change is noise the
+    // summary shouldn't enumerate (matches the hidden tiles on the page).
+    metrics: t.metrics
+      .filter((m) => m.value !== 0 || m.mom != null)
+      .map((m) => ({
+        metric: m.label,
+        value: num(m.value),
+        monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,
+      })),
   };
 }
 

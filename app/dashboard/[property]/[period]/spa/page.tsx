@@ -392,6 +392,7 @@ export default async function SpaPage({
             area={tripadvisor.area}
             noun={tripadvisor.noun}
             metrics={tripadvisor.metrics}
+            hideZeroMetrics
           />
         ) : (
           <SectionNote
