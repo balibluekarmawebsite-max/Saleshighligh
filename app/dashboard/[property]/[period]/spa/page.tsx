@@ -303,6 +303,7 @@ export default async function SpaPage({
           spendRevenue={data.spendRevenue}
           roasTrend={data.roasTrend}
           fileBase={`${fileBase}-ads`}
+          showRoasTrend={false}
           emptyLabel={
             canEdit
               ? 'No spa ad data yet — click "Sync spa ads from dashboard" to pull Spend / Reach / Clicks / ROAS (Google + Meta) for this month.'

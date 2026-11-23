@@ -192,11 +192,16 @@ export function SpaTreatmentsUploader({
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const count = Math.max(0, toInt(r.count) ?? 0);
-              const revenue = Math.max(0, toNum(r.revenue) ?? 0);
-              const named = r.treatmentName.trim() !== "" && r.count.trim() !== "" && r.revenue.trim() !== "";
-              const pct = named && totals.count > 0 ? (count / totals.count) * 100 : null;
-              const avg = named && count > 0 ? revenue / count : null;
+              // Gate the preview on what save actually keeps: a row with an
+              // unparseable count/revenue is dropped by normalize, so it shows
+              // "—" here rather than a misleading 0.00%.
+              const ci = toInt(r.count);
+              const ri = toNum(r.revenue);
+              const valid = r.treatmentName.trim() !== "" && ci != null && ri != null;
+              const count = Math.max(0, ci ?? 0);
+              const revenue = Math.max(0, ri ?? 0);
+              const pct = valid && totals.count > 0 ? (count / totals.count) * 100 : null;
+              const avg = valid && count > 0 ? revenue / count : null;
               return (
                 <tr key={i} className="border-b border-border/60">
                   <td className="px-2 py-1.5">
