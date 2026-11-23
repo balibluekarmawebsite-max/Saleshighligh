@@ -7,11 +7,12 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { ExportableCard } from "@/components/dashboard/exportable-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { MoMBadge } from "@/components/dashboard/mom-badge";
-import { OverviewEditorPanel } from "@/components/dashboard/overview-editor-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { SpaOverviewPanel } from "@/components/sales/spa-overview-panel";
 import { SpaSegmentTable } from "@/components/tables/spa-segment-table";
 import { Card, CardContent } from "@/components/ui/card";
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { variancePct } from "@/lib/calculations";
 import {
   GROUP_CODE,
@@ -63,6 +64,8 @@ export default async function SpaPage({
     return <ComingSoon title="Group — Spa & Wellness" description="Consolidated view coming soon." />;
   }
 
+  const me = await getCurrentUser();
+  const canEdit = canEditProperty(me, params.property);
   const data = await getSpaPageData(params.property, params.period);
   if (!data) notFound();
   if (!data.hasData) {
@@ -116,6 +119,19 @@ export default async function SpaPage({
         </p>
       </div>
 
+      {/* 0 — Overview (structured narrative: text input + AI optimise + preview) */}
+      <Card>
+        <CardContent className="p-6">
+          <SpaOverviewPanel
+            property={params.property}
+            period={params.period}
+            content={narrative?.content ?? null}
+            aiGenerated={narrative?.aiGenerated ?? false}
+            canEdit={canEdit}
+          />
+        </CardContent>
+      </Card>
+
       {/* 1 — KPI strip */}
       {overview ? (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -146,7 +162,7 @@ export default async function SpaPage({
           <StatTile label="Revenue Achievement" value={formatPercent(overview.revenueAchievementPct)} sub="of budget" />
         </section>
       ) : (
-        <SectionNote title="Overview" message="Import the SPA tab to populate covers, revenue and average check." />
+        <SectionNote title="Performance" message="Import the SPA tab to populate covers, revenue and average check." />
       )}
 
       {/* 2 — Guest segment performance */}
@@ -270,18 +286,6 @@ export default async function SpaPage({
         <SectionNote title="Gokai CRM" description="Product engagement and upsell" message="No Gokai report for this period yet." />
       )}
 
-      {/* 6 — Overview narrative (editable text box + AI optimise) */}
-      <Card>
-        <CardContent className="space-y-4 p-6">
-          <div>
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">Overview</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Write the month&rsquo;s spa overview, or optimise your draft with AI — grounded in the figures above.
-            </p>
-          </div>
-          <OverviewEditorPanel block={narrative} section="SPA_OVERVIEW" property={params.property} period={params.period} />
-        </CardContent>
-      </Card>
     </div>
   );
 }

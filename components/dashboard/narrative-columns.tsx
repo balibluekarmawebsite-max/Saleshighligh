@@ -132,7 +132,7 @@ export function NarrativeColumns({
             <Sparkles className="h-3 w-3" /> AI-generated
           </span>
         )}
-        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={() => generate()} disabled={streaming}>
+        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={generate} disabled={streaming}>
           <Sparkles className="h-4 w-4" />
           {streaming ? "Generating…" : "Generate with AI"}
         </Button>

@@ -220,7 +220,7 @@ export default async function PrintPage({
           {spa.treatments.length > 0 && (
             <Table head={["#", "Treatment", "Count", "Revenue", "Avg Price"]} rows={spa.treatments.map((t) => [t.rank, t.treatmentName, num(t.count), money(t.revenue), money(t.avgPrice)])} />
           )}
-          <Prose text={spa.narrative?.content} />
+          <Prose text={overviewContentToText(spa.narrative?.content ?? null)} />
         </Section>
       )}
 

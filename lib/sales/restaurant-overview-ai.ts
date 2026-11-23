@@ -132,14 +132,14 @@ export async function generateOverviewSection(input: {
  * any figures exactly. It invents nothing; a section with no matching content
  * comes back empty.
  */
-const EXTRACT_SYSTEM = `You reorganise a hotel restaurant's monthly overview notes into four labelled sections and return STRICT JSON. The input is the user's own notes (pasted text or a screenshot) — your job is to SORT them, not to write new ones.
+const extractSystem = (unitWord: string) => `You reorganise a hotel ${unitWord}'s monthly overview notes into four labelled sections and return STRICT JSON. The input is the user's own notes (pasted text or a screenshot) — your job is to SORT them, not to write new ones.
 
 Return ONLY this JSON (no prose, no code fences):
 {"challenges":["..."],"highlights":["..."],"marketing":["..."],"takeaway":"..."}
 
 Sections:
-- challenges  = Key Challenges: problems, declines, anything below budget/target, weak meal periods.
-- highlights  = Positive Highlights: wins, growth, anything above budget/target, strong meal periods.
+- challenges  = Key Challenges: problems, declines, anything below budget/target, weak areas.
+- highlights  = Positive Highlights: wins, growth, anything above budget/target, strong areas.
 - marketing   = Marketing Focus: actions and plans for next month (promotions, campaigns, events, acquisition).
 - takeaway    = Key Takeaway: a short 2–3 sentence summary and the single priority. ONE string, not an array.
 
@@ -150,7 +150,7 @@ Rules:
 - If a section has no matching content, return an empty array [] (or "" for takeaway). Never pad a section with made-up points.`;
 
 export async function extractOverview(
-  input: { text?: string | null; image?: GroqImage | null },
+  input: { text?: string | null; image?: GroqImage | null; unit?: "restaurant" | "spa" },
 ): Promise<{ ok: true; data: OverviewData } | { ok: false; error: string }> {
   if (!isGroqConfigured()) {
     return { ok: false, error: "AI extraction is not configured — set GROQ_API_KEY on the server." };
@@ -159,12 +159,13 @@ export async function extractOverview(
   if (!text && !input.image) {
     return { ok: false, error: "Paste the overview or attach a screenshot/file first." };
   }
+  const unitWord = input.unit === "spa" ? "spa" : "restaurant";
   const user = text
-    ? `Sort the following restaurant overview notes into the four sections:\n\n${text}`
-    : "Sort the restaurant overview notes in the attached image into the four sections.";
+    ? `Sort the following ${unitWord} overview notes into the four sections:\n\n${text}`
+    : `Sort the ${unitWord} overview notes in the attached image into the four sections.`;
   try {
     const raw = await groqChat({
-      system: EXTRACT_SYSTEM,
+      system: extractSystem(unitWord),
       user,
       image: input.image ?? null,
       jsonMode: !input.image,

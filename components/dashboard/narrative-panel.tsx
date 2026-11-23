@@ -13,7 +13,7 @@ import type { NarrativeBlock } from "@/lib/dashboard-data";
  * "Label: body" line bolds the label; everything else is a paragraph. Keeps the
  * AI's three-block acquisition format (and other sections) looking tidy.
  */
-export function FormattedNarrative({ content }: { content: string }) {
+function FormattedNarrative({ content }: { content: string }) {
   const lines = content.split("\n");
   const out: React.ReactNode[] = [];
   let bullets: string[] = [];
@@ -102,7 +102,7 @@ export function NarrativePanel({
             <Sparkles className="h-3 w-3" /> AI-generated
           </span>
         )}
-        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={() => generate()} disabled={streaming}>
+        <Button size="sm" variant="outline" className="ml-auto gap-1.5" onClick={generate} disabled={streaming}>
           <Sparkles className="h-4 w-4" />
           {streaming ? "Generating…" : "Generate with AI"}
         </Button>
