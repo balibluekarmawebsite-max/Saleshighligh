@@ -10,6 +10,7 @@ import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { SpaOverviewPanel } from "@/components/sales/spa-overview-panel";
+import { SpaPerformanceUploader } from "@/components/sales/spa-performance-uploader";
 import { SpaSegmentTable } from "@/components/tables/spa-segment-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
@@ -165,28 +166,45 @@ export default async function SpaPage({
         <SectionNote title="Performance" message="Import the SPA tab to populate covers, revenue and average check." />
       )}
 
-      {/* 2 — Guest segment performance */}
-      {segments.length > 0 ? (
-        <div className="space-y-6">
-          <SectionCard
-            title="Guest Segment Performance"
-            description="Covers, average check and revenue vs budget by guest segment"
-            insight={segInsight}
-          >
-            <SpaSegmentTable segments={segments} />
-            {beat && (
-              <div className="flex flex-wrap gap-2">
-                <Chip tone="good">Beat budget · {beat.label} {formatVariancePercent(beat.revVar)}</Chip>
-                {beat.avgVar !== null && (
-                  <Chip tone="gold">{beat.label} avg check {formatVariancePercent(beat.avgVar)}</Chip>
-                )}
-                {beat.coversVar !== null && (
-                  <Chip tone={beat.coversVar >= 0 ? "good" : "bad"}>{beat.label} covers {formatVariancePercent(beat.coversVar)}</Chip>
-                )}
-              </div>
-            )}
-          </SectionCard>
+      {/* 2 — Guest segment performance (table + upload / AI edit) */}
+      <div className="space-y-6">
+        <SectionCard
+          title="Guest Segment Performance"
+          description="Covers, average check and revenue vs budget by guest segment"
+          insight={segments.length > 0 ? segInsight : undefined}
+        >
+          {segments.length > 0 ? (
+            <>
+              <SpaSegmentTable segments={segments} />
+              {beat && (
+                <div className="flex flex-wrap gap-2">
+                  <Chip tone="good">Beat budget · {beat.label} {formatVariancePercent(beat.revVar)}</Chip>
+                  {beat.avgVar !== null && (
+                    <Chip tone="gold">{beat.label} avg check {formatVariancePercent(beat.avgVar)}</Chip>
+                  )}
+                  {beat.coversVar !== null && (
+                    <Chip tone={beat.coversVar >= 0 ? "good" : "bad"}>{beat.label} covers {formatVariancePercent(beat.coversVar)}</Chip>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              In-House / Outside / Inclusion — no data for this period yet
+              {canEdit ? " · upload a screenshot or paste the table below." : "."}
+            </p>
+          )}
+          {canEdit && (
+            <SpaPerformanceUploader
+              property={params.property}
+              period={params.period}
+              initial={segments}
+              hasData={segments.length > 0}
+            />
+          )}
+        </SectionCard>
 
+        {segments.length > 0 && (
           <ExportableCard
             title="Revenue by Segment — Actual vs Budget"
             description="Guest-segment revenue against budget"
@@ -194,14 +212,8 @@ export default async function SpaPage({
           >
             <ActualBudgetBarChart data={segBarData} />
           </ExportableCard>
-        </div>
-      ) : (
-        <SectionNote
-          title="Guest Segment Performance"
-          description="In-House / Outside / Inclusion"
-          message="No spa guest-segment data for this period yet."
-        />
-      )}
+        )}
+      </div>
 
       {/* 3 — Top 10 treatments */}
       {treatments.length > 0 ? (

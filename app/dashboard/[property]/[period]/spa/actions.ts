@@ -9,6 +9,9 @@ import { prisma } from "@/lib/prisma";
 import { extractOverview } from "@/lib/sales/restaurant-overview-ai";
 import { generateSpaOverviewSection } from "@/lib/sales/spa-overview-ai";
 import { serializeOverview, type OverviewData, type OverviewSection } from "@/lib/sales/restaurant-overview";
+import { extractSpaPerformance } from "@/lib/sales/spa-performance-ai";
+import { saveSpaPerformance } from "@/lib/sales/spa-performance-import";
+import type { NormalSpaPerfRow, RawSpaPerfRow } from "@/lib/sales/spa-performance-logic";
 
 export interface GenerateResult {
   ok: boolean;
@@ -110,4 +113,52 @@ export async function saveSpaOverviewAction(input: {
   }).catch(() => {});
   revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
   return { ok: true, message: "Overview saved." };
+}
+
+export interface SpaPerfExtractResult {
+  ok: boolean;
+  error?: string;
+  segments?: NormalSpaPerfRow[];
+}
+
+/** Editor/admin: AI-extract the Spa guest-segment performance table from
+ * text/screenshot (preview only — nothing is written). */
+export async function extractSpaPerformanceAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<SpaPerfExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractSpaPerformance({ text: input.text, image });
+  return r.ok ? { ok: true, segments: r.segments } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Spa guest-segment performance (covers + revenue,
+ * actual + budget) into SpaSales. */
+export async function saveSpaPerformanceAction(input: {
+  property: string;
+  period: string;
+  segments: RawSpaPerfRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveSpaPerformance({
+    property: input.property,
+    period: input.period,
+    segments: input.segments,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
+  return { ok: r.ok, message: r.message };
 }
