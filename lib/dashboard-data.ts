@@ -1820,7 +1820,7 @@ export interface MarketAlert {
 
 export interface MarketAreaPoint {
   month: string; // "YYYY-MM"
-  monthLabel: string; // "Oct 2026"
+  monthLabel: string; // short month for the chart x-axis, e.g. "Oct"
   propertyRoomNights: number;
   marketRoomNights: number;
   propertyAdr: number;

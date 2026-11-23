@@ -438,7 +438,7 @@ async function marketAreaSummaryContext(code: string, period: string) {
     reportPeriod: periodLabel(period),
     basis: "Booking.com monthly sales statistics (book-date basis); property vs the overall market",
     months: d.marketArea.map((m) => ({
-      month: m.monthLabel,
+      month: periodLabel(m.month), // year-qualified (e.g. "October 2026") so the summary is unambiguous
       propertyRoomNights: num(m.propertyRoomNights),
       marketRoomNights: num(m.marketRoomNights),
       propertyAdr: money(m.propertyAdr),
