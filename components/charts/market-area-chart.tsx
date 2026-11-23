@@ -4,6 +4,7 @@ import {
   Bar,
   CartesianGrid,
   ComposedChart,
+  Label,
   Legend,
   Line,
   ResponsiveContainer,
@@ -12,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 
-import { formatIDR, formatIDRCompact, formatNumber } from "@/lib/format";
+import { formatIDR, formatNumber } from "@/lib/format";
 
 export interface MarketAreaDatum {
   month: string;
@@ -88,12 +89,19 @@ export function MarketAreaChart({ data }: { data: MarketAreaDatum[] }) {
           <YAxis
             yAxisId="adr"
             orientation="right"
-            tickFormatter={(v: number) => formatIDRCompact(v)}
+            tickFormatter={(v: number) => formatNumber(v)}
             tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
             tickLine={false}
             axisLine={false}
-            width={52}
-          />
+            width={92}
+          >
+            <Label
+              value="ADR (IDR)"
+              angle={90}
+              position="insideRight"
+              style={{ fontSize: 11, fill: "hsl(var(--muted-foreground))", textAnchor: "middle" }}
+            />
+          </YAxis>
           <Tooltip content={<MarketAreaTooltip />} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
           <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
           <Bar yAxisId="rn" dataKey="propertyRN" name="Room nights" fill={COLORS.propertyRN} radius={[3, 3, 0, 0]} maxBarSize={34} />
