@@ -12,6 +12,9 @@ import { serializeOverview, type OverviewData, type OverviewSection } from "@/li
 import { extractSpaPerformance } from "@/lib/sales/spa-performance-ai";
 import { saveSpaPerformance } from "@/lib/sales/spa-performance-import";
 import type { NormalSpaPerfRow, RawSpaPerfRow } from "@/lib/sales/spa-performance-logic";
+import { extractSpaTreatments } from "@/lib/sales/spa-treatments-ai";
+import { saveSpaTreatments } from "@/lib/sales/spa-treatments-import";
+import type { NormalTreatmentRow, RawTreatmentRow } from "@/lib/sales/spa-treatments-logic";
 
 export interface GenerateResult {
   ok: boolean;
@@ -156,6 +159,53 @@ export async function saveSpaPerformanceAction(input: {
     property: input.property,
     period: input.period,
     segments: input.segments,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface TreatmentsExtractResult {
+  ok: boolean;
+  error?: string;
+  treatments?: NormalTreatmentRow[];
+}
+
+/** Editor/admin: AI-extract the Spa Top Treatments table from text/screenshot
+ * (preview only — nothing is written). */
+export async function extractSpaTreatmentsAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<TreatmentsExtractResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractSpaTreatments({ text: input.text, image });
+  return r.ok ? { ok: true, treatments: r.treatments } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Spa Top Treatments (count + revenue per treatment). */
+export async function saveSpaTreatmentsAction(input: {
+  property: string;
+  period: string;
+  treatments: RawTreatmentRow[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveSpaTreatments({
+    property: input.property,
+    period: input.period,
+    treatments: input.treatments,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,
   });

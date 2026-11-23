@@ -11,6 +11,7 @@ import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
 import { SpaOverviewPanel } from "@/components/sales/spa-overview-panel";
 import { SpaPerformanceUploader } from "@/components/sales/spa-performance-uploader";
+import { SpaTreatmentsUploader } from "@/components/sales/spa-treatments-uploader";
 import { SpaSegmentTable } from "@/components/tables/spa-segment-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
@@ -80,7 +81,7 @@ export default async function SpaPage({
     );
   }
 
-  const { property, overview, segments, treatments, gokai, narrative } = data;
+  const { property, overview, segments, treatments, treatmentsAll, gokai, narrative } = data;
   const fileBase = `${property.code}-${params.period}-spa`;
 
   const avgCheckAboveBudget =
@@ -217,8 +218,19 @@ export default async function SpaPage({
         )}
       </div>
 
-      {/* 3 — Top 10 treatments */}
-      {treatments.length > 0 ? (
+      {/* 3 — Top 10 treatments (upload / AI edit on top; preview below) */}
+      <div className="space-y-6">
+        {canEdit && (
+          <SectionCard title="Top Treatments" description="Upload or edit the ranked treatments — person count and revenue">
+            <SpaTreatmentsUploader
+              property={params.property}
+              period={params.period}
+              initial={treatmentsAll}
+              hasData={treatments.length > 0}
+            />
+          </SectionCard>
+        )}
+        {treatments.length > 0 ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <ExportableCard title="Top Treatments by Revenue" description="Top 10, with treatment counts" fileName={`${fileBase}-treatments-bar`}>
             <div className="space-y-3">
@@ -263,9 +275,12 @@ export default async function SpaPage({
             </div>
           </ExportableCard>
         </div>
-      ) : (
-        <SectionNote title="Top Treatments" description="Ranked by revenue" message="No treatment data for this period yet." />
-      )}
+        ) : (
+          !canEdit && (
+            <SectionNote title="Top Treatments" description="Ranked by revenue" message="No treatment data for this period yet." />
+          )
+        )}
+      </div>
 
       {/* 4 — Spa ads */}
       <div>

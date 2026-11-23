@@ -1580,6 +1580,9 @@ export interface SpaPageData {
   } | null;
   segments: SpaSegmentRow[];
   treatments: SpaTreatmentRow[];
+  /** Every treatment (unsliced), for the edit/upload grid so a re-save keeps
+   * treatments ranked below the top 10. */
+  treatmentsAll: SpaTreatmentRow[];
   ads: AdsSummary | null;
   spendRevenue: { platform: string; spend: number; revenue: number }[];
   roasTrend: RoasPoint[];
@@ -1637,6 +1640,7 @@ export async function getSpaPageData(
       overview: null,
       segments: [],
       treatments: [],
+      treatmentsAll: [],
       ads: null,
       spendRevenue: [],
       roasTrend: [],
@@ -1679,8 +1683,8 @@ export async function getSpaPageData(
         }
       : null;
 
-  // Top treatments
-  const treatments: SpaTreatmentRow[] = current.spaTreatments.slice(0, 10).map((t, i) => {
+  // Top treatments (full list for editing; the display uses the top 10)
+  const treatmentsAll: SpaTreatmentRow[] = current.spaTreatments.map((t, i) => {
     const revenue = t.revenue.toNumber();
     return {
       rank: i + 1,
@@ -1690,6 +1694,7 @@ export async function getSpaPageData(
       avgPrice: avgCheck(revenue, t.treatmentCount),
     };
   });
+  const treatments: SpaTreatmentRow[] = treatmentsAll.slice(0, 10);
 
   // Ads (unit=SPA)
   const asc = [...property.periods].reverse();
@@ -1726,6 +1731,7 @@ export async function getSpaPageData(
     overview,
     segments,
     treatments,
+    treatmentsAll,
     ads,
     spendRevenue,
     roasTrend,
