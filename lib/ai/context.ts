@@ -10,6 +10,7 @@
 import { achievementPct, variancePct } from "@/lib/calculations";
 import {
   getMarketingPageData,
+  getMarketPageData,
   getRestaurantPageData,
   getRoomTypesPageData,
   getSocialPageData,
@@ -427,6 +428,25 @@ async function spaTripadvisorSummaryContext(code: string, period: string) {
   };
 }
 
+/** Booking.com "Market Area Update": the monthly property-vs-market room nights
+ * and ADR series, pre-formatted so the model only quotes the figures. */
+async function marketAreaSummaryContext(code: string, period: string) {
+  const d = await getMarketPageData(code, period);
+  if (!d || !d.hasData || d.marketArea.length === 0) return null;
+  return {
+    property: d.property.name,
+    reportPeriod: periodLabel(period),
+    basis: "Booking.com monthly sales statistics (book-date basis); property vs the overall market",
+    months: d.marketArea.map((m) => ({
+      month: m.monthLabel,
+      propertyRoomNights: num(m.propertyRoomNights),
+      marketRoomNights: num(m.marketRoomNights),
+      propertyAdr: money(m.propertyAdr),
+      marketAdr: money(m.marketAdr),
+    })),
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -442,6 +462,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   GOKAI_SPA_SUMMARY: spaGokaiSummaryContext,
   TRIPADVISOR_SUMMARY: tripadvisorSummaryContext,
   TRIPADVISOR_SPA_SUMMARY: spaTripadvisorSummaryContext,
+  MARKET_AREA_SUMMARY: marketAreaSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

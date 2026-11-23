@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 
 import { ForecastOccupancyChart } from "@/components/charts/forecast-occupancy-chart";
+import { MarketAreaChart } from "@/components/charts/market-area-chart";
 import { MarketPaceChart } from "@/components/charts/market-pace-chart";
 import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
@@ -10,7 +11,9 @@ import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { Sparkline } from "@/components/dashboard/sparkline";
+import { MarketAreaUploader } from "@/components/sales/market-area-uploader";
 import { Card, CardContent } from "@/components/ui/card";
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { GROUP_CODE, getMarketPageData } from "@/lib/dashboard-data";
 import { formatIDR, formatNumber, varianceColorClass } from "@/lib/format";
 import { periodLabel, periodMonthShort } from "@/lib/labels";
@@ -41,6 +44,8 @@ export default async function MarketPage({
     return <ComingSoon title="Group — Market & Forecast" description="Consolidated view coming soon." />;
   }
 
+  const me = await getCurrentUser();
+  const canEdit = canEditProperty(me, params.property);
   const data = await getMarketPageData(params.property, params.period);
   if (!data) notFound();
   if (!data.hasData) {
@@ -54,10 +59,17 @@ export default async function MarketPage({
     );
   }
 
-  const { property, pace, paceAsOf, forecasts, revenueForecast, revenueForecastCumulativeGap, supply, demandRange, narrative, alerts } = data;
+  const { property, pace, paceAsOf, forecasts, revenueForecast, revenueForecastCumulativeGap, supply, demandRange, marketArea, narrative, marketAreaNarrative, alerts } = data;
   const fileBase = `${property.code}-${params.period}-market`;
 
   const paceChartData = pace.map((p) => ({ month: p.monthLabel, otb: p.otbOcc, demand: p.marketDemand, pickup: p.pickup }));
+  const marketAreaChartData = marketArea.map((m) => ({
+    month: m.monthLabel,
+    propertyRN: m.propertyRoomNights,
+    marketRN: m.marketRoomNights,
+    propertyAdr: m.propertyAdr,
+    marketAdr: m.marketAdr,
+  }));
   const forecastChartData = forecasts.map((f) => ({
     month: periodMonthShort(f.month),
     forecast: f.forecastOcc,
@@ -218,11 +230,59 @@ export default async function MarketPage({
         </div>
       </SectionCard>
 
-      {/* Market-area narrative */}
+      {/* 4 — Market Area Update (Booking.com property vs market) */}
+      <div className="space-y-4">
+        {canEdit && (
+          <MarketAreaUploader
+            property={params.property}
+            period={params.period}
+            initial={marketArea}
+            hasData={marketArea.length > 0}
+          />
+        )}
+        {marketArea.length > 0 ? (
+          <ExportableCard
+            title="Market Area Update"
+            description="Booking.com — property vs market: room nights (bars) and average daily rate (lines)"
+            fileName={`${fileBase}-area`}
+          >
+            <MarketAreaChart data={marketAreaChartData} />
+          </ExportableCard>
+        ) : (
+          <SectionNote
+            title="Market Area Update"
+            description="Booking.com — property vs market room nights &amp; ADR"
+            message={
+              canEdit
+                ? "No Market Area data yet — attach the Booking.com sales-statistics chart above to compile it."
+                : "No Market Area data for this period yet."
+            }
+          />
+        )}
+
+        {/* Booking.com sales performance summary */}
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">Booking.com Sales Performance Summary</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Room nights, ADR and the property-vs-market story.</p>
+            </div>
+            <NarrativePanel
+              block={marketAreaNarrative}
+              section="MARKET_AREA_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Booking.com sales performance summary written for this period yet."
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Market-area commentary (competitor behaviour) */}
       <Card>
         <CardContent className="space-y-4 p-6">
           <div>
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">Market Area Update</h3>
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">Market-Area Commentary</h3>
             <p className="mt-1 text-sm text-muted-foreground">Competitor behaviour and market-area commentary.</p>
           </div>
           <NarrativePanel

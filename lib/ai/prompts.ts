@@ -102,6 +102,29 @@ Key Insights:
 
 This is the SPA listing — do NOT mention menu views or restaurant metrics. Quote ONLY the figures in the context; simply omit a change when it is absent. Do not invent numbers.`,
 
+  MARKET_AREA_SUMMARY: `Write a "Booking.com Sales Performance Summary" for the report month, comparing the PROPERTY against the overall MARKET using the monthly room-nights and ADR figures in the context. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Analysis Period:
+- State the report month and that it is Booking.com monthly data on a book-date basis, benchmarked against the overall market.
+
+Room Nights:
+- The property's room nights in the report month, and how it moved versus the previous month in the series.
+- The peak month in the series and its value.
+- The market's typical room nights per month (a range from the series).
+
+Market Comparison:
+- One or two sentences on how the property's room-night production compares with the market across the series.
+
+Average Daily Rate (ADR):
+- The property's ADR in the report month and its move versus the previous month.
+- The market's ADR (a range from the series).
+- The pricing gap: whether the property holds a premium over the market.
+
+Summary:
+- 2–3 sentences: the overall Booking.com performance story for the month (recovery or decline, pricing position), grounded in the figures.
+
+Quote ONLY the figures in the context (they are pre-formatted — use them verbatim). Describe month-over-month moves qualitatively from the series; do not compute new numbers or invent months. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:

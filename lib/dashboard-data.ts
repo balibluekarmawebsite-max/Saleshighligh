@@ -1818,6 +1818,15 @@ export interface MarketAlert {
   message: string;
 }
 
+export interface MarketAreaPoint {
+  month: string; // "YYYY-MM"
+  monthLabel: string; // "Oct 2026"
+  propertyRoomNights: number;
+  marketRoomNights: number;
+  propertyAdr: number;
+  marketAdr: number;
+}
+
 export interface MarketPageData {
   property: { code: string; name: string; area: string; roomCount: number };
   period: string;
@@ -1830,7 +1839,9 @@ export interface MarketPageData {
   revenueForecastCumulativeGap: number | null;
   supply: MarketSupplyCard[];
   demandRange: { min: number; max: number } | null;
+  marketArea: MarketAreaPoint[];
   narrative: NarrativeBlock | null;
+  marketAreaNarrative: NarrativeBlock | null;
   alerts: MarketAlert[];
 }
 
@@ -1850,7 +1861,8 @@ export async function getMarketPageData(
           bookingPace: true,
           forecasts: { orderBy: { targetMonth: "asc" }, take: 6 },
           marketSupply: { orderBy: { areaName: "asc" } },
-          narrativeContent: { where: { section: "MARKET_INTEL" } },
+          marketAreaStats: { orderBy: { statMonth: "asc" } },
+          narrativeContent: { where: { section: { in: ["MARKET_INTEL", "MARKET_AREA_SUMMARY"] } } },
         },
       },
     },
@@ -1881,7 +1893,9 @@ export async function getMarketPageData(
       revenueForecastCumulativeGap: null,
       supply: [],
       demandRange: null,
+      marketArea: [],
       narrative: null,
+      marketAreaNarrative: null,
       alerts: [],
     };
   }
@@ -1986,8 +2000,25 @@ export async function getMarketPageData(
     }
   }
 
-  const narr = rp.narrativeContent[0];
-  const narrative = narr ? { content: narr.content, aiGenerated: narr.aiGenerated } : null;
+  // Booking.com Market Area Update — property vs market monthly series.
+  const marketArea: MarketAreaPoint[] = rp.marketAreaStats.map((s) => {
+    const month = dateToPeriod(s.statMonth);
+    return {
+      month,
+      monthLabel: periodMonthShort(month),
+      propertyRoomNights: s.propertyRoomNights,
+      marketRoomNights: s.marketRoomNights,
+      propertyAdr: s.propertyAdr.toNumber(),
+      marketAdr: s.marketAdr.toNumber(),
+    };
+  });
+
+  const narrFor = (section: string): NarrativeBlock | null => {
+    const n = rp.narrativeContent.find((x) => x.section === section);
+    return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
+  };
+  const narrative = narrFor("MARKET_INTEL");
+  const marketAreaNarrative = narrFor("MARKET_AREA_SUMMARY");
 
   return {
     ...base,
@@ -2000,7 +2031,9 @@ export async function getMarketPageData(
     revenueForecastCumulativeGap,
     supply,
     demandRange,
+    marketArea,
     narrative,
+    marketAreaNarrative,
     alerts,
   };
 }
