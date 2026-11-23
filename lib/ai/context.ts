@@ -447,6 +447,27 @@ async function marketAreaSummaryContext(code: string, period: string) {
   };
 }
 
+/** Booking.com "Booking Window": reservation share and ADR by lead-time bucket,
+ * property vs market, with the report metadata — pre-formatted for the model. */
+async function bookingWindowSummaryContext(code: string, period: string) {
+  const d = await getMarketPageData(code, period);
+  if (!d || !d.hasData || !d.bookingWindow) return null;
+  const bw = d.bookingWindow;
+  return {
+    property: d.property.name,
+    window: bw.windowLabel,
+    dataAsOf: bw.dataAsOf,
+    totalBookedRooms: num(bw.totalBookedRooms),
+    buckets: bw.buckets.map((b) => ({
+      bucket: b.bucket,
+      propertyShare: `${b.propertySharePct.toFixed(1)}%`,
+      marketShare: `${b.marketSharePct.toFixed(1)}%`,
+      propertyAdr: money(b.propertyAdr),
+      marketAdr: money(b.marketAdr),
+    })),
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -463,6 +484,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   TRIPADVISOR_SUMMARY: tripadvisorSummaryContext,
   TRIPADVISOR_SPA_SUMMARY: spaTripadvisorSummaryContext,
   MARKET_AREA_SUMMARY: marketAreaSummaryContext,
+  BOOKING_WINDOW_SUMMARY: bookingWindowSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

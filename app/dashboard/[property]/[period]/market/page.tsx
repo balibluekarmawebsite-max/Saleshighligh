@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 
+import { BookingWindowChart } from "@/components/charts/booking-window-chart";
 import { ForecastOccupancyChart } from "@/components/charts/forecast-occupancy-chart";
 import { MarketAreaChart } from "@/components/charts/market-area-chart";
 import { MarketPaceChart } from "@/components/charts/market-pace-chart";
@@ -11,6 +12,7 @@ import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { NarrativePanel } from "@/components/dashboard/narrative-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { Sparkline } from "@/components/dashboard/sparkline";
+import { BookingWindowUploader } from "@/components/sales/booking-window-uploader";
 import { MarketAreaUploader } from "@/components/sales/market-area-uploader";
 import { Card, CardContent } from "@/components/ui/card";
 import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
@@ -59,8 +61,16 @@ export default async function MarketPage({
     );
   }
 
-  const { property, pace, paceAsOf, forecasts, revenueForecast, revenueForecastCumulativeGap, supply, demandRange, marketArea, narrative, marketAreaNarrative, alerts } = data;
+  const { property, pace, paceAsOf, forecasts, revenueForecast, revenueForecastCumulativeGap, supply, demandRange, marketArea, bookingWindow, narrative, marketAreaNarrative, bookingWindowNarrative, alerts } = data;
   const fileBase = `${property.code}-${params.period}-market`;
+
+  const bookingWindowChartData = (bookingWindow?.buckets ?? []).map((b) => ({
+    bucket: b.bucket,
+    propertyShare: b.propertySharePct,
+    marketShare: b.marketSharePct,
+    propertyAdr: b.propertyAdr,
+    marketAdr: b.marketAdr,
+  }));
 
   const paceChartData = pace.map((p) => ({ month: p.monthLabel, otb: p.otbOcc, demand: p.marketDemand, pickup: p.pickup }));
   const marketAreaChartData = marketArea.map((m) => ({
@@ -273,6 +283,54 @@ export default async function MarketPage({
               property={params.property}
               period={params.period}
               emptyText="No Booking.com sales performance summary written for this period yet."
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 5 — Booking Window (Booking.com lead-time) */}
+      <div className="space-y-4">
+        {canEdit && (
+          <BookingWindowUploader
+            property={params.property}
+            period={params.period}
+            initial={bookingWindow}
+            hasData={bookingWindow !== null}
+          />
+        )}
+        {bookingWindow && bookingWindow.buckets.length > 0 ? (
+          <ExportableCard
+            title="Booking Window"
+            description={`Booking.com — reservations per book window (${bookingWindow.windowLabel}); property vs market${bookingWindow.dataAsOf ? ` · data as of ${dateFmt.format(new Date(bookingWindow.dataAsOf))}` : ""}${bookingWindow.totalBookedRooms ? ` · ${formatNumber(bookingWindow.totalBookedRooms)} booked rooms` : ""}`}
+            fileName={`${fileBase}-booking-window`}
+          >
+            <BookingWindowChart data={bookingWindowChartData} />
+          </ExportableCard>
+        ) : (
+          <SectionNote
+            title="Booking Window"
+            description="Booking.com — reservations per book window, property vs market"
+            message={
+              canEdit
+                ? "No Booking Window data yet — attach the Booking.com book-window chart above to compile it."
+                : "No Booking Window data for this period yet."
+            }
+          />
+        )}
+
+        {/* Booking Window analysis summary */}
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <div>
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">Booking Window Analysis Summary</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Booking pattern, rate positioning and the key takeaways.</p>
+            </div>
+            <NarrativePanel
+              block={bookingWindowNarrative}
+              section="BOOKING_WINDOW_SUMMARY"
+              property={params.property}
+              period={params.period}
+              emptyText="No Booking Window analysis written for this period yet."
             />
           </CardContent>
         </Card>

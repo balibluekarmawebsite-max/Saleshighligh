@@ -125,6 +125,23 @@ Summary:
 
 Quote ONLY the figures in the context (they are pre-formatted — use them verbatim). Describe month-over-month moves qualitatively from the series; do not compute new numbers or invent months. Do not invent numbers.`,
 
+  BOOKING_WINDOW_SUMMARY: `Write a "Booking Window Analysis Summary" from the context — Booking.com data on how far ahead guests book (lead-time buckets), the property vs the overall market. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Data Overview:
+- Analysis Period (the window), Data as of (the date), Total Booked Rooms, and the benchmark (Market) — from the context.
+
+Booking Pattern Analysis:
+- Under a "Short-Term Bookings (0–14 days):" style grouping, one bullet per short-window bucket (0–1 day, 2–3 days, 4–7 days, 8–14 days) with the property's share, e.g. "0–1 day: ~18% of bookings".
+- Then "Mid to Long-Term Bookings (15–90+ days):" with one bullet per bucket (15–30, 31–60, 61–90, 91+ days), flagging the highest-share window.
+
+Rate Positioning (ADR vs Market):
+- Whether the property ADR sits above or below the market across the buckets, the highest property ADR and in which window, and the approximate property and market ADR ranges.
+
+Summary:
+- 2–3 sentences: the overall advance-booking pattern (where the largest share sits), short-term contribution, and the property's pricing position versus the market.
+
+Quote ONLY the figures in the context (shares and ADR are pre-formatted — use them). Describe the pattern qualitatively; do not compute new numbers or invent buckets. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:

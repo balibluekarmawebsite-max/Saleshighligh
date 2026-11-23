@@ -117,6 +117,7 @@ enum NarrativeSection {
   TRIPADVISOR_SUMMARY
   TRIPADVISOR_SPA_SUMMARY
   MARKET_AREA_SUMMARY
+  BOOKING_WINDOW_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ model ReportPeriod {
   forecasts          Forecast[]
   marketSupply       MarketSupply[]
   marketAreaStats    MarketAreaStat[]
+  bookingWindowStats BookingWindowStat[]
   narrativeContent   NarrativeContent[]
   narrativeVersions  NarrativeVersion[]
   influencerCollabs  InfluencerCollab[]
@@ -704,6 +706,31 @@ model MarketAreaStat {
 
   @@unique([periodId, statMonth])
   @@map("market_area_stats")
+}
+
+/// Booking.com "Booking Window": reservation share and ADR by booking lead-time
+/// bucket (0–1 day … 91+ days, Unspecified), property vs market. One row per
+/// bucket; the report-level metadata (window label, data-as-of, total booked
+/// rooms) is repeated on each row (same across a period's rows).
+model BookingWindowStat {
+  id               String    @id @default(cuid())
+  periodId         String
+  /// Lead-time bucket label, e.g. "0–1 day", "15–30 days", "91+ days", "Unspecified".
+  bucket           String
+  /// Reservation share as a PERCENT (0–100).
+  propertySharePct Decimal   @db.Decimal(9, 4)
+  marketSharePct   Decimal   @db.Decimal(9, 4)
+  propertyAdr      Decimal   @db.Decimal(18, 2)
+  marketAdr        Decimal   @db.Decimal(18, 2)
+  // Report-level metadata (identical across a period's rows).
+  windowLabel      String
+  dataAsOf         DateTime? @db.Date
+  totalBookedRooms Int
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, bucket])
+  @@map("booking_window_stats")
 }
 
 // ─── Narrative & partnerships ────────────────────────────────────────────────

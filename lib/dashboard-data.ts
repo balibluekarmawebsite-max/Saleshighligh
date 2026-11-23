@@ -3,6 +3,7 @@ import { unstable_noStore as noStore } from "next/cache";
 
 import { achievementPct, avgCheck, cpc, ctr, momChange } from "@/lib/calculations";
 import { prisma } from "@/lib/prisma";
+import { BOOKING_WINDOW_BUCKETS } from "@/lib/sales/booking-window-logic";
 import { periodMonthShort } from "@/lib/labels";
 import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
 import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
@@ -1827,6 +1828,21 @@ export interface MarketAreaPoint {
   marketAdr: number;
 }
 
+export interface BookingWindowBucketPoint {
+  bucket: string;
+  propertySharePct: number;
+  marketSharePct: number;
+  propertyAdr: number;
+  marketAdr: number;
+}
+
+export interface BookingWindowData {
+  windowLabel: string;
+  dataAsOf: string | null; // ISO date "YYYY-MM-DD"
+  totalBookedRooms: number;
+  buckets: BookingWindowBucketPoint[];
+}
+
 export interface MarketPageData {
   property: { code: string; name: string; area: string; roomCount: number };
   period: string;
@@ -1840,8 +1856,10 @@ export interface MarketPageData {
   supply: MarketSupplyCard[];
   demandRange: { min: number; max: number } | null;
   marketArea: MarketAreaPoint[];
+  bookingWindow: BookingWindowData | null;
   narrative: NarrativeBlock | null;
   marketAreaNarrative: NarrativeBlock | null;
+  bookingWindowNarrative: NarrativeBlock | null;
   alerts: MarketAlert[];
 }
 
@@ -1862,7 +1880,8 @@ export async function getMarketPageData(
           forecasts: { orderBy: { targetMonth: "asc" }, take: 6 },
           marketSupply: { orderBy: { areaName: "asc" } },
           marketAreaStats: { orderBy: { statMonth: "asc" } },
-          narrativeContent: { where: { section: { in: ["MARKET_INTEL", "MARKET_AREA_SUMMARY"] } } },
+          bookingWindowStats: true,
+          narrativeContent: { where: { section: { in: ["MARKET_INTEL", "MARKET_AREA_SUMMARY", "BOOKING_WINDOW_SUMMARY"] } } },
         },
       },
     },
@@ -1894,8 +1913,10 @@ export async function getMarketPageData(
       supply: [],
       demandRange: null,
       marketArea: [],
+      bookingWindow: null,
       narrative: null,
       marketAreaNarrative: null,
+      bookingWindowNarrative: null,
       alerts: [],
     };
   }
@@ -2013,12 +2034,39 @@ export async function getMarketPageData(
     };
   });
 
+  // Booking.com Booking Window — share & ADR by lead-time bucket (metadata is
+  // repeated across the period's rows, so read it from the first).
+  let bookingWindow: BookingWindowData | null = null;
+  if (rp.bookingWindowStats.length > 0) {
+    const first = rp.bookingWindowStats[0]!;
+    const order = (b: string) => {
+      const i = (BOOKING_WINDOW_BUCKETS as readonly string[]).indexOf(b);
+      return i < 0 ? 99 : i;
+    };
+    const buckets: BookingWindowBucketPoint[] = [...rp.bookingWindowStats]
+      .sort((a, b) => order(a.bucket) - order(b.bucket))
+      .map((s) => ({
+        bucket: s.bucket,
+        propertySharePct: s.propertySharePct.toNumber(),
+        marketSharePct: s.marketSharePct.toNumber(),
+        propertyAdr: s.propertyAdr.toNumber(),
+        marketAdr: s.marketAdr.toNumber(),
+      }));
+    bookingWindow = {
+      windowLabel: first.windowLabel,
+      dataAsOf: first.dataAsOf ? first.dataAsOf.toISOString().slice(0, 10) : null,
+      totalBookedRooms: first.totalBookedRooms,
+      buckets,
+    };
+  }
+
   const narrFor = (section: string): NarrativeBlock | null => {
     const n = rp.narrativeContent.find((x) => x.section === section);
     return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
   };
   const narrative = narrFor("MARKET_INTEL");
   const marketAreaNarrative = narrFor("MARKET_AREA_SUMMARY");
+  const bookingWindowNarrative = narrFor("BOOKING_WINDOW_SUMMARY");
 
   return {
     ...base,
@@ -2032,8 +2080,10 @@ export async function getMarketPageData(
     supply,
     demandRange,
     marketArea,
+    bookingWindow,
     narrative,
     marketAreaNarrative,
+    bookingWindowNarrative,
     alerts,
   };
 }
