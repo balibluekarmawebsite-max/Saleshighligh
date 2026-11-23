@@ -357,11 +357,11 @@ export default async function SpaPage({
         {/* Summary always renders so a saved narrative is never orphaned. */}
         <div className="mt-6 rounded-lg border border-border bg-card p-5">
           <h3 className="text-sm font-semibold text-foreground">Gokai Upselling Tools Performance Summary</h3>
-          <p className="mt-1 text-xs text-muted-foreground">Guest engagement &amp; conversion, revenue performance and the key insights.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Product engagement, upsell performance and the key insights.</p>
           <div className="mt-3">
             <NarrativePanel
               block={gokaiNarrative}
-              section="GOKAI_SUMMARY"
+              section="GOKAI_SPA_SUMMARY"
               property={params.property}
               period={params.period}
               emptyText="No Gokai summary written for this period yet."

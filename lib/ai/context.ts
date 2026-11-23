@@ -359,6 +359,27 @@ async function gokaiSummaryContext(code: string, period: string) {
   };
 }
 
+/** Gokai for the SPA page specifically: the "Upsell Analytics" cards (Product
+ * Views / Upsell Sales / Upsell Revenue / Refunds) with each card's own MoM.
+ * Kept separate from gokaiSummaryContext so the spa summary never describes the
+ * restaurant "Guest Experience" metrics. */
+async function spaGokaiSummaryContext(code: string, period: string) {
+  const s = await getSpaPageData(code, period);
+  if (!s || !s.hasData || !s.gokai) return null;
+  const g = s.gokai;
+  const fmtVal = (m: { value: number; format: string }) =>
+    m.format === "idr" ? money(m.value) : m.format === "pct" ? formatPercent(m.value) : num(m.value);
+  return {
+    outlet: s.property.spaName,
+    unit: g.unit,
+    metrics: g.metrics.map((m) => ({
+      metric: m.label,
+      value: fmtVal(m),
+      monthOverMonth: m.mom != null ? formatVariancePercent(m.mom) : null,
+    })),
+  };
+}
+
 async function tripadvisorSummaryContext(code: string, period: string) {
   const d = await getRestaurantPageData(code, period);
   if (!d || !d.hasData || !d.tripadvisor) return null;
@@ -391,6 +412,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   ACQUISITION_SPLIT: acquisitionContext,
   CHOPE_SUMMARY: chopeContext,
   GOKAI_SUMMARY: gokaiSummaryContext,
+  GOKAI_SPA_SUMMARY: spaGokaiSummaryContext,
   TRIPADVISOR_SUMMARY: tripadvisorSummaryContext,
 };
 

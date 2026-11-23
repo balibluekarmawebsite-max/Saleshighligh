@@ -1612,7 +1612,7 @@ export async function getSpaPageData(
           spaTreatments: { orderBy: { revenue: "desc" } },
           gokaiReports: true,
           adsPerformance: { where: { unit: "SPA" } },
-          narrativeContent: { where: { section: { in: ["SPA_OVERVIEW", "GOKAI_SUMMARY"] } } },
+          narrativeContent: { where: { section: { in: ["SPA_OVERVIEW", "GOKAI_SPA_SUMMARY"] } } },
         },
       },
     },
@@ -1731,7 +1731,7 @@ export async function getSpaPageData(
     return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
   };
   const narrative = narrBlock("SPA_OVERVIEW");
-  const gokaiNarrative = narrBlock("GOKAI_SUMMARY");
+  const gokaiNarrative = narrBlock("GOKAI_SPA_SUMMARY");
 
   return {
     ...base,

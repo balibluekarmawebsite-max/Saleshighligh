@@ -57,6 +57,19 @@ Key Insights:
 
 Quote ONLY the figures in the context; never write "movement not available" or similar — simply omit the change when it is absent. Do not invent numbers.`,
 
+  GOKAI_SPA_SUMMARY: `Summarise the SPA's Gokai upselling-tools performance for the month. The context lists the spa "Upsell Analytics" cards — Product Views, Upsell Sales, Upsell Revenue and Refunds — each with its own month-over-month change. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Product Engagement:
+- "Product Views: <n> (<MoM>)" taken from the context, e.g. "Product Views: 135 (+87.50% vs last month)". If a metric has no month-over-month value, give just the value.
+
+Upsell Performance:
+- "Upsell Sales: <n> transactions (<MoM>)", "Upsell Revenue: <IDR> (<MoM>)" and "Refunds: <n> (<MoM>)", each from the context.
+
+Key Insights:
+- 2–4 short bullets: where product interest grew, where upsell conversion or revenue slipped, and ONE concrete action to convert product views into upsell revenue next month.
+
+Use ONLY the spa Upsell Analytics figures in the context — do NOT mention guest sign-ups, open rate, click-through or survey completion (those are the restaurant report). Quote ONLY the figures provided; never write "movement not available" or similar — simply omit the change when it is absent. Do not invent numbers.`,
+
   TRIPADVISOR_SUMMARY: `Summarise the restaurant's Tripadvisor listing performance for the month. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
 
 Overall Performance:
