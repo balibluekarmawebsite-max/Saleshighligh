@@ -15,6 +15,7 @@ import type { NormalSpaPerfRow, RawSpaPerfRow } from "@/lib/sales/spa-performanc
 import { extractSpaTreatments } from "@/lib/sales/spa-treatments-ai";
 import { saveSpaTreatments } from "@/lib/sales/spa-treatments-import";
 import type { NormalTreatmentRow, RawTreatmentRow } from "@/lib/sales/spa-treatments-logic";
+import { runMonthlyAdsSync } from "@/lib/sales/ads-monthly-sync";
 
 export interface GenerateResult {
   ok: boolean;
@@ -211,4 +212,28 @@ export async function saveSpaTreatmentsAction(input: {
   });
   if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
   return { ok: r.ok, message: r.message };
+}
+
+/**
+ * Editor/admin: pull this month's Spa ads (Spend / Impressions / Reach /
+ * Clicks / ROAS, Google + Meta + OpenAI) from the ads dashboard — scoped to the
+ * spa outlet (Mudara / Flying Bamboo / Heiwa, i.e. <code>-SPA) — and write them
+ * as the SPA-unit `AdsPerformance` rows the Spa Ads block reads.
+ */
+export async function syncSpaAdsAction(input: {
+  property: string;
+  period: string;
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await runMonthlyAdsSync({
+    property: input.property,
+    period: input.period,
+    unit: "SPA",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.body.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/spa`);
+  return r.body.ok ? { ok: true, message: r.body.message } : { ok: false, message: r.body.error };
 }

@@ -9,6 +9,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { MoMBadge } from "@/components/dashboard/mom-badge";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { AdsSyncButton } from "@/components/sales/ads-sync-button";
 import { SpaOverviewPanel } from "@/components/sales/spa-overview-panel";
 import { SpaPerformanceUploader } from "@/components/sales/spa-performance-uploader";
 import { SpaTreatmentsUploader } from "@/components/sales/spa-treatments-uploader";
@@ -24,6 +25,7 @@ import {
 import { formatIDR, formatNumber, formatPercent, formatVariancePercent } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { cn } from "@/lib/utils";
+import { syncSpaAdsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -282,15 +284,30 @@ export default async function SpaPage({
         )}
       </div>
 
-      {/* 4 — Spa ads */}
+      {/* 4 — Spa ads (synced from the ads dashboard, SPA unit) */}
       <div>
-        <h3 className="mb-3 text-lg font-semibold tracking-tight text-foreground">Spa Ads</h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground">Spa Ads</h3>
+          {canEdit && (
+            <AdsSyncButton
+              property={params.property}
+              period={params.period}
+              action={syncSpaAdsAction}
+              variant="link"
+              label="Sync spa ads from dashboard"
+            />
+          )}
+        </div>
         <AdsBlock
           ads={data.ads}
           spendRevenue={data.spendRevenue}
           roasTrend={data.roasTrend}
           fileBase={`${fileBase}-ads`}
-          emptyLabel="Import the ADS tab (SPA unit) to populate ad performance."
+          emptyLabel={
+            canEdit
+              ? 'No spa ad data yet — click "Sync spa ads from dashboard" to pull Spend / Reach / Clicks / ROAS (Google + Meta) for this month.'
+              : "No spa ad data for this period yet."
+          }
         />
       </div>
 
