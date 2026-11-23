@@ -11,6 +11,7 @@ import {
   coerceGokaiCore,
   gokaiFormOwnedUpdate,
   gokaiHasData,
+  gokaiSpaFormOwnedUpdate,
   normalizeGokaiUnit,
   type GokaiUnit,
 } from "@/lib/sales/gokai-logic";
@@ -73,7 +74,7 @@ export async function saveGokai(input: GokaiImportInput): Promise<GokaiResult> {
         // only the form-owned columns so a save never zeroes productViews/refunds
         // that the monthly Excel import populated and the Spa page/PPTX read.
         create: { periodId: period.id, unit, ...core },
-        update: gokaiFormOwnedUpdate(core),
+        update: unit === "SPA" ? gokaiSpaFormOwnedUpdate(core) : gokaiFormOwnedUpdate(core),
       });
     });
 

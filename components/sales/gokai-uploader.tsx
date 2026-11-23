@@ -11,19 +11,42 @@ import { UploadControls, type UploadImage } from "@/components/sales/upload-cont
 import type { GokaiSummary } from "@/lib/dashboard-data";
 import { cn } from "@/lib/utils";
 
-const METRICS = [
+interface Metric {
+  key: string;
+  label: string;
+  valueField: string;
+  /** The reported-MoM column, or null for cards that have none (Product Views /
+   *  Refunds): the Spa page computes their MoM from the prior period. */
+  momField: string | null;
+  hint: string;
+}
+
+/** Restaurant / Hotel: the "Guest Experience" six-card report. */
+const RESTAURANT_METRICS: Metric[] = [
   { key: "signups", label: "Guests Added", valueField: "signups", momField: "signupsMom", hint: "e.g. 293" },
   { key: "openRate", label: "Guest Journey Open Rate", valueField: "openRatePct", momField: "openRateMom", hint: "% e.g. 40.816" },
   { key: "ctr", label: "Guest Journey Click-through Rate", valueField: "ctrPct", momField: "ctrMom", hint: "% e.g. 21.245" },
   { key: "survey", label: "Pre-arrival Survey Completion", valueField: "surveyCompletionPct", momField: "surveyMom", hint: "% e.g. 6.78" },
   { key: "upsellSales", label: "Upsell Sales", valueField: "upsellSales", momField: "upsellSalesMom", hint: "transactions" },
   { key: "upsellRevenue", label: "Upsell Revenue", valueField: "upsellRevenue", momField: "upsellRevenueMom", hint: "IDR" },
-] as const;
+];
+
+/** Spa: the "Upsell Analytics" four-card report the Spa page displays. */
+const SPA_METRICS: Metric[] = [
+  { key: "productViews", label: "Product Views", valueField: "productViews", momField: null, hint: "e.g. 135" },
+  { key: "upsellSales", label: "Upsell Sales", valueField: "upsellSales", momField: "upsellSalesMom", hint: "transactions" },
+  { key: "upsellRevenue", label: "Upsell Revenue", valueField: "upsellRevenue", momField: "upsellRevenueMom", hint: "IDR" },
+  { key: "refunds", label: "Refunds", valueField: "refunds", momField: null, hint: "e.g. 0" },
+];
 
 const UNITS = ["RESTAURANT", "HOTEL", "SPA"] as const;
 type Unit = (typeof UNITS)[number];
 
-const ALL_FIELDS = METRICS.flatMap((m) => [m.valueField, m.momField]);
+const metricsFor = (unit: Unit): Metric[] => (unit === "SPA" ? SPA_METRICS : RESTAURANT_METRICS);
+
+const ALL_FIELDS = Array.from(
+  new Set([...RESTAURANT_METRICS, ...SPA_METRICS].flatMap((m) => (m.momField ? [m.valueField, m.momField] : [m.valueField]))),
+);
 type Form = Record<string, string>;
 
 const emptyForm = (): Form => Object.fromEntries(ALL_FIELDS.map((f) => [f, ""]));
@@ -31,11 +54,11 @@ const emptyForm = (): Form => Object.fromEntries(ALL_FIELDS.map((f) => [f, ""]))
 function formFromInitial(initial: GokaiSummary | null): Form {
   const f = emptyForm();
   if (!initial) return f;
-  for (const m of METRICS) {
+  for (const m of metricsFor((initial.unit as Unit) ?? "RESTAURANT")) {
     const metric = initial.metrics.find((x) => x.key === m.key);
     if (metric) {
       f[m.valueField] = String(metric.value);
-      f[m.momField] = metric.reportedMom != null ? String(metric.reportedMom) : "";
+      if (m.momField) f[m.momField] = metric.reportedMom != null ? String(metric.reportedMom) : "";
     }
   }
   return f;
@@ -137,7 +160,7 @@ export function GokaiUploader({
         <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Paste the Gokai &ldquo;Guest Experience&rdquo; report or attach a screenshot, then compile — or type the six
+        Paste the Gokai report (Guest Experience or Upsell Analytics) or attach a screenshot, then compile — or type the
         metrics in. Capture each card&rsquo;s value and its &ldquo;% from last month&rdquo; (negative for a red/down arrow).
       </p>
 
@@ -173,7 +196,7 @@ export function GokaiUploader({
             </tr>
           </thead>
           <tbody>
-            {METRICS.map((m) => (
+            {metricsFor(unit).map((m) => (
               <tr key={m.key} className="border-b border-border/60">
                 <td className="px-2 py-1.5 text-xs text-foreground">{m.label}</td>
                 <td className="px-2 py-1.5">
@@ -181,8 +204,12 @@ export function GokaiUploader({
                     className="w-28 rounded-md border border-border bg-card px-2 py-1 text-right text-xs tabular-nums text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none" />
                 </td>
                 <td className="px-2 py-1.5">
-                  <input value={form[m.momField] ?? ""} onChange={(e) => setCell(m.momField, e.target.value)} inputMode="decimal" placeholder="e.g. -34.664"
-                    className="w-24 rounded-md border border-border bg-card px-2 py-1 text-right text-xs tabular-nums text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none" />
+                  {m.momField ? (
+                    <input value={form[m.momField] ?? ""} onChange={(e) => setCell(m.momField!, e.target.value)} inputMode="decimal" placeholder="e.g. -34.664"
+                      className="w-24 rounded-md border border-border bg-card px-2 py-1 text-right text-xs tabular-nums text-foreground placeholder:text-muted-foreground focus:border-brand-teal focus:outline-none" />
+                  ) : (
+                    <span className="block text-right text-xs text-muted-foreground" title="MoM is computed from the prior month for this metric">—</span>
+                  )}
                 </td>
               </tr>
             ))}

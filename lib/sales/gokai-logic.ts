@@ -130,6 +130,24 @@ export function gokaiFormOwnedUpdate(c: GokaiCore) {
   };
 }
 
+/**
+ * The GokaiReport columns the SPA uploader FORM owns: the four cards the Spa
+ * page shows (Product Views / Upsell Sales / Upsell Revenue / Refunds) plus the
+ * two reported MoM values that have columns. Mirrors gokaiFormOwnedUpdate but
+ * for the SPA unit, so a spa save never zeroes the restaurant-owned metrics
+ * (signups / open rate / CTR / survey) on the shared GokaiReport row.
+ */
+export function gokaiSpaFormOwnedUpdate(c: GokaiCore) {
+  return {
+    productViews: c.productViews,
+    upsellSales: c.upsellSales,
+    upsellRevenue: c.upsellRevenue,
+    refunds: c.refunds,
+    upsellSalesMom: c.upsellSalesMom,
+    upsellRevenueMom: c.upsellRevenueMom,
+  };
+}
+
 /** True when at least one metric carries data (guards an empty save). */
 export function gokaiHasData(c: GokaiCore): boolean {
   return (

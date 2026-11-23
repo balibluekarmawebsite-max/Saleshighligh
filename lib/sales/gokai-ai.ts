@@ -8,18 +8,20 @@
 import { toInt, toNum, toUsNum } from "@/lib/sales/gokai-logic";
 import { groqChat, isGroqConfigured, parseJsonLoose, type GroqImage } from "@/lib/weekly/groq";
 
-const SYSTEM = `You read a Gokai "Guest Experience" CRM report and return STRICT JSON. There are six metric cards, each with a value and a month-over-month change (an up/green or down/red arrow + a percentage).
+const SYSTEM = `You read a Gokai CRM report ("Guest Experience" or "Upsell Analytics") and return STRICT JSON. Each metric card shows a value and often a month-over-month change (an up/green or down/red arrow + a percentage). The report may show any of the cards below; include ONLY the keys for cards that are actually present and omit the rest.
 
 Return ONLY this JSON (no prose, no code fences):
-{"signups":<int>,"openRatePct":<number>,"ctrPct":<number>,"surveyCompletionPct":<number>,"upsellSales":<int>,"upsellRevenue":<int>,"signupsMom":<number>,"openRateMom":<number>,"ctrMom":<number>,"surveyMom":<number>,"upsellSalesMom":<number>,"upsellRevenueMom":<number>}
+{"signups":<int>,"openRatePct":<number>,"ctrPct":<number>,"surveyCompletionPct":<number>,"productViews":<int>,"upsellSales":<int>,"upsellRevenue":<int>,"refunds":<int>,"signupsMom":<number>,"openRateMom":<number>,"ctrMom":<number>,"surveyMom":<number>,"upsellSalesMom":<number>,"upsellRevenueMom":<number>}
 
 Metric cards → keys:
 - "Guests Added" → signups
 - "Guest Journey Open Rate" → openRatePct
 - "Guest Journey Click-through Rate" → ctrPct
 - "Pre-arrival Survey Completion Rate" → surveyCompletionPct
-- "Upsell Sales" → upsellSales
-- "Upsell Revenue" → upsellRevenue (rupiah; "IDR 0" -> 0)
+- "Product Views" → productViews
+- "Upsell Sales" or "Sales" → upsellSales
+- "Upsell Revenue" or "Revenue" → upsellRevenue (rupiah; "IDR 0" -> 0)
+- "Refunds" → refunds
 
 Rules:
 - Percentages (openRatePct, ctrPct, surveyCompletionPct) are PERCENT NUMBERS exactly as shown: "40.816%" -> 40.816, "6.78%" -> 6.78. Do NOT convert to a ratio.
@@ -78,8 +80,10 @@ export async function extractGokai(
     };
 
     put("signups", toInt(pick(o, ["signups", "guestsAdded", "signUps", "guests"])));
-    put("upsellSales", toInt(pick(o, ["upsellSales", "upsellTransactions"])));
-    put("upsellRevenue", toNum(pick(o, ["upsellRevenue", "upsellRevenueIdr"])));
+    put("productViews", toInt(pick(o, ["productViews", "productView", "views"])));
+    put("upsellSales", toInt(pick(o, ["upsellSales", "upsellTransactions", "sales"])));
+    put("upsellRevenue", toNum(pick(o, ["upsellRevenue", "upsellRevenueIdr", "revenue"])));
+    put("refunds", toInt(pick(o, ["refunds", "refund"])));
     for (const [key, keys] of Object.entries(RATE_KEYS)) put(key, toUsNum(pick(o, keys)));
     for (const [key, keys] of Object.entries(MOM_KEYS)) put(key, toUsNum(pick(o, keys)));
 
