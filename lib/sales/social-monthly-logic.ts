@@ -157,21 +157,33 @@ export interface SocialRow {
   followersGained: number;
 }
 
+export interface BuiltSocialRow {
+  /** All six columns, with an unresolved metric as 0 — for CREATE of a new row. */
+  row: SocialRow;
+  /** Only the metrics that actually resolved this pull — for UPDATE, so an
+   *  unresolved column keeps its previously-stored value instead of being zeroed. */
+  resolvedKeys: SocialMonthlyMetric[];
+}
+
 /**
  * Build the row for one platform from the resolved per-metric values. Returns
- * null when NOTHING resolved (so an all-blank platform isn't written as a row of
- * zeros that would overwrite a real figure or clutter the page). A resolved null
- * for an individual metric becomes 0 in the stored row.
+ * null when NOTHING resolved (so an all-blank platform isn't written at all).
+ *
+ * IMPORTANT: `resolvedKeys` lists only the metrics that came back with data. The
+ * caller must UPDATE only those columns (a partial Metricool pull commonly leaves
+ * several IG/FB metrics empty) — writing the full `row` on an UPDATE would zero a
+ * previously-stored or manually-imported metric that this pull didn't resolve.
+ * `row` (null→0) is only for CREATE, where there is no prior value to preserve.
  */
-export function buildSocialRow(values: Partial<Record<SocialMonthlyMetric, number | null>>): {
-  row: SocialRow;
-  resolved: number;
-} | null {
-  let resolved = 0;
+export function buildSocialRow(values: Partial<Record<SocialMonthlyMetric, number | null>>): BuiltSocialRow | null {
+  const resolvedKeys: SocialMonthlyMetric[] = [];
   const get = (k: SocialMonthlyMetric): number => {
     const v = values[k];
-    if (v !== null && v !== undefined) resolved += 1;
-    return v ?? 0;
+    if (v !== null && v !== undefined) {
+      resolvedKeys.push(k);
+      return v;
+    }
+    return 0;
   };
   const row: SocialRow = {
     impressions: get("impressions"),
@@ -181,5 +193,5 @@ export function buildSocialRow(values: Partial<Record<SocialMonthlyMetric, numbe
     profileVisits: get("profileVisits"),
     followersGained: get("followersGained"),
   };
-  return resolved === 0 ? null : { row, resolved };
+  return resolvedKeys.length === 0 ? null : { row, resolvedKeys };
 }

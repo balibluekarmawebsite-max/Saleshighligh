@@ -8,10 +8,11 @@
  * `blogId` the weekly report uses); RESTAURANT/SPA use their own `blogId:UNIT`
  * override and are skipped when unassigned (never duplicated from the hotel).
  *
- * Safety: a platform is only (re)written when at least one of its six metrics
- * resolved — a failed/empty pull never wipes a manually-entered platform, and the
- * delete is scoped to [periodId, unit, platform] for the platforms we resolved.
- * A FINAL period is refused.
+ * Safety: a platform is only written when at least one of its six metrics
+ * resolved, and each platform is UPSERTed updating ONLY the columns that actually
+ * came back — so a metric Metricool returns empty (several IG/FB metrics commonly
+ * are) keeps its previously-stored or manually-imported value instead of being
+ * zeroed. A failed/empty pull touches nothing. A FINAL period is refused.
  */
 
 import { logAudit } from "@/lib/audit";
@@ -19,7 +20,9 @@ import { prisma } from "@/lib/prisma";
 import {
   buildSocialRow,
   SOCIAL_NETWORKS,
+  type BuiltSocialRow,
   type SocialPlatformEnum,
+  type SocialRow,
 } from "@/lib/sales/social-monthly-logic";
 import { fetchNetworkMonth, monthBounds, type SocialMetricFetch } from "@/lib/sales/social-metricool";
 import { getUnitBlogId, isMetricoolConfigured, listMetricoolBrands } from "@/lib/weekly/metricool";
@@ -111,7 +114,8 @@ export async function runMonthlySocialSync(input: SocialMonthlySyncInput): Promi
       return fail(409, "This report period is marked FINAL and is locked for editing.");
     }
 
-    const bounds = monthBounds(periodStr)!; // periodStr validated above
+    const bounds = monthBounds(periodStr);
+    if (!bounds) return fail(400, "period must be a real month in YYYY-MM form.");
     const window = { from: ymd(bounds.from), to: ymd(bounds.to) };
 
     // Resolve the brand's human label for the diagnostic (non-fatal).
@@ -130,11 +134,11 @@ export async function runMonthlySocialSync(input: SocialMonthlySyncInput): Promi
     );
 
     // Build the rows for platforms that resolved at least one metric.
-    const toWrite: { platform: SocialPlatformEnum; row: ReturnType<typeof buildSocialRow> }[] = [];
+    const toWrite: { platform: SocialPlatformEnum; built: BuiltSocialRow }[] = [];
     for (const net of networks) {
       const values = Object.fromEntries(net.metrics.map((m) => [m.key, m.value]));
       const built = buildSocialRow(values);
-      if (built) toWrite.push({ platform: net.enumValue, row: built });
+      if (built) toWrite.push({ platform: net.enumValue, built });
     }
 
     if (toWrite.length === 0) {
@@ -152,24 +156,30 @@ export async function runMonthlySocialSync(input: SocialMonthlySyncInput): Promi
         update: {},
         select: { id: true },
       });
-      // Replace only the platforms we resolved for this unit — a platform we
-      // didn't get (e.g. a manually entered one) keeps its value.
-      await tx.socialMediaMetrics.deleteMany({
-        where: { periodId: period.id, unit, platform: { in: writtenPlatforms } },
-      });
-      await tx.socialMediaMetrics.createMany({
-        data: toWrite.map((w) => ({
-          periodId: period.id,
-          unit,
-          platform: w.platform,
-          impressions: w.row!.row.impressions,
-          reach: w.row!.row.reach,
-          interactions: w.row!.row.interactions,
-          linkClicks: w.row!.row.linkClicks,
-          profileVisits: w.row!.row.profileVisits,
-          followersGained: w.row!.row.followersGained,
-        })),
-      });
+      // Upsert each resolved platform, UPDATING ONLY the columns that actually
+      // came back this pull — so a metric Metricool returned empty (common for
+      // several IG/FB metrics) keeps its previously-stored or manually-imported
+      // value instead of being overwritten with 0. On CREATE there is no prior
+      // value, so unresolved columns default to 0.
+      for (const w of toWrite) {
+        const update: Partial<SocialRow> = {};
+        for (const key of w.built.resolvedKeys) update[key] = w.built.row[key];
+        await tx.socialMediaMetrics.upsert({
+          where: { periodId_unit_platform: { periodId: period.id, unit, platform: w.platform } },
+          create: {
+            periodId: period.id,
+            unit,
+            platform: w.platform,
+            impressions: w.built.row.impressions,
+            reach: w.built.row.reach,
+            interactions: w.built.row.interactions,
+            linkClicks: w.built.row.linkClicks,
+            profileVisits: w.built.row.profileVisits,
+            followersGained: w.built.row.followersGained,
+          },
+          update,
+        });
+      }
       await tx.importHistory.create({
         data: {
           propertyId: property.id,

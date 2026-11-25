@@ -61,7 +61,7 @@ describe("reduceMonthly", () => {
 });
 
 describe("buildSocialRow", () => {
-  it("builds the six-column row and counts resolved metrics", () => {
+  it("builds the six-column row and lists every resolved metric", () => {
     const out = buildSocialRow({
       impressions: 252_000,
       reach: 99_800,
@@ -71,7 +71,14 @@ describe("buildSocialRow", () => {
       followersGained: 458,
     });
     expect(out).not.toBeNull();
-    expect(out!.resolved).toBe(6);
+    expect(out!.resolvedKeys).toEqual([
+      "impressions",
+      "reach",
+      "interactions",
+      "linkClicks",
+      "profileVisits",
+      "followersGained",
+    ]);
     expect(out!.row).toEqual({
       impressions: 252_000,
       reach: 99_800,
@@ -82,12 +89,22 @@ describe("buildSocialRow", () => {
     });
   });
 
-  it("coerces an unresolved (null) metric to 0 but still writes when something resolved", () => {
+  it("marks ONLY the resolved metrics so a partial pull can't zero the rest on UPDATE", () => {
+    // A common IG pull: only impressions + followers resolve, the rest come back empty.
     const out = buildSocialRow({ impressions: 1000, reach: null, followersGained: 20 });
-    expect(out!.resolved).toBe(2);
+    expect(out!.resolvedKeys).toEqual(["impressions", "followersGained"]);
+    // row is CREATE-only (null → 0); resolvedKeys is what the caller UPDATEs.
+    expect(out!.row.impressions).toBe(1000);
     expect(out!.row.reach).toBe(0);
     expect(out!.row.linkClicks).toBe(0);
-    expect(out!.row.impressions).toBe(1000);
+    expect(out!.resolvedKeys).not.toContain("reach");
+    expect(out!.resolvedKeys).not.toContain("linkClicks");
+  });
+
+  it("treats a net-gain of 0 as resolved (a real 'no followers gained' value)", () => {
+    const out = buildSocialRow({ followersGained: 0 });
+    expect(out!.resolvedKeys).toEqual(["followersGained"]);
+    expect(out!.row.followersGained).toBe(0);
   });
 
   it("returns null when NOTHING resolved (no all-zero row written)", () => {
