@@ -155,6 +155,22 @@ Summary:
 
 Quote ONLY the figures in the context (they are pre-formatted — use them verbatim). Do not compute new numbers or invent metrics. Do not invent numbers.`,
 
+  SOJERN_SUMMARY: `Write a "Sojern Market Demand Summary" from the context — Sojern travel-intent data showing the Flight Volume Index and Hotel Volume Index (% difference vs a baseline month) for the destination, across several years. Produce these labelled blocks — heading on its own line ending with a colon, then "- " bullets, one blank line between blocks:
+
+Market Context:
+- State the destination, the origin-country and event-type filters, the time period, and the baseline month from the context.
+
+Flight Demand:
+- Describe the flight-demand trend versus the baseline: whether recent years sit above or below baseline, how the latest year compares with earlier years, and the peak month(s) and value(s). Quote the % figures from the context.
+
+Hotel Demand:
+- Do the same for hotel demand: above/below baseline, latest-year trajectory, and notable peaks or troughs.
+
+Key Insights:
+- 2–3 bullets: what the flight-vs-hotel demand picture means for the destination (e.g. strong arrivals intent but softer accommodation demand), and one implication for pricing or promotion timing.
+
+Quote ONLY the figures in the context (they are pre-formatted signed percentages). Describe trends qualitatively; do not compute new numbers or invent months/years. Do not invent numbers.`,
+
   CHOPE_SUMMARY: `Summarise the restaurant's Chope reservation performance for the month. Produce FOUR labelled blocks. Put each heading on its own line ending with a colon, then its bullets ("- " prefixed), with ONE blank line between blocks:
 
 Overall Booking Performance:

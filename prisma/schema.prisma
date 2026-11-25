@@ -119,6 +119,7 @@ enum NarrativeSection {
   MARKET_AREA_SUMMARY
   BOOKING_WINDOW_SUMMARY
   BOOKING_OVERVIEW_SUMMARY
+  SOJERN_SUMMARY
 }
 
 // ─── Core ─────────────────────────────────────────────────────────────────
@@ -201,6 +202,8 @@ model ReportPeriod {
   bookingWindowStats BookingWindowStat[]
   bookingOverview       BookingOverview?
   bookingOverviewAvail  BookingOverviewAvail[]
+  sojernOverview        SojernOverview?
+  sojernIndexPoints     SojernIndexPoint[]
   narrativeContent   NarrativeContent[]
   narrativeVersions  NarrativeVersion[]
   influencerCollabs  InfluencerCollab[]
@@ -781,6 +784,39 @@ model BookingOverviewAvail {
 
   @@unique([periodId, statMonth])
   @@map("booking_overview_avail")
+}
+
+/// Sojern Market Overview: the filter context for the flight/hotel volume
+/// indices (destination, origin country, event type, time period + baseline
+/// label). One row per period.
+model SojernOverview {
+  id            String @id @default(cuid())
+  periodId      String @unique
+  destination   String
+  originCountry String
+  eventType     String
+  timePeriod    String
+  baselineLabel String
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@map("sojern_overviews")
+}
+
+/// Sojern Flight/Hotel Volume Index point: % difference vs the baseline for one
+/// (metric, year, month). metric is "FLIGHT" or "HOTEL". Keyed by the period.
+model SojernIndexPoint {
+  id       String  @id @default(cuid())
+  periodId String
+  metric   String
+  year     Int
+  month    Int
+  valuePct Decimal @db.Decimal(9, 4)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, metric, year, month])
+  @@map("sojern_index_points")
 }
 
 // ─── Narrative & partnerships ────────────────────────────────────────────────

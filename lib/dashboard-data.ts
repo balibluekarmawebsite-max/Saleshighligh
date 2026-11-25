@@ -4,6 +4,7 @@ import { unstable_noStore as noStore } from "next/cache";
 import { achievementPct, avgCheck, cpc, ctr, momChange } from "@/lib/calculations";
 import { prisma } from "@/lib/prisma";
 import { BOOKING_WINDOW_BUCKETS } from "@/lib/sales/booking-window-logic";
+import { MONTH_LABELS as SOJERN_MONTH_LABELS, SOJERN_METRICS } from "@/lib/sales/sojern-logic";
 import { periodMonthShort } from "@/lib/labels";
 import { getSegmentRuleMap } from "@/lib/sales/account-segment-rules";
 import { accountKey, isExcluded, resolveSegment } from "@/lib/sales/account-segments";
@@ -1863,6 +1864,24 @@ export interface BookingOverviewData {
   availability: { month: string; monthLabel: string; yourPct: number; marketPct: number }[];
 }
 
+export interface SojernChartRow {
+  month: string;
+  [year: string]: number | string | null;
+}
+
+export interface SojernData {
+  destination: string;
+  originCountry: string;
+  eventType: string;
+  timePeriod: string;
+  baselineLabel: string;
+  years: number[];
+  flight: SojernChartRow[];
+  hotel: SojernChartRow[];
+  /** Flat points for seeding the editor. */
+  points: { metric: string; year: number; month: number; valuePct: number }[];
+}
+
 export interface MarketPageData {
   property: { code: string; name: string; area: string; roomCount: number };
   period: string;
@@ -1878,10 +1897,12 @@ export interface MarketPageData {
   marketArea: MarketAreaPoint[];
   bookingWindow: BookingWindowData | null;
   bookingOverview: BookingOverviewData | null;
+  sojern: SojernData | null;
   narrative: NarrativeBlock | null;
   marketAreaNarrative: NarrativeBlock | null;
   bookingWindowNarrative: NarrativeBlock | null;
   bookingOverviewNarrative: NarrativeBlock | null;
+  sojernNarrative: NarrativeBlock | null;
   alerts: MarketAlert[];
 }
 
@@ -1905,7 +1926,9 @@ export async function getMarketPageData(
           bookingWindowStats: true,
           bookingOverview: true,
           bookingOverviewAvail: { orderBy: { statMonth: "asc" } },
-          narrativeContent: { where: { section: { in: ["MARKET_INTEL", "MARKET_AREA_SUMMARY", "BOOKING_WINDOW_SUMMARY", "BOOKING_OVERVIEW_SUMMARY"] } } },
+          sojernOverview: true,
+          sojernIndexPoints: true,
+          narrativeContent: { where: { section: { in: ["MARKET_INTEL", "MARKET_AREA_SUMMARY", "BOOKING_WINDOW_SUMMARY", "BOOKING_OVERVIEW_SUMMARY", "SOJERN_SUMMARY"] } } },
         },
       },
     },
@@ -1939,10 +1962,12 @@ export async function getMarketPageData(
       marketArea: [],
       bookingWindow: null,
       bookingOverview: null,
+      sojern: null,
       narrative: null,
       marketAreaNarrative: null,
       bookingWindowNarrative: null,
       bookingOverviewNarrative: null,
+      sojernNarrative: null,
       alerts: [],
     };
   }
@@ -2115,6 +2140,38 @@ export async function getMarketPageData(
     };
   }
 
+  // Sojern Market Overview — flight/hotel volume indices by year/month.
+  let sojern: SojernData | null = null;
+  if (rp.sojernOverview) {
+    const so = rp.sojernOverview;
+    const pts = rp.sojernIndexPoints.map((p) => ({
+      metric: p.metric,
+      year: p.year,
+      month: p.month,
+      valuePct: p.valuePct.toNumber(),
+    }));
+    const years = [...new Set(pts.map((p) => p.year))].sort((a, b) => a - b);
+    const byKey = new Map(pts.map((p) => [`${p.metric}-${p.year}-${p.month}`, p.valuePct]));
+    const buildRows = (metric: string): SojernChartRow[] =>
+      SOJERN_MONTH_LABELS.map((label, idx) => {
+        const month = idx + 1;
+        const row: SojernChartRow = { month: label };
+        for (const y of years) row[String(y)] = byKey.get(`${metric}-${y}-${month}`) ?? null;
+        return row;
+      });
+    sojern = {
+      destination: so.destination,
+      originCountry: so.originCountry,
+      eventType: so.eventType,
+      timePeriod: so.timePeriod,
+      baselineLabel: so.baselineLabel,
+      years,
+      flight: buildRows(SOJERN_METRICS[0]),
+      hotel: buildRows(SOJERN_METRICS[1]),
+      points: pts,
+    };
+  }
+
   const narrFor = (section: string): NarrativeBlock | null => {
     const n = rp.narrativeContent.find((x) => x.section === section);
     return n ? { content: n.content, aiGenerated: n.aiGenerated } : null;
@@ -2123,6 +2180,7 @@ export async function getMarketPageData(
   const marketAreaNarrative = narrFor("MARKET_AREA_SUMMARY");
   const bookingWindowNarrative = narrFor("BOOKING_WINDOW_SUMMARY");
   const bookingOverviewNarrative = narrFor("BOOKING_OVERVIEW_SUMMARY");
+  const sojernNarrative = narrFor("SOJERN_SUMMARY");
 
   return {
     ...base,
@@ -2138,10 +2196,12 @@ export async function getMarketPageData(
     marketArea,
     bookingWindow,
     bookingOverview,
+    sojern,
     narrative,
     marketAreaNarrative,
     bookingWindowNarrative,
     bookingOverviewNarrative,
+    sojernNarrative,
     alerts,
   };
 }

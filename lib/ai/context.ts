@@ -21,6 +21,7 @@ import {
 } from "@/lib/dashboard-data";
 import { formatIDRCompact, formatNumber, formatPercent, formatRatioPct, formatVariancePercent } from "@/lib/format";
 import { getGroupData, type GroupKpiCell } from "@/lib/group-data";
+import { MONTH_LABELS as SOJERN_MONTH_LABELS } from "@/lib/sales/sojern-logic";
 import { periodLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
 
@@ -493,6 +494,35 @@ async function bookingOverviewSummaryContext(code: string, period: string) {
   };
 }
 
+/** Sojern "Market Overview": the flight & hotel volume indices (% vs baseline)
+ * per year, compacted to one Jan→Dec line per year so the model reads the shape
+ * of demand without a huge payload. */
+async function sojernSummaryContext(code: string, period: string) {
+  const d = await getMarketPageData(code, period);
+  if (!d || !d.hasData || !d.sojern) return null;
+  const s = d.sojern;
+  const byKey = new Map(s.points.map((p) => [`${p.metric}-${p.year}-${p.month}`, p.valuePct]));
+  const sign = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}%`;
+  const metricLines = (metric: string) =>
+    s.years.map((y) => ({
+      year: y,
+      monthly: SOJERN_MONTH_LABELS.map((label, idx) => {
+        const v = byKey.get(`${metric}-${y}-${idx + 1}`);
+        return v === undefined ? `${label} —` : `${label} ${sign(v)}`;
+      }).join(", "),
+    }));
+  return {
+    destination: s.destination,
+    originCountry: s.originCountry,
+    eventType: s.eventType,
+    timePeriod: s.timePeriod,
+    baseline: s.baselineLabel,
+    note: "Each value is the % difference vs the baseline month; positive = above baseline demand.",
+    flightVolumeIndex: metricLines("FLIGHT"),
+    hotelVolumeIndex: metricLines("HOTEL"),
+  };
+}
+
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
 const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<unknown>> = {
@@ -511,6 +541,7 @@ const RICH_BUILDERS: Record<string, (code: string, period: string) => Promise<un
   MARKET_AREA_SUMMARY: marketAreaSummaryContext,
   BOOKING_WINDOW_SUMMARY: bookingWindowSummaryContext,
   BOOKING_OVERVIEW_SUMMARY: bookingOverviewSummaryContext,
+  SOJERN_SUMMARY: sojernSummaryContext,
 };
 
 /** Build the section-specific pre-formatted context, or null if the property is unknown. */

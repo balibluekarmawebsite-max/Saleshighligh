@@ -6,6 +6,9 @@ import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { extractBookingOverview } from "@/lib/sales/booking-overview-ai";
 import { saveBookingOverview } from "@/lib/sales/booking-overview-import";
 import type { BookingOverviewCore, NormalAvailRow, RawAvailRow } from "@/lib/sales/booking-overview-logic";
+import { extractSojern } from "@/lib/sales/sojern-ai";
+import { saveSojern } from "@/lib/sales/sojern-import";
+import type { NormalSojernMeta, NormalSojernPoint, RawSojernMeta, RawSojernPoint } from "@/lib/sales/sojern-logic";
 import { extractBookingWindow } from "@/lib/sales/booking-window-ai";
 import { saveBookingWindow } from "@/lib/sales/booking-window-import";
 import type {
@@ -160,6 +163,55 @@ export async function saveBookingOverviewAction(input: {
     period: input.period,
     core: input.core,
     avail: input.avail,
+    source: "manual-or-ai",
+    uploadedBy: user?.email ?? null,
+  });
+  if (r.ok) revalidatePath(`/dashboard/${input.property}/${input.period}/market`);
+  return { ok: r.ok, message: r.message };
+}
+
+export interface SojernExtractActionResult {
+  ok: boolean;
+  error?: string;
+  meta?: NormalSojernMeta;
+  points?: NormalSojernPoint[];
+}
+
+/** Editor/admin: AI-extract the Sojern Market Overview (preview only). */
+export async function extractSojernAction(input: {
+  property: string;
+  text?: string | null;
+  imageBase64?: string | null;
+  imageMediaType?: string | null;
+}): Promise<SojernExtractActionResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, error: "You don't have edit access to this property." };
+  }
+  const image =
+    input.imageBase64 && input.imageMediaType
+      ? { data: input.imageBase64, mediaType: input.imageMediaType }
+      : null;
+  const r = await extractSojern({ text: input.text, image });
+  return r.ok ? { ok: true, meta: r.meta, points: r.points } : { ok: false, error: r.error };
+}
+
+/** Editor/admin: save the Sojern Market Overview (filters + flight/hotel index). */
+export async function saveSojernAction(input: {
+  property: string;
+  period: string;
+  meta: RawSojernMeta;
+  points: RawSojernPoint[];
+}): Promise<SaveResult> {
+  const user = await getCurrentUser();
+  if (!canEditProperty(user, input.property)) {
+    return { ok: false, message: "You don't have edit access to this property." };
+  }
+  const r = await saveSojern({
+    property: input.property,
+    period: input.period,
+    meta: input.meta,
+    points: input.points,
     source: "manual-or-ai",
     uploadedBy: user?.email ?? null,
   });
