@@ -68,15 +68,25 @@ function UnitPanel({ unit }: { unit: SocialUnitData }) {
 
   return (
     <div className="space-y-6">
-      {unit.summary && (
-        <div className="flex gap-2 rounded-md border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/5 p-3 text-sm">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--brand-gold))]" aria-hidden />
-          <p className="text-muted-foreground">
-            <span className="font-medium text-foreground">Summary · </span>
-            {unit.summary}
-          </p>
-        </div>
-      )}
+      {(() => {
+        const narrated = unit.platforms.filter((p) => p.narrative);
+        if (narrated.length === 0) return null;
+        return (
+          <div className="flex gap-2 rounded-md border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/5 p-4 text-sm">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--brand-gold))]" aria-hidden />
+            <div className="space-y-2 leading-relaxed">
+              <p className="font-medium text-foreground">Summary</p>
+              {narrated.map((p) => (
+                <p key={p.platform} className="text-muted-foreground">
+                  <span className="font-semibold text-foreground">{PLATFORM_LABEL[p.platform] ?? p.platform}</span>
+                  {" · "}
+                  {p.narrative}
+                </p>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="space-y-3">
         <h4 className="text-sm font-semibold text-foreground">Instagram &amp; Facebook</h4>

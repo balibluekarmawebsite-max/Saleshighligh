@@ -2231,6 +2231,9 @@ export interface SocialPlatformCard {
   platform: string;
   hasData: boolean;
   metrics: SocialMetricCell[];
+  /** A prose paragraph describing this platform's month (reported metrics only,
+   *  each with its value + MoM) — the per-platform summary shown on the page. */
+  narrative: string | null;
 }
 
 export interface SocialUnitData {
@@ -2276,6 +2279,105 @@ const METRIC_PHRASE: Record<SocialMetricKey, string> = {
   profileVisits: "profile visits",
   followersGained: "followers",
 };
+
+const SOCIAL_PLATFORM_LABEL: Record<string, string> = {
+  INSTAGRAM: "Instagram",
+  FACEBOOK: "Facebook",
+  TIKTOK: "TikTok",
+  YOUTUBE: "YouTube",
+};
+
+// Prose nouns + direction verbs for the per-platform narrative.
+const SOC_NOUN: Record<SocialMetricKey, string> = {
+  impressions: "impressions",
+  reach: "reach",
+  interactions: "content interactions",
+  linkClicks: "link clicks",
+  profileVisits: "profile visits",
+  followersGained: "followers",
+};
+const SOC_VERB: Record<Exclude<SocialMetricKey, "followersGained">, { up: string; down: string; flat: string; none: string }> = {
+  impressions: { up: "rose to", down: "declined to", flat: "held at", none: "reached" },
+  reach: { up: "increased to", down: "fell to", flat: "held at", none: "totalled" },
+  interactions: { up: "climbed to", down: "eased to", flat: "held at", none: "came in at" },
+  linkClicks: { up: "grew to", down: "dropped to", flat: "held at", none: "registered" },
+  profileVisits: { up: "rose to", down: "slipped to", flat: "held at", none: "stood at" },
+};
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** Compact count for prose, e.g. 313423 → "313.4K", 1_106_039 → "1.1M". */
+function socialCompact(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (a >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return Math.round(n).toLocaleString("en-US");
+}
+/** " (+673.8%)" / " (−12.4%)" / "" when the MoM isn't available. */
+function socialMomTag(mom: number | null): string {
+  if (mom === null) return "";
+  return ` (${mom > 0 ? "+" : mom < 0 ? "−" : ""}${Math.abs(mom).toFixed(1)}%)`;
+}
+function joinAnd(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? "";
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * A prose paragraph for one platform's month, built ONLY from reported metrics
+ * (each with its exact value + MoM) — so the figures are always correct. Reads
+ * like the Sales Highlight narrative (lead assessment, then each metric, then an
+ * interpretive close). Returns null when the platform reported nothing.
+ */
+function buildPlatformNarrative(platformLabel: string, metrics: SocialMetricCell[], monthLabel: string): string | null {
+  const reported = metrics.filter((m) => m.value !== null);
+  if (reported.length === 0) return null;
+  const withMom = reported.filter((m) => m.mom !== null);
+  const up = withMom.filter((m) => (m.mom as number) > 0).length;
+  const down = withMom.filter((m) => (m.mom as number) < 0).length;
+
+  const clauses: string[] = [];
+  for (const m of reported) {
+    if (m.key === "followersGained") continue; // placed last, phrased specially
+    const v = m.value as number;
+    const verbs = SOC_VERB[m.key as Exclude<SocialMetricKey, "followersGained">];
+    const verb = m.mom === null ? verbs.none : m.mom > 0.05 ? verbs.up : m.mom < -0.05 ? verbs.down : verbs.flat;
+    clauses.push(`${SOC_NOUN[m.key]} ${verb} ${socialCompact(v)}${socialMomTag(m.mom)}`);
+  }
+  const fol = reported.find((m) => m.key === "followersGained");
+  if (fol) {
+    const v = fol.value as number;
+    const word = Math.abs(v) === 1 ? "follower" : "followers";
+    clauses.push(
+      v >= 0
+        ? `the account gained ${socialCompact(v)} new ${word}${socialMomTag(fol.mom)}`
+        : `the account lost ${socialCompact(Math.abs(v))} ${word}${socialMomTag(fol.mom)}`,
+    );
+  }
+
+  let lead: string;
+  let closing = "";
+  if (withMom.length === 0) {
+    lead = `Monthly ${platformLabel} performance for ${monthLabel}`;
+  } else if (down === 0) {
+    lead = `Monthly ${platformLabel} performance showed broad growth month-on-month`;
+    closing = ", reflecting stronger visibility and audience engagement";
+  } else if (up === 0) {
+    lead = `Monthly ${platformLabel} performance softened across the board month-on-month`;
+    closing = ", pointing to an opportunity to rebuild reach and engagement";
+  } else if (up > down) {
+    lead = `Monthly ${platformLabel} performance was mostly positive month-on-month`;
+  } else if (down > up) {
+    lead = `Monthly ${platformLabel} performance was mostly softer month-on-month`;
+  } else {
+    lead = `Monthly ${platformLabel} performance was mixed month-on-month`;
+  }
+  return `${lead}: ${joinAnd(clauses)}${closing}.`;
+}
 
 /** Aggregated data for the Social Media & PR page. */
 export async function getSocialPageData(
@@ -2326,6 +2428,9 @@ export async function getSocialPageData(
   // MoM, the trend and the summary, so it never reads as a false −100% drop.
   const reported = (n: number | null | undefined): number | null => (n === 0 || n == null ? null : n);
 
+  const [py, pm] = period.split("-").map(Number);
+  const monthLabel = `${MONTH_NAMES[(pm ?? 1) - 1] ?? ""} ${py ?? ""}`.trim();
+
   const units: SocialUnitData[] = SOCIAL_UNITS.map((unit) => {
     const platforms: SocialPlatformCard[] = SOCIAL_PLATFORMS.map((platform) => {
       const cur = current.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform);
@@ -2344,7 +2449,8 @@ export async function getSocialPageData(
           trend,
         };
       });
-      return { platform, hasData: !!cur, metrics };
+      const narrative = buildPlatformNarrative(SOCIAL_PLATFORM_LABEL[platform] ?? platform, metrics, monthLabel);
+      return { platform, hasData: !!cur, metrics, narrative };
     });
 
     // Rule-based unit summary from platform-aggregated MoM. Only metrics that are
