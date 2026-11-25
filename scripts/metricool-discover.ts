@@ -14,7 +14,7 @@
  *
  *     <blogId|propertyCode>  a numeric Metricool blogId, or a property code
  *                            (BKDS / BKDU / BKV) resolved from the database.
- *     [network]              instagram | facebook   (default: both)
+ *     [network]              instagram | facebook | tiktok | youtube (default: all)
  *
  *   e.g.  npx tsx scripts/metricool-discover.ts BKV
  *         npx tsx scripts/metricool-discover.ts 2929192 instagram
@@ -240,6 +240,55 @@ const CANDIDATES: Record<string, string[]> = {
     "websiteClicks",
     "profileVisits",
     "followers",
+  ],
+  tiktok: [
+    // views / impressions
+    "video_views",
+    "videoViews",
+    "views",
+    "impressions",
+    "profileViews",
+    "profile_views",
+    // reach / engagement
+    "reach",
+    "engagement",
+    "interactions",
+    "likes",
+    "comments",
+    "shares",
+    // clicks / followers
+    "profile_clicks",
+    "link_clicks",
+    "clicks",
+    "followers",
+    "fans",
+    "follower_count",
+    "followerCount",
+  ],
+  youtube: [
+    // views / reach
+    "views",
+    "impressions",
+    "uniqueViewers",
+    "unique_viewers",
+    // watch / engagement
+    "estimatedMinutesWatched",
+    "estimated_minutes_watched",
+    "watchTime",
+    "watch_time",
+    "likes",
+    "comments",
+    "shares",
+    "engagement",
+    // clicks / subscribers
+    "cardClicks",
+    "card_clicks",
+    "clicks",
+    "subscribers",
+    "subscribersGained",
+    "subscribers_gained",
+    "channelViews",
+    "channel_views",
   ],
 };
 
@@ -665,7 +714,7 @@ async function main(): Promise<void> {
   const target = process.argv[2];
   const netArg = (process.argv[3] || "").toLowerCase();
   if (!target) {
-    console.error("Usage: npx tsx scripts/metricool-discover.ts <blogId|propertyCode|brands> [instagram|facebook]");
+    console.error("Usage: npx tsx scripts/metricool-discover.ts <blogId|propertyCode|brands> [instagram|facebook|tiktok|youtube]");
     process.exit(1);
     return;
   }
@@ -689,7 +738,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const networks = netArg === "instagram" || netArg === "facebook" ? [netArg] : ["instagram", "facebook"];
+  const ALL_NETWORKS = ["instagram", "facebook", "tiktok", "youtube"];
+  const networks = ALL_NETWORKS.includes(netArg) ? [netArg] : ALL_NETWORKS;
 
   const { blogId, label } = await resolveTarget(target);
 

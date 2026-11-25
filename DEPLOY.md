@@ -445,6 +445,54 @@ in the audit log (`/admin/activity`, action `weekly_auto_sync`).
 
 ---
 
+## 9a. Monthly Social Media sync (Metricool → Sales Highlight)
+
+The monthly **Social Media & PR** page pulls six metrics (impressions · reach ·
+interactions · link clicks · profile visits · followers gained) for **Instagram,
+Facebook, TikTok and YouTube** from Metricool, over the whole report month, into
+`SocialMediaMetrics` (keyed per business unit). It reuses the same Metricool
+credentials as the weekly sync (§9) — no extra login.
+
+**Brand model.** One Metricool brand per property feeds the **Hotel** unit (the
+same `blogId` the weekly report uses). If the restaurant/spa have their own
+Metricool brands, assign them from the Social page's sync panel (admin) — they
+write a `blogId:RESTAURANT` / `blogId:SPA` setting and are skipped when
+unassigned (never duplicated from the hotel).
+
+**Using it.** On `/dashboard/<PROPERTY>/<YYYY-MM>/social`, editors see a **Sync
+from Metricool** panel: assign a brand per unit (admin), then “Sync Hotel” (or
+“Sync all assigned units”). A FINAL period is refused. Each sync writes an
+`ImportHistory` + audit row.
+
+**TikTok / YouTube metric names.** Instagram/Facebook names ship confirmed.
+TikTok/YouTube metric names vary per account, so discover them once, then pin via
+`METRICOOL_SOCIAL_METRIC_MAP`:
+
+```bash
+npx tsx scripts/metricool-discover.ts <PROPERTY|blogId> tiktok
+npx tsx scripts/metricool-discover.ts <PROPERTY|blogId> youtube
+# then, e.g.:
+# METRICOOL_SOCIAL_METRIC_MAP='{"tiktok":{"impressions":"video_views","followersGained":"followers"},"youtube":{"impressions":"views","followersGained":"subscribers"}}'
+```
+
+Until pinned, a TikTok/YouTube metric whose name doesn't resolve simply stays
+blank (never a wrong number). `followersGained` is the month's net change
+(last − first of the daily follower/subscriber count).
+
+**Automation (optional).** A token-gated route mirrors the ads sync, for a cron:
+
+```bash
+curl -X POST https://<host>/api/sales/social/sync \
+  -H "Authorization: Bearer $SALES_API_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"property":"BKDS","period":"2026-10","unit":"HOTEL"}'
+```
+
+`unit` is optional (default `HOTEL`). Needs `SALES_API_TOKEN` (or
+`IMPORT_API_TOKEN`) and the Metricool credentials.
+
+---
+
 ## 10. Data push API (VHP scraper → weekly report)
 
 An external scraper can push a VHP CSV export straight into a weekly report

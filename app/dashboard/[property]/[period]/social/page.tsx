@@ -4,11 +4,16 @@ import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SocialUnitTabs } from "@/components/dashboard/social-unit-tabs";
+import { SocialSyncPanel, type UnitBrandInit } from "@/components/sales/social-sync-panel";
+import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
 import { GROUP_CODE, getSocialPageData } from "@/lib/dashboard-data";
 import { formatNumber } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
+import { getUnitBlogId, isMetricoolConfigured } from "@/lib/weekly/metricool";
 
 export const dynamic = "force-dynamic";
+
+const SYNC_UNITS: UnitBrandInit["unit"][] = ["HOTEL", "RESTAURANT", "SPA"];
 
 /** Compact follower count, e.g. 12,400 → "12.4K". */
 function compactFollowers(n: number): string {
@@ -29,14 +34,40 @@ export default async function SocialPage({
 
   const data = await getSocialPageData(params.property, params.period);
   if (!data) notFound();
+
+  // Editor/admin Metricool sync controls (also shown on the empty state so an
+  // editor can populate the page). Resolve each unit's assigned brand.
+  const me = await getCurrentUser();
+  const canEdit = canEditProperty(me, params.property);
+  const admin = isAdmin(me);
+  const configured = isMetricoolConfigured();
+  const brands: UnitBrandInit[] = canEdit
+    ? await Promise.all(
+        SYNC_UNITS.map(async (unit) => ({ unit, blogId: await getUnitBlogId(params.property, unit) })),
+      )
+    : [];
+
+  const syncPanel = canEdit ? (
+    <SocialSyncPanel
+      property={params.property}
+      period={params.period}
+      brands={brands}
+      configured={configured}
+      isAdmin={admin}
+    />
+  ) : null;
+
   if (!data.hasData) {
     return (
-      <EmptyState
-        title={`No data for ${params.property} · ${periodLabel(params.period)}`}
-        message="Import the monthly workbook (SOCIAL / INFLUENCER tabs) to populate this page."
-        actionHref="/admin/import"
-        actionLabel="Import data"
-      />
+      <div className="mx-auto max-w-6xl space-y-6">
+        {syncPanel}
+        <EmptyState
+          title={`No data for ${params.property} · ${periodLabel(params.period)}`}
+          message="Sync from Metricool above, or import the monthly workbook (SOCIAL / INFLUENCER tabs)."
+          actionHref="/admin/import"
+          actionLabel="Import data"
+        />
+      </div>
     );
   }
 
@@ -45,9 +76,12 @@ export default async function SocialPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div>
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground">{property.name}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Social Media &amp; PR · {periodLabel(params.period)}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-foreground">{property.name}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Social Media &amp; PR · {periodLabel(params.period)}</p>
+        </div>
+        {syncPanel}
       </div>
 
       {/* Organic social by unit */}

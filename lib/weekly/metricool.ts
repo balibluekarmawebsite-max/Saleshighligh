@@ -108,6 +108,36 @@ export async function getPropertyBlogId(propertyCode: string): Promise<string | 
   return typeof v === "string" ? v : String(v);
 }
 
+/** The WeeklySetting key that holds a business unit's Metricool brand. HOTEL
+ *  reuses the shared `blogId` (the property brand — what the weekly report uses);
+ *  RESTAURANT/SPA have their own `blogId:UNIT` key so they can point at a
+ *  separate Metricool brand when the outlet has its own social accounts. */
+export function unitBlogIdKey(unit: "HOTEL" | "RESTAURANT" | "SPA"): string {
+  return unit === "HOTEL" ? "blogId" : `blogId:${unit}`;
+}
+
+/**
+ * The Metricool blogId for a (property, business unit), or null. HOTEL resolves
+ * to the shared property brand (`blogId`); RESTAURANT/SPA resolve to their own
+ * `blogId:UNIT` override and fall back to NOTHING (not the hotel brand) so an
+ * unassigned outlet is simply skipped rather than duplicating the hotel's data.
+ */
+export async function getUnitBlogId(
+  propertyCode: string,
+  unit: "HOTEL" | "RESTAURANT" | "SPA",
+): Promise<string | null> {
+  const prop = await prisma.property.findUnique({ where: { code: propertyCode }, select: { id: true } });
+  if (!prop) return null;
+  const row = await prisma.weeklySetting.findFirst({
+    where: { propertyId: prop.id, group: "metricool", key: unitBlogIdKey(unit) },
+    select: { value: true },
+  });
+  if (!row || row.value == null) return null;
+  const v = row.value;
+  const s = typeof v === "string" ? v : String(v);
+  return s.trim() || null;
+}
+
 // ── Analytics ────────────────────────────────────────────────────────────────
 //
 // Section H pulls five metrics per network from Metricool (confirmed live
@@ -244,19 +274,24 @@ export async function metricoolV2Aggregate(
 }
 
 /**
- * Reduce a /v2/analytics/timelines response to its summed and last values.
+ * Reduce a /v2/analytics/timelines response to its summed, first and last values.
  * The modern per-account metrics come back nested:
  *   { "data": [ { "metric": "X", "values": [ { "dateTime": "…", "value": N }, … ] } ] }
  * (values may be strings). Older/other metrics may come back as a flat point
  * array [[ts,"val"], …]; both shapes are handled. `metric` picks the matching
- * series when several are returned. Returns { sum, last } (either may be null).
+ * series when several are returned. Returns { sum, first, last } (any may be
+ * null). `first`/`last` are the first/last non-null daily values — their delta
+ * is the net change over the window (used for monthly "followers gained").
  */
-export function readV2Timeline(data: unknown, metric?: string): { sum: number | null; last: number | null } {
+export function readV2Timeline(
+  data: unknown,
+  metric?: string,
+): { sum: number | null; first: number | null; last: number | null } {
   let node: unknown = data;
   if (node && typeof node === "object" && !Array.isArray(node) && "data" in (node as Record<string, unknown>)) {
     node = (node as Record<string, unknown>).data;
   }
-  if (!Array.isArray(node)) return { sum: null, last: null };
+  if (!Array.isArray(node)) return { sum: null, first: null, last: null };
 
   // Array of series objects { metric, values: [{dateTime, value}, …] }.
   const seriesObjs = node.filter(
@@ -276,8 +311,12 @@ export function readV2Timeline(data: unknown, metric?: string): { sum: number | 
   }
 
   const nums = points.map(pointValue).filter((v): v is number => v !== null);
-  if (!nums.length) return { sum: null, last: null };
-  return { sum: nums.reduce((a, b) => a + b, 0), last: nums[nums.length - 1] ?? null };
+  if (!nums.length) return { sum: null, first: null, last: null };
+  return {
+    sum: nums.reduce((a, b) => a + b, 0),
+    first: nums[0] ?? null,
+    last: nums[nums.length - 1] ?? null,
+  };
 }
 
 /**
@@ -292,7 +331,7 @@ export async function metricoolV2Timeline(
   subject: string,
   fromIso: string,
   toIso: string,
-): Promise<{ sum: number | null; last: number | null }> {
+): Promise<{ sum: number | null; first: number | null; last: number | null }> {
   const data = await metricoolGet<unknown>("/v2/analytics/timelines", {
     blogId,
     params: { from: fromIso, to: toIso, metric, network, subject, timezone: metricoolTimezone() },
