@@ -64,10 +64,26 @@ export function SocialSyncPanel({
     );
   }
 
+  /** Persist the current brand input before syncing (admins only), so typing or
+   *  browsing a brand and clicking Sync "just works" without a separate Save —
+   *  the sync reads the SAVED brand from the server. Non-admins rely on the
+   *  already-saved brand. Returns ok:false (with a message) if the save fails. */
+  async function ensureSaved(unit: Unit): Promise<{ ok: boolean; message?: string }> {
+    const id = blogIds[unit]?.trim();
+    if (!isAdmin || !id) return { ok: true };
+    const s = await saveSocialUnitBrandAction({ property, period, unit, blogId: id });
+    return { ok: s.ok, message: s.message };
+  }
+
   async function syncUnit(unit: Unit) {
     setMsg(null);
     setBusyUnit(unit);
     try {
+      const saved = await ensureSaved(unit);
+      if (!saved.ok) {
+        setMsg({ ok: false, text: saved.message ?? "Could not save the brand." });
+        return;
+      }
       const r = await syncMonthlySocialAction({ property, period, unit });
       setMsg({ ok: r.ok, text: r.message });
       if (r.ok) router.refresh();
@@ -83,7 +99,12 @@ export function SocialSyncPanel({
     let anyOk = false;
     try {
       for (const { unit, label } of UNITS) {
-        if (!blogIds[unit]?.trim()) continue; // skip units with no brand assigned
+        if (!blogIds[unit]?.trim()) continue; // skip units with no brand entered
+        const saved = await ensureSaved(unit);
+        if (!saved.ok) {
+          results.push(`${label}: ✗ ${saved.message ?? "could not save brand"}`);
+          continue;
+        }
         const r = await syncMonthlySocialAction({ property, period, unit });
         if (r.ok) anyOk = true;
         results.push(`${label}: ${r.ok ? "✓" : "✗"} ${r.message}`);
@@ -91,7 +112,7 @@ export function SocialSyncPanel({
       setMsg(
         results.length
           ? { ok: anyOk, text: results.join("  ·  ") }
-          : { ok: false, text: "No brands assigned yet — assign a Metricool brand to at least the hotel." },
+          : { ok: false, text: "No brands entered yet — enter a Metricool brand for at least the hotel." },
       );
       if (anyOk) router.refresh();
     } finally {
