@@ -265,7 +265,8 @@ export default async function PrintPage({
                   .filter((p) => p.hasData)
                   .map((p) => {
                     const m = (k: string) => p.metrics.find((x) => x.key === k)?.value ?? null;
-                    return [`${UNIT[u.unit] ?? u.unit} · ${p.platform}`, num(m("impressions")), num(m("reach")), num(m("interactions")), num(m("followersGained"))];
+                    const cell = (k: string) => { const v = m(k); return v === null ? "—" : num(v); };
+                    return [`${UNIT[u.unit] ?? u.unit} · ${p.platform}`, cell("impressions"), cell("reach"), cell("interactions"), cell("followersGained")];
                   }),
               )}
           />

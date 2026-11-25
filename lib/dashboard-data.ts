@@ -2219,7 +2219,10 @@ type SocialMetricKey =
 export interface SocialMetricCell {
   key: SocialMetricKey;
   label: string;
-  value: number;
+  /** null = not reported this period (e.g. a metric Metricool doesn't serve for
+   *  this account) — rendered as "—" and excluded from MoM/trend/summary, so an
+   *  unreported metric never shows a false −100% drop. */
+  value: number | null;
   mom: number | null;
   trend: number[];
 }
@@ -2318,35 +2321,45 @@ export async function getSocialPageData(
 
   const pctStr = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 
+  // A monthly social metric of 0 is treated as "not reported" (e.g. a metric
+  // Metricool doesn't serve for this account): excluded from the value shown,
+  // MoM, the trend and the summary, so it never reads as a false −100% drop.
+  const reported = (n: number | null | undefined): number | null => (n === 0 || n == null ? null : n);
+
   const units: SocialUnitData[] = SOCIAL_UNITS.map((unit) => {
     const platforms: SocialPlatformCard[] = SOCIAL_PLATFORMS.map((platform) => {
       const cur = current.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform);
       const prev = previous?.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform);
       const metrics: SocialMetricCell[] = SOCIAL_METRICS.map(({ key, label }) => {
-        const value = cur ? cur[key] : 0;
-        const prevVal = prev ? prev[key] : undefined;
+        const value = reported(cur?.[key]);
+        const prevVal = reported(prev?.[key]);
         const trend = asc
-          .map((p) => p.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform)?.[key])
-          .filter((v): v is number => v !== undefined);
+          .map((p) => reported(p.socialMediaMetrics.find((m) => m.unit === unit && m.platform === platform)?.[key]))
+          .filter((v): v is number => v !== null);
         return {
           key,
           label,
           value,
-          mom: cur && prevVal !== undefined ? momChange(value, prevVal) : null,
+          mom: value !== null && prevVal !== null ? momChange(value, prevVal) : null,
           trend,
         };
       });
       return { platform, hasData: !!cur, metrics };
     });
 
-    // Rule-based unit summary from platform-aggregated MoM.
+    // Rule-based unit summary from platform-aggregated MoM. Only metrics that are
+    // actually reported (non-zero) in BOTH months contribute — an unreported
+    // metric (e.g. link clicks Metricool doesn't serve) is skipped, not a −100%.
     const curRows = current.socialMediaMetrics.filter((m) => m.unit === unit);
     const prevRows = previous?.socialMediaMetrics.filter((m) => m.unit === unit) ?? [];
     let summary: string | null = null;
     if (curRows.length > 0 && prevRows.length > 0) {
       const momOf = (key: SocialMetricKey): number | null => {
-        const c = curRows.reduce((s, m) => s + m[key], 0);
-        const p = prevRows.reduce((s, m) => s + m[key], 0);
+        const cs = curRows.map((m) => reported(m[key])).filter((x): x is number => x !== null);
+        const ps = prevRows.map((m) => reported(m[key])).filter((x): x is number => x !== null);
+        if (cs.length === 0 || ps.length === 0) return null;
+        const c = cs.reduce((s, v) => s + v, 0);
+        const p = ps.reduce((s, v) => s + v, 0);
         return p > 0 ? momChange(c, p) : null;
       };
       const ups = SUMMARY_UP.map((k) => ({ k, mom: momOf(k) }))

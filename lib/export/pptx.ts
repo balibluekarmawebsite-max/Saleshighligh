@@ -432,7 +432,8 @@ async function socialSection(pptx: Pptx, code: string, period: string) {
     for (const u of d.units.filter((x) => x.hasData)) {
       for (const p of u.platforms.filter((x) => x.hasData)) {
         const m = (k: string) => p.metrics.find((x) => x.key === k)?.value ?? null;
-        rows.push([td(`${UNIT[u.unit] ?? u.unit} · ${p.platform}`), td(num(m("impressions")), "right"), td(num(m("reach")), "right"), td(num(m("interactions")), "right"), td(num(m("followersGained")), "right")]);
+        const cell = (k: string) => { const v = m(k); return v === null ? "—" : num(v); };
+        rows.push([td(`${UNIT[u.unit] ?? u.unit} · ${p.platform}`), td(cell("impressions"), "right"), td(cell("reach"), "right"), td(cell("interactions"), "right"), td(cell("followersGained"), "right")]);
       }
     }
     addTable(slide, rows, 1.45);

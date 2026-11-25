@@ -40,7 +40,9 @@ function PlatformCard({ card }: { card: SocialPlatformCard }) {
                 <dt className="text-xs text-muted-foreground">{m.label}</dt>
                 <dd className="flex items-center gap-2">
                   {m.trend.length > 1 && <Sparkline data={m.trend} width={56} height={18} />}
-                  <span className="w-20 text-right text-sm font-medium tabular-nums text-foreground">{formatNumber(m.value)}</span>
+                  <span className="w-20 text-right text-sm font-medium tabular-nums text-foreground">
+                    {m.value === null ? "—" : formatNumber(m.value)}
+                  </span>
                   <span className="w-16 text-right text-xs">
                     <MoMBadge value={m.mom} />
                   </span>

@@ -240,7 +240,7 @@ async function socialContext(code: string, period: string) {
             platform: p.platform,
             metrics: p.metrics.map((m) => ({
               metric: m.label,
-              value: num(m.value),
+              value: m.value === null ? "—" : num(m.value),
               momChange: m.mom != null ? formatVariancePercent(m.mom) : "—",
             })),
           })),
