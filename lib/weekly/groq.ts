@@ -226,9 +226,16 @@ export function coerceRows(arr: unknown, keys: string[]): Record<string, string>
   return out;
 }
 
-/** Parse a model's text output as JSON, tolerating code fences / prose around it. */
+/** Parse a model's text output as JSON, tolerating code fences / prose around
+ *  it, reasoning-model <think> blocks, and a truncated trailing array. */
 export function parseJsonLoose(text: string): unknown {
-  const cleaned = text.replace(/```(?:json)?/gi, "").trim();
+  let cleaned = text.replace(/```(?:json)?/gi, "").trim();
+  // Reasoning models (e.g. gpt-oss) may emit a <think>…</think> block before the
+  // answer; strip it (and an unclosed one) so the JSON is reachable.
+  cleaned = cleaned
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/i, "")
+    .trim();
   try {
     return JSON.parse(cleaned);
   } catch {
@@ -243,5 +250,62 @@ export function parseJsonLoose(text: string): unknown {
       /* fall through */
     }
   }
+  // Last resort: the output was cut off mid-array (common on a large response).
+  // Salvage whatever object is open by closing a dangling `[ … ` array and `{`.
+  if (start >= 0) {
+    const salvaged = salvageTruncatedJson(cleaned.slice(start));
+    if (salvaged !== null) return salvaged;
+  }
   throw new Error("The AI response was not valid JSON.");
+}
+
+/** Best-effort recovery of a JSON object whose output was truncated: trims back
+ *  to the last complete element and closes open brackets/braces. Returns null if
+ *  nothing parseable can be recovered. */
+function salvageTruncatedJson(s: string): unknown {
+  // Walk the string tracking bracket depth (ignoring string contents) to find a
+  // safe truncation point after the last complete top-level array element.
+  let inStr = false;
+  let esc = false;
+  const stack: string[] = [];
+  let lastSafe = -1;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") stack.push(c);
+    else if (c === "}" || c === "]") stack.pop();
+    // A comma whose enclosing container is an array ends a complete element —
+    // a safe point to truncate before the dangling partial element.
+    else if (c === "," && stack[stack.length - 1] === "[") lastSafe = i;
+  }
+  if (lastSafe < 0) return null;
+  let head = s.slice(0, lastSafe); // drop the trailing partial element + comma
+  // Re-close any brackets left open, in reverse order.
+  const open: string[] = [];
+  inStr = false;
+  esc = false;
+  for (let i = 0; i < head.length; i++) {
+    const c = head[i]!;
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{" || c === "[") open.push(c);
+    else if (c === "}" || c === "]") open.pop();
+  }
+  for (let i = open.length - 1; i >= 0; i--) head += open[i] === "{" ? "}" : "]";
+  try {
+    return JSON.parse(head);
+  } catch {
+    return null;
+  }
 }

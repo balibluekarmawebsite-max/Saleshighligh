@@ -9,7 +9,7 @@ import {
 } from "@/app/dashboard/[property]/[period]/market/actions";
 import { UploadControls, type UploadImage } from "@/components/sales/upload-controls";
 import type { SojernData } from "@/lib/dashboard-data";
-import { MONTH_LABELS, SOJERN_METRICS } from "@/lib/sales/sojern-logic";
+import { MONTH_LABELS, SOJERN_METRICS, type SojernMetric } from "@/lib/sales/sojern-logic";
 import { cn } from "@/lib/utils";
 
 const METRIC_LABEL: Record<string, string> = { FLIGHT: "Flight Volume Index", HOTEL: "Hotel Volume Index" };
@@ -48,25 +48,27 @@ export function SojernUploader({
   const [baselineLabel, setBaselineLabel] = useState(initial?.baselineLabel ?? "Jan 2023");
   const [years, setYears] = useState<number[]>(initial?.years?.length ? initial.years : defaultYears(period));
   const [points, setPoints] = useState<Record<string, string>>(() => seedPoints(initial));
-  const [text, setText] = useState("");
-  const [image, setImage] = useState<UploadImage>(null);
-  const [busyKind, setBusyKind] = useState<null | "compile" | "save">(null);
-  const busy = busyKind !== null;
+  const [texts, setTexts] = useState<Record<string, string>>({ FLIGHT: "", HOTEL: "" });
+  const [images, setImages] = useState<Record<string, UploadImage>>({ FLIGHT: null, HOTEL: null });
+  const [compiling, setCompiling] = useState<SojernMetric | null>(null);
+  const [saving, setSaving] = useState(false);
+  const busy = saving || compiling !== null;
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const setCell = (metric: string, year: number, month: number, v: string) =>
     setPoints((p) => ({ ...p, [cellKey(metric, year, month)]: v }));
 
-  function compile() {
+  function compile(metric: SojernMetric) {
     setMsg(null);
-    setBusyKind("compile");
+    setCompiling(metric);
     void (async () => {
       try {
         const r = await extractSojernAction({
           property,
-          text: text.trim() || null,
-          imageBase64: image?.base64 ?? null,
-          imageMediaType: image?.mediaType ?? null,
+          metric,
+          text: texts[metric]?.trim() || null,
+          imageBase64: images[metric]?.base64 ?? null,
+          imageMediaType: images[metric]?.mediaType ?? null,
         });
         if (r.ok && r.points) {
           if (r.meta) {
@@ -76,7 +78,6 @@ export function SojernUploader({
             if (r.meta.timePeriod) setTimePeriod(r.meta.timePeriod);
             if (r.meta.baselineLabel) setBaselineLabel(r.meta.baselineLabel);
           }
-          // Expand the year columns to cover any years the AI read.
           const aiYears = Array.from(new Set(r.points.map((p) => p.year)));
           setYears((ys) => Array.from(new Set([...ys, ...aiYears])).sort((a, b) => a - b));
           setPoints((prev) => {
@@ -84,21 +85,21 @@ export function SojernUploader({
             for (const p of r.points!) next[cellKey(p.metric, p.year, p.month)] = String(p.valuePct);
             return next;
           });
-          setMsg({ ok: true, text: `Read ${r.points.length} index point(s) — review, then save.` });
+          setMsg({ ok: true, text: `Read ${r.points.length} ${METRIC_LABEL[metric]} point(s) — review, then save.` });
         } else {
           setMsg({ ok: false, text: r.error ?? "Could not read that." });
         }
       } catch {
         setMsg({ ok: false, text: "Could not compile — please try again." });
       } finally {
-        setBusyKind(null);
+        setCompiling(null);
       }
     })();
   }
 
   function save() {
     setMsg(null);
-    setBusyKind("save");
+    setSaving(true);
     void (async () => {
       try {
         const pts: { metric: string; year: number; month: number; value: string }[] = [];
@@ -122,7 +123,7 @@ export function SojernUploader({
           router.refresh();
         }
       } finally {
-        setBusyKind(null);
+        setSaving(false);
       }
     })();
   }
@@ -143,21 +144,9 @@ export function SojernUploader({
         <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">Close</button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Attach the Sojern Flight &amp; Hotel Volume Index charts or paste the figures, then compile — or type them in. Each
-        cell is the % difference vs the baseline for that year &amp; month.
+        Upload each chart separately — attach the Flight chart, compile, then the Hotel chart. Each cell is the % difference
+        vs the baseline for that year &amp; month; review the AI&rsquo;s reading before saving.
       </p>
-
-      <UploadControls
-        compact
-        placeholder="Paste the Sojern flight &amp; hotel volume index figures (year, month, % vs baseline)…"
-        text={text}
-        onText={setText}
-        image={image}
-        onImage={setImage}
-        onCompile={compile}
-        working={busyKind === "compile"}
-        disabled={busy}
-      />
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -188,8 +177,20 @@ export function SojernUploader({
       </div>
 
       {SOJERN_METRICS.map((metric) => (
-        <div key={metric}>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">{METRIC_LABEL[metric]} — % vs {baselineLabel}</p>
+        <div key={metric} className="space-y-2 rounded-md border border-border/70 p-3">
+          <p className="text-xs font-semibold text-foreground">{METRIC_LABEL[metric]}</p>
+          <UploadControls
+            compact
+            placeholder={`Attach the ${METRIC_LABEL[metric]} chart, or paste its year/month % figures…`}
+            text={texts[metric] ?? ""}
+            onText={(v) => setTexts((t) => ({ ...t, [metric]: v }))}
+            image={images[metric] ?? null}
+            onImage={(img) => setImages((i) => ({ ...i, [metric]: img }))}
+            onCompile={() => compile(metric)}
+            working={compiling === metric}
+            disabled={busy}
+          />
+          <p className="text-[11px] text-muted-foreground">% vs {baselineLabel}</p>
           <div className="overflow-x-auto rounded-md border border-border bg-card">
             <table className="w-full min-w-[520px] text-sm">
               <thead>
@@ -229,7 +230,7 @@ export function SojernUploader({
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" onClick={save} disabled={busy}
           className="rounded-md bg-brand-gold px-3 py-1.5 text-sm font-medium text-brand-teal transition-colors hover:bg-brand-gold/90 disabled:opacity-50">
-          {busyKind === "save" ? "Saving…" : "Save Sojern Market Overview"}
+          {saving ? "Saving…" : "Save Sojern Market Overview"}
         </button>
         {msg && <span className={cn("text-xs", msg.ok ? "text-variance-positive" : "text-variance-negative")}>{msg.text}</span>}
       </div>

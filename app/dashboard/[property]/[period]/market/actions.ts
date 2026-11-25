@@ -8,7 +8,7 @@ import { saveBookingOverview } from "@/lib/sales/booking-overview-import";
 import type { BookingOverviewCore, NormalAvailRow, RawAvailRow } from "@/lib/sales/booking-overview-logic";
 import { extractSojern } from "@/lib/sales/sojern-ai";
 import { saveSojern } from "@/lib/sales/sojern-import";
-import type { NormalSojernMeta, NormalSojernPoint, RawSojernMeta, RawSojernPoint } from "@/lib/sales/sojern-logic";
+import type { NormalSojernMeta, NormalSojernPoint, RawSojernMeta, RawSojernPoint, SojernMetric } from "@/lib/sales/sojern-logic";
 import { extractBookingWindow } from "@/lib/sales/booking-window-ai";
 import { saveBookingWindow } from "@/lib/sales/booking-window-import";
 import type {
@@ -177,9 +177,10 @@ export interface SojernExtractActionResult {
   points?: NormalSojernPoint[];
 }
 
-/** Editor/admin: AI-extract the Sojern Market Overview (preview only). */
+/** Editor/admin: AI-extract one Sojern chart (flight or hotel), preview only. */
 export async function extractSojernAction(input: {
   property: string;
+  metric?: SojernMetric | null;
   text?: string | null;
   imageBase64?: string | null;
   imageMediaType?: string | null;
@@ -192,7 +193,7 @@ export async function extractSojernAction(input: {
     input.imageBase64 && input.imageMediaType
       ? { data: input.imageBase64, mediaType: input.imageMediaType }
       : null;
-  const r = await extractSojern({ text: input.text, image });
+  const r = await extractSojern({ text: input.text, image, metric: input.metric ?? null });
   return r.ok ? { ok: true, meta: r.meta, points: r.points } : { ok: false, error: r.error };
 }
 
