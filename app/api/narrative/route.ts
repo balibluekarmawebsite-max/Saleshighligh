@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { NextRequest } from "next/server";
 
 import { buildNarrativeContext } from "@/lib/ai/context";
-import { NARRATIVE_MODEL, systemPromptFor } from "@/lib/ai/prompts";
+import { NARRATIVE_MODEL, rephraseSystemPrompt, systemPromptFor } from "@/lib/ai/prompts";
 import { requireRole } from "@/lib/auth-helpers";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { groqChatStream, isGroqConfigured } from "@/lib/weekly/groq";
@@ -19,16 +19,33 @@ export async function POST(req: NextRequest) {
   let section: string;
   let property: string;
   let period: string;
+  let mode: "generate" | "rephrase";
+  let text: string;
   try {
-    const body = (await req.json()) as { section?: string; property?: string; period?: string };
+    const body = (await req.json()) as {
+      section?: string;
+      property?: string;
+      period?: string;
+      mode?: string;
+      text?: string;
+    };
     section = body.section ?? "";
     property = body.property ?? "";
     period = body.period ?? "";
+    mode = body.mode === "rephrase" ? "rephrase" : "generate";
+    text = typeof body.text === "string" ? body.text : "";
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
   if (!section || !property || !period) {
     return Response.json({ error: "section, property and period are required." }, { status: 400 });
+  }
+  if (mode === "rephrase" && !text.trim()) {
+    return Response.json({ error: "No text to rephrase — write or paste some content first." }, { status: 400 });
+  }
+  // Cap the rephrase input so a pasted blob can't blow past the model's context.
+  if (mode === "rephrase" && text.length > 12_000) {
+    return Response.json({ error: "Text is too long to rephrase (max ~12,000 characters)." }, { status: 413 });
   }
 
   if (!rateLimit(req, "narrative", 20, 60_000)) return tooManyRequests();
@@ -56,17 +73,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const ctx = await buildNarrativeContext(section, property, period);
-  if (!ctx) {
-    return Response.json({ error: `Unknown property "${property}".` }, { status: 404 });
+  let system: string;
+  let userContent: string;
+  if (mode === "rephrase") {
+    // Polish the author's own text — no DB context needed; keep every fact intact.
+    system = rephraseSystemPrompt(section);
+    userContent = `Rewrite the author's notes below into clean report copy, preserving every fact, name, date and number exactly. Output only the rewritten headings and bullets.\n\n---\n${text}\n---`;
+  } else {
+    const ctx = await buildNarrativeContext(section, property, period);
+    if (!ctx) {
+      return Response.json({ error: `Unknown property "${property}".` }, { status: 404 });
+    }
+    system = systemPromptFor(section);
+    userContent =
+      `Report period: ${ctx.period}\n` +
+      `Property: ${ctx.property.name} (${ctx.property.code}), ${ctx.property.area}\n` +
+      `Restaurant: ${ctx.property.restaurantName} · Spa: ${ctx.property.spaName}\n\n` +
+      `Context JSON — the only figures you may cite:\n${JSON.stringify(ctx.data, null, 2)}`;
   }
-
-  const system = systemPromptFor(section);
-  const userContent =
-    `Report period: ${ctx.period}\n` +
-    `Property: ${ctx.property.name} (${ctx.property.code}), ${ctx.property.area}\n` +
-    `Restaurant: ${ctx.property.restaurantName} · Spa: ${ctx.property.spaName}\n\n` +
-    `Context JSON — the only figures you may cite:\n${JSON.stringify(ctx.data, null, 2)}`;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

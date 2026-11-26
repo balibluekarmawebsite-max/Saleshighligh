@@ -1,6 +1,6 @@
 "use client";
 
-import { CopyPlus, Sparkles } from "lucide-react";
+import { CopyPlus, PencilLine, Sparkles } from "lucide-react";
 
 import { AiDraftEditor } from "@/components/dashboard/ai-draft-editor";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,11 @@ export function PlanSectionPanel({
   period: string;
   emptyText?: string;
 }) {
-  const { draft, streaming, saveState, generate, setDraft, seed, discard, save } = useNarrativeDraft(section, property, period);
+  const { draft, streaming, rephrasing, saveState, generate, rephrase, setDraft, seed, discard, save } = useNarrativeDraft(
+    section,
+    property,
+    period,
+  );
   const { current, previous } = blocks;
 
   return (
@@ -42,6 +46,17 @@ export function PlanSectionPanel({
             size="sm"
             variant="outline"
             className="gap-1.5"
+            onClick={() => seed(current?.content ?? "")}
+            disabled={streaming}
+            title="Write or paste this section's content, then save (or rephrase with AI)"
+          >
+            <PencilLine className="h-4 w-4" />
+            {current?.content ? "Edit text" : "Write / paste"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
             onClick={() => previous?.content && seed(previous.content)}
             disabled={!previous?.content || streaming}
             title={previous?.content ? "Copy last month's content as a starting draft" : "No previous month to carry forward"}
@@ -51,7 +66,7 @@ export function PlanSectionPanel({
           </Button>
           <Button size="sm" variant="outline" className="gap-1.5" onClick={generate} disabled={streaming}>
             <Sparkles className="h-4 w-4" />
-            {streaming ? "Generating…" : "Generate with AI"}
+            {streaming && !rephrasing ? "Generating…" : "Generate with AI"}
           </Button>
         </div>
       </div>
@@ -69,10 +84,13 @@ export function PlanSectionPanel({
       <AiDraftEditor
         draft={draft}
         streaming={streaming}
+        rephrasing={rephrasing}
         saveState={saveState}
         onChange={setDraft}
         onSave={save}
         onDiscard={discard}
+        onRephrase={() => rephrase(draft ?? "")}
+        placeholder={"Type or paste this section's plan — one action per line. Use sub-headings like\n\nOTA:\n- …\n\nOffline Agent:\n- …\n\nthen Rephrase with AI to polish it."}
       />
     </div>
   );

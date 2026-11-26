@@ -232,6 +232,21 @@ const PLAN_LABELS: Record<string, string> = {
   PROMOTIONS: "ongoing promotions summary",
 };
 
+const REPHRASE_RULES = `You are an editor polishing an internal monthly "Sales Highlight" report for Blue Karma Group, a Bali hospitality company (properties BKDS, BKDU, BKV). You are given the author's own rough notes for one section. Rewrite them into clean, professional report copy.
+
+Hard rules:
+- Preserve every fact EXACTLY: campaign and partner/OTA names, dates and months, markets and countries, night counts, percentages, commissions, property codes (BKDS/BKDU/BKV) and outlet names. Never add, drop, merge away, or change a fact, name, date or number.
+- Fix grammar, spelling, capitalisation and tense. Use clear, concise British-neutral hospitality English. No marketing hyperbole and no emoji.
+- Keep it as a bullet list: one action per line, each line starting with "- ". Keep the author's sub-headings (e.g. "OTA:", "Offline Agent:") on their own line above their bullets.
+- Do NOT invent new actions or commentary, and do NOT add a title, preamble or closing remark. Output only the rewritten headings and bullets.`;
+
+/** System prompt for the "Rephrase with AI" action — polishes the author's own
+ *  text for a section without inventing or changing any fact. */
+export function rephraseSystemPrompt(section: string): string {
+  const label = PLAN_LABELS[section] ?? section.replace(/_/g, " ").toLowerCase();
+  return `${REPHRASE_RULES}\n\nThis section is the ${label}.`;
+}
+
 /** The section-specific system prompt, combined with the shared guardrails. */
 export function systemPromptFor(section: string): string {
   const specific = SECTION_GUIDANCE[section];

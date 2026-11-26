@@ -14,10 +14,12 @@ export function useNarrativeDraft(section: string, property: string, period: str
   const router = useRouter();
   const [draft, setDraftState] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
+  const [rephrasing, setRephrasing] = useState(false);
   const [edited, setEdited] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
 
-  async function generate() {
+  /** POST to /api/narrative and stream the plain-text response into the buffer. */
+  async function runStream(body: Record<string, unknown>) {
     setStreaming(true);
     setEdited(false);
     setSaveState("idle");
@@ -26,7 +28,7 @@ export function useNarrativeDraft(section: string, property: string, period: str
       const res = await fetch("/api/narrative", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, property, period }),
+        body: JSON.stringify({ section, property, period, ...body }),
       });
       if (!res.ok || !res.body) {
         let message = "AI generation is unavailable.";
@@ -52,6 +54,23 @@ export function useNarrativeDraft(section: string, property: string, period: str
       setDraftState("Could not reach the AI service.");
     } finally {
       setStreaming(false);
+    }
+  }
+
+  /** Generate a fresh draft from the section's KPI context. */
+  async function generate() {
+    await runStream({});
+  }
+
+  /** Rephrase the author's own text (polish grammar/format, keep every fact). */
+  async function rephrase(input: string) {
+    const t = (input ?? "").trim();
+    if (!t) return;
+    setRephrasing(true);
+    try {
+      await runStream({ mode: "rephrase", text: t });
+    } finally {
+      setRephrasing(false);
     }
   }
 
@@ -98,5 +117,5 @@ export function useNarrativeDraft(section: string, property: string, period: str
     }
   }
 
-  return { draft, streaming, edited, saveState, generate, setDraft, seed, discard, save };
+  return { draft, streaming, rephrasing, edited, saveState, generate, rephrase, setDraft, seed, discard, save };
 }
