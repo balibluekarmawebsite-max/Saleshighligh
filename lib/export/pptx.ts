@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+
 import PptxGenJS from "pptxgenjs";
 
 import { achievementPct, variancePct } from "@/lib/calculations";
@@ -12,11 +14,12 @@ import {
   getSocialPageData,
   getSpaPageData,
   getSummaryPageData,
+  type SojernChartRow,
 } from "@/lib/dashboard-data";
 import { segmentLabel } from "@/lib/sales/account-segments";
 import { overviewContentToText } from "@/lib/sales/restaurant-overview";
 import {
-  formatIDRCompact,
+  formatIDR,
   formatNumber,
   formatPercent,
   formatRatioPct,
@@ -25,6 +28,7 @@ import {
 import { DECK_SECTIONS, DEFAULT_SECTION_IDS, type DeckSectionId } from "@/lib/export/sections";
 import { periodLabel } from "@/lib/labels";
 import { prisma } from "@/lib/prisma";
+import { storagePath } from "@/lib/storage";
 
 export { DECK_SECTIONS, DEFAULT_SECTION_IDS } from "@/lib/export/sections";
 export type { DeckSectionId } from "@/lib/export/sections";
@@ -41,6 +45,8 @@ type Slide = ReturnType<Pptx["addSlide"]>;
 
 const TEAL = "0F4C5C";
 const GOLD = "C9A227";
+const LTTEAL = "9CC3D0"; // light teal — "market" comparison series
+const ORANGE = "E8833A"; // ADR / line accent
 const INK = "1F2937";
 const MUTE = "6B7280";
 const LINE = "E5E7EB";
@@ -51,7 +57,9 @@ const CW = 13.333;
 const MX = 0.6;
 
 // ── formatting ──────────────────────────────────────────────────────────────
-const money = (n: number | null | undefined) => (n == null ? "—" : formatIDRCompact(n));
+// Full IDR numbers with thousand separators (e.g. "Rp 4,600,000,000") — the
+// report quotes complete figures, not compact "Rp 4.6 B".
+const money = (n: number | null | undefined) => (n == null ? "—" : formatIDR(n));
 const num = (n: number | null | undefined) => (n == null ? "—" : formatNumber(n));
 const pct = (n: number | null | undefined) => (n == null ? "—" : formatPercent(n));
 const svar = (n: number | null | undefined) => (n == null ? "—" : formatVariancePercent(n));
@@ -176,6 +184,81 @@ function revenueBar(pptx: Pptx, slide: Slide, labels: string[], actual: number[]
     },
   );
 }
+
+/** A two-series grouped column chart (e.g. Actual vs Budget, Property vs Market). */
+function groupedBar(
+  pptx: Pptx,
+  slide: Slide,
+  labels: string[],
+  s1: string,
+  v1: number[],
+  s2: string,
+  v2: number[],
+  y: number,
+  h: number,
+  colors: string[] = [TEAL, GOLD],
+) {
+  slide.addChart(
+    pptx.ChartType.bar,
+    [
+      { name: s1, labels, values: v1 },
+      { name: s2, labels, values: v2 },
+    ],
+    {
+      x: MX, y, w: CW - 2 * MX, h, barDir: "col", chartColors: colors, showLegend: true, legendPos: "b",
+      legendFontFace: FONT, catAxisLabelFontFace: FONT, catAxisLabelFontSize: 9, valAxisLabelFontFace: FONT, valAxisLabelFontSize: 9, showValue: false,
+    },
+  );
+}
+
+/** A multi-series line chart (nulls render as gaps). */
+function lineChart(
+  pptx: Pptx,
+  slide: Slide,
+  labels: string[],
+  series: { name: string; values: (number | null)[] }[],
+  y: number,
+  h: number,
+  colors: string[] = [TEAL, GOLD, ORANGE, LTTEAL, "2F6FBF", "6B7280"],
+) {
+  slide.addChart(
+    pptx.ChartType.line,
+    series.map((s) => ({ name: s.name, labels, values: s.values })),
+    {
+      x: MX, y, w: CW - 2 * MX, h, chartColors: colors, showLegend: true, legendPos: "b",
+      legendFontFace: FONT, catAxisLabelFontFace: FONT, catAxisLabelFontSize: 9, valAxisLabelFontFace: FONT, valAxisLabelFontSize: 9,
+      lineDataSymbol: "circle", lineSize: 2, lineDataSymbolSize: 5,
+    },
+  );
+}
+
+/** Read a stored upload (by its /uploads/<key> URL) as a base64 data URI for
+ *  embedding. Returns null when the URL isn't a local upload or the file is gone. */
+function imageData(imageUrl: string | null | undefined): string | null {
+  if (!imageUrl) return null;
+  const base = (process.env.UPLOAD_URL_BASE ?? "/uploads").replace(/\/+$/, "");
+  const prefix = `${base}/`;
+  if (!imageUrl.startsWith(prefix)) return null;
+  const key = imageUrl.slice(prefix.length);
+  try {
+    const abs = storagePath(key);
+    if (!existsSync(abs)) return null;
+    const ext = (key.split(".").pop() ?? "png").toLowerCase();
+    const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/png";
+    return `data:${mime};base64,${readFileSync(abs).toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+/** A short en-GB date, e.g. "3 Nov 2026", from an ISO "YYYY-MM-DD". */
+function fmtDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+const share = (n: number | null | undefined) => (n == null ? "—" : `${n.toFixed(1)}%`);
+const vsMkt = (n: number | null | undefined) => (n == null ? "—" : `${svar(n)} vs mkt`);
 
 // ── cover ───────────────────────────────────────────────────────────────────
 function coverSlide(pptx: Pptx, property: { name: string; area: string }, period: string) {
@@ -335,6 +418,22 @@ async function marketingSection(pptx: Pptx, code: string, period: string) {
       rows.push([td(p.platform), td(money(p.spend), "right"), td(num(p.impressions), "right"), td(num(p.clicks), "right"), td(p.ctr != null ? formatPercent(p.ctr) : "—", "right"), td(money(p.cpc), "right"), td(money(p.trackedRevenue), "right")]);
     }
     addTable(adsSlide, rows, 2.0);
+    // Spend vs tracked revenue per platform.
+    if (d.spendRevenue.length > 0) {
+      groupedBar(
+        pptx, adsSlide,
+        d.spendRevenue.map((s) => s.platform),
+        "Spend", d.spendRevenue.map((s) => s.spend),
+        "Tracked Revenue", d.spendRevenue.map((s) => s.revenue),
+        4.0, 2.7, [TEAL, GOLD],
+      );
+    }
+    // 6-month ROAS trend on its own slide (when there's a series to show).
+    const roas = d.roasTrend.filter((r) => r.roasPct != null);
+    if (roas.length >= 2) {
+      const rt = contentSlide(pptx, "Digital Ads — 6-Month ROAS Trend", periodLabel(period));
+      lineChart(pptx, rt, d.roasTrend.map((r) => periodLabel(r.month)), [{ name: "ROAS %", values: d.roasTrend.map((r) => r.roasPct) }], 1.6, 4.6, [GOLD]);
+    }
   } else noData(adsSlide, "No ad data for this period.");
 
   const repSlide = contentSlide(pptx, "Online Reputation — OTA & Tripadvisor", periodLabel(period));
@@ -434,15 +533,80 @@ async function spaSection(pptx: Pptx, code: string, period: string) {
 
 async function marketSection(pptx: Pptx, code: string, period: string) {
   const d = await getMarketPageData(code, period);
-  const pace = contentSlide(pptx, "Booking Pace / On the Books", d?.paceAsOf ? `Data as of ${new Date(d.paceAsOf).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : periodLabel(period));
-  if (d && d.pace.length > 0) {
+  if (!d) {
+    noData(contentSlide(pptx, "Market & Forecast", periodLabel(period)));
+    return;
+  }
+  let any = false;
+  const narr = (title: string, content: string | null | undefined) => {
+    if (content && content.trim()) addNarrative(contentSlide(pptx, title, periodLabel(period)), content);
+  };
+
+  // Market Area Update — Booking.com property vs market: room-nights (bars) + ADR (lines).
+  if (d.marketArea.length > 0) {
+    any = true;
+    const s = contentSlide(pptx, "Market Area Update", "Booking.com — property vs market");
+    const labels = d.marketArea.map((m) => m.monthLabel);
+    s.addText("Room nights — property vs market", { x: MX, y: 1.35, w: CW - 2 * MX, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
+    groupedBar(pptx, s, labels, "Room nights", d.marketArea.map((m) => m.propertyRoomNights), "Market", d.marketArea.map((m) => m.marketRoomNights), 1.62, 2.4, [TEAL, LTTEAL]);
+    s.addText("Average daily rate (IDR) — property vs market", { x: MX, y: 4.15, w: CW - 2 * MX, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
+    lineChart(pptx, s, labels, [{ name: "ADR", values: d.marketArea.map((m) => m.propertyAdr) }, { name: "Market ADR", values: d.marketArea.map((m) => m.marketAdr) }], 4.42, 2.4, [ORANGE, GOLD]);
+    narr("Market Area — Summary", d.marketAreaNarrative?.content);
+  }
+
+  // Booking Window — advance-booking lead-time, property vs market.
+  const bw = d.bookingWindow;
+  if (bw && bw.buckets.length > 0) {
+    any = true;
+    const s = contentSlide(pptx, "Booking Window", bw.dataAsOf ? `Data as of ${fmtDate(bw.dataAsOf)}  ·  ${num(bw.totalBookedRooms)} booked rooms` : periodLabel(period));
+    const rows: Cell[][] = [[head("Lead time"), head("Property share", "right"), head("Market share", "right"), head("Property ADR", "right"), head("Market ADR", "right")]];
+    for (const b of bw.buckets) rows.push([td(b.bucket), td(share(b.propertySharePct), "right"), td(share(b.marketSharePct), "right"), td(money(b.propertyAdr), "right"), td(money(b.marketAdr), "right")]);
+    addTable(s, rows, 1.5);
+    narr("Booking Window — Summary", d.bookingWindowNarrative?.content);
+  }
+
+  // Booking.com Overview — search → page → booking funnel vs market.
+  const bo = d.bookingOverview;
+  if (bo) {
+    any = true;
+    const s = contentSlide(pptx, "Booking.com Overview", bo.dataAsOf ? `Data as of ${fmtDate(bo.dataAsOf)}` : periodLabel(period));
+    const rows: Cell[][] = [[head("Metric"), head("Value", "right"), head("vs Market", "right")]];
+    rows.push([td("Search Results Views"), td(num(bo.searchResultsViews), "right"), td(vsMkt(bo.searchResultsViewsVsMkt), "right", varColor(bo.searchResultsViewsVsMkt))]);
+    rows.push([td("Property Page Visits"), td(num(bo.propertyPageVisits), "right"), td(vsMkt(bo.propertyPageVisitsVsMkt), "right", varColor(bo.propertyPageVisitsVsMkt))]);
+    rows.push([td("Search → Page Conversion"), td(share(bo.searchToPagePct), "right"), td(vsMkt(bo.searchToPageVsMkt), "right", varColor(bo.searchToPageVsMkt))]);
+    rows.push([td("Bookings Made"), td(num(bo.bookingsMade), "right"), td(vsMkt(bo.bookingsMadeVsMkt), "right", varColor(bo.bookingsMadeVsMkt))]);
+    rows.push([td("Page → Booking Conversion"), td(share(bo.pageToBookingPct), "right"), td(vsMkt(bo.pageToBookingVsMkt), "right", varColor(bo.pageToBookingVsMkt))]);
+    rows.push([td("Availability for Search"), td(share(bo.availabilityPct), "right"), td(vsMkt(bo.availabilityVsMkt), "right", varColor(bo.availabilityVsMkt))]);
+    addTable(s, rows, 1.5);
+    narr("Booking.com Overview — Summary", d.bookingOverviewNarrative?.content);
+  }
+
+  // Sojern Market Overview — flight & hotel travel-intent index vs baseline.
+  const sj = d.sojern;
+  if (sj && sj.points.length > 0) {
+    any = true;
+    const s = contentSlide(pptx, "Sojern Market Overview", `${sj.destination}  ·  ${sj.eventType}  ·  ${sj.timePeriod}  ·  vs ${sj.baselineLabel}`);
+    const yr = (row: SojernChartRow, y: number): number | null => (typeof row[String(y)] === "number" ? (row[String(y)] as number) : null);
+    const monthsF = sj.flight.map((r) => r.month);
+    const monthsH = sj.hotel.map((r) => r.month);
+    s.addText("Flight Volume Index (% vs baseline)", { x: MX, y: 1.35, w: CW - 2 * MX, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
+    lineChart(pptx, s, monthsF, sj.years.map((y) => ({ name: String(y), values: sj.flight.map((r) => yr(r, y)) })), 1.62, 2.4);
+    s.addText("Hotel Volume Index (% vs baseline)", { x: MX, y: 4.15, w: CW - 2 * MX, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
+    lineChart(pptx, s, monthsH, sj.years.map((y) => ({ name: String(y), values: sj.hotel.map((r) => yr(r, y)) })), 4.42, 2.4);
+    narr("Sojern Market Overview — Summary", d.sojernNarrative?.content);
+  }
+
+  // Legacy booking-pace / forecast — only when the data is present.
+  if (d.pace.length > 0) {
+    any = true;
+    const pace = contentSlide(pptx, "Booking Pace / On the Books", d.paceAsOf ? `Data as of ${fmtDate(d.paceAsOf.slice(0, 10))}` : periodLabel(period));
     const rows: Cell[][] = [[head("Target Month"), head("Prev OTB", "right"), head("OTB Today", "right"), head("Pickup", "right"), head("Market Demand", "right"), head("Note")]];
     for (const p of d.pace) rows.push([td(periodLabel(p.targetMonth)), td(p.prevOcc != null ? p.prevOcc.toFixed(0) + "%" : "—", "right"), td(p.otbOcc.toFixed(0) + "%", "right"), td(p.pickup != null ? `${p.pickup >= 0 ? "+" : ""}${p.pickup.toFixed(1)} pts` : "—", "right", varColor(p.pickup)), td(p.marketDemand != null ? p.marketDemand.toFixed(0) + "%" : "—", "right"), td(p.note || "—")]);
     addTable(pace, rows, 1.5);
-  } else noData(pace);
-
-  const fc = contentSlide(pptx, "6-Month Forecast", periodLabel(period));
-  if (d && d.forecasts.length > 0) {
+  }
+  if (d.forecasts.length > 0) {
+    any = true;
+    const fc = contentSlide(pptx, "6-Month Forecast", periodLabel(period));
     const rows: Cell[][] = [[head("Month"), head("Forecast Occ", "right"), head("Last Year", "right"), head("Market Demand", "right")]];
     for (const f of d.forecasts) rows.push([td(periodLabel(f.month)), td(f.forecastOcc != null ? f.forecastOcc.toFixed(1) + "%" : "—", "right"), td(f.lastYearOcc != null ? f.lastYearOcc.toFixed(1) + "%" : "—", "right"), td(f.marketDemand != null ? f.marketDemand.toFixed(1) + "%" : "—", "right")]);
     addTable(fc, rows, 1.45);
@@ -451,10 +615,10 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
       for (const r of d.revenueForecast) rrows.push([td(periodLabel(r.month)), td(money(r.forecastRevenue), "right"), td(money(r.budgetRevenue), "right"), td(r.gap != null ? money(r.gap) : "—", "right", varColor(r.gap)), td(r.cumulativeGap != null ? money(r.cumulativeGap) : "—", "right", varColor(r.cumulativeGap))]);
       addTable(fc, rrows, 4.4);
     }
-  } else noData(fc);
+  }
 
-  const upd = contentSlide(pptx, "Market Update", periodLabel(period));
-  addNarrative(upd, d?.narrative?.content ?? null);
+  if (d.narrative?.content) narr("Market Update", d.narrative.content);
+  if (!any && !d.narrative?.content) noData(contentSlide(pptx, "Market & Forecast", periodLabel(period)));
 }
 
 async function plansSection(pptx: Pptx, code: string, period: string) {
@@ -491,12 +655,41 @@ async function socialSection(pptx: Pptx, code: string, period: string) {
     addTable(slide, rows, 1.45);
   } else noData(slide);
 
-  const inf = contentSlide(pptx, "Influencer Collaborations", periodLabel(period));
-  if (d && d.influencers.length > 0) {
-    const rows: Cell[][] = [[head("Handle"), head("Name"), head("Followers", "right"), head("Origin"), head("Notes")]];
-    for (const i of d.influencers) rows.push([td(i.handle), td(i.name), td(num(i.followers), "right"), td(i.origin), td(i.notes ?? "—")]);
-    addTable(inf, rows, 1.45);
-  } else noData(inf, "No influencer collaborations recorded for this period.");
+  // Influencer Collaborations — the original post screenshot + its details.
+  const infs = d?.influencers ?? [];
+  if (infs.length > 0) {
+    const PER = 3; // cards per slide
+    const rowH = 1.95;
+    for (let page = 0; page * PER < infs.length; page += 1) {
+      const slide = page === 0
+        ? contentSlide(pptx, "Influencer Collaborations", periodLabel(period))
+        : contentSlide(pptx, "Influencer Collaborations (cont.)", periodLabel(period));
+      const chunk = infs.slice(page * PER, page * PER + PER);
+      chunk.forEach((i, idx) => {
+        const y = 1.5 + idx * rowH;
+        const data = imageData(i.imageUrl);
+        if (data) {
+          slide.addImage({ data, x: MX, y, w: 2.9, h: rowH - 0.1, sizing: { type: "contain", w: 2.9, h: rowH - 0.1 } });
+        } else {
+          slide.addShape(pptx.ShapeType.rect, { x: MX, y, w: 2.9, h: rowH - 0.1, fill: { color: "F3F6F7" }, line: { color: LINE, width: 0.5 } });
+          slide.addText("No image", { x: MX, y: y + (rowH - 0.1) / 2 - 0.15, w: 2.9, h: 0.3, fontFace: FONT, fontSize: 9, color: MUTE, align: "center" });
+        }
+        const tx = MX + 3.15;
+        const clean = i.handle.replace(/^@/, "");
+        slide.addText(
+          [
+            { text: `${i.name}\n`, options: { bold: true, fontSize: 14, color: INK } },
+            { text: `@${clean}\n`, options: { fontSize: 11, color: TEAL } },
+            { text: `Followers: ${num(i.followers)}${i.origin && i.origin !== "—" ? `   ·   Origin: ${i.origin}` : ""}\n`, options: { fontSize: 10, color: MUTE } },
+            ...(i.notes ? [{ text: `\n${i.notes}`, options: { fontSize: 10.5, color: INK } }] : []),
+          ],
+          { x: tx, y, w: CW - MX - tx, h: rowH - 0.1, fontFace: FONT, valign: "top", lineSpacingMultiple: 1.1 },
+        );
+      });
+    }
+  } else {
+    noData(contentSlide(pptx, "Influencer Collaborations", periodLabel(period)), "No influencer collaborations recorded for this period.");
+  }
 }
 
 const BUILDERS: Record<DeckSectionId, (pptx: Pptx, code: string, period: string) => Promise<void>> = {
