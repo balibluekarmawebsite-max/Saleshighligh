@@ -67,21 +67,58 @@ function td(text: string, align: "left" | "right" | "center" = "left", color = I
   return { text, options: { align, color, fontFace: FONT, fontSize: 9.5, valign: "middle" } };
 }
 
+/** Define the per-deck slide master used by every content slide: a slim teal
+ *  top band, a footer rule with the deck's property/period, and a page number. */
+function defineMasters(pptx: Pptx, footer: string) {
+  pptx.defineSlideMaster({
+    title: "BK_CONTENT",
+    background: { color: "FFFFFF" },
+    objects: [
+      { rect: { x: 0, y: 0, w: CW, h: 0.1, fill: { color: TEAL }, line: { type: "none" } } },
+      { rect: { x: MX, y: 7.12, w: CW - 2 * MX, h: 0.012, fill: { color: LINE }, line: { type: "none" } } },
+      {
+        text: {
+          text: footer,
+          options: { x: MX, y: 7.14, w: CW - 2 * MX - 1.1, h: 0.3, fontFace: FONT, fontSize: 8, color: MUTE, align: "left", valign: "middle" },
+        },
+      },
+    ],
+    slideNumber: { x: CW - MX - 1, y: 7.14, w: 1, h: 0.3, fontFace: FONT, fontSize: 8, color: MUTE, align: "right" },
+  });
+}
+
 function slideHeader(pptx: Pptx, slide: Slide, title: string, subtitle?: string) {
-  slide.background = { color: "FFFFFF" };
-  slide.addText(title, { x: MX, y: 0.32, w: CW - 2 * MX, h: 0.5, fontFace: FONT, fontSize: 22, bold: true, color: TEAL });
-  slide.addShape(pptx.ShapeType.rect, { x: MX, y: 0.92, w: 1.4, h: 0.035, fill: { color: GOLD }, line: { type: "none" } });
-  if (subtitle) slide.addText(subtitle, { x: MX, y: 0.98, w: CW - 2 * MX, h: 0.3, fontFace: FONT, fontSize: 11, color: MUTE });
+  slide.addText(title, { x: MX, y: 0.34, w: CW - 2 * MX, h: 0.52, fontFace: FONT, fontSize: 22, bold: true, color: TEAL });
+  slide.addShape(pptx.ShapeType.rect, { x: MX, y: 0.94, w: 1.4, h: 0.035, fill: { color: GOLD }, line: { type: "none" } });
+  if (subtitle) slide.addText(subtitle, { x: MX, y: 1.0, w: CW - 2 * MX, h: 0.3, fontFace: FONT, fontSize: 11, color: MUTE });
 }
 
 function contentSlide(pptx: Pptx, title: string, subtitle?: string): Slide {
-  const slide = pptx.addSlide();
+  const slide = pptx.addSlide({ masterName: "BK_CONTENT" });
   slideHeader(pptx, slide, title, subtitle);
   return slide;
 }
 
+/** A full-bleed teal section divider: big gold section number + white title. */
+function dividerSlide(pptx: Pptx, index: number, label: string) {
+  const slide = pptx.addSlide();
+  slide.background = { color: TEAL };
+  slide.addText(String(index).padStart(2, "0"), { x: MX, y: 2.45, w: 3, h: 1.2, fontFace: FONT, fontSize: 54, bold: true, color: GOLD });
+  slide.addShape(pptx.ShapeType.rect, { x: MX + 0.03, y: 3.95, w: 1.7, h: 0.05, fill: { color: GOLD }, line: { type: "none" } });
+  slide.addText(label, { x: MX, y: 4.12, w: CW - 2 * MX, h: 1.1, fontFace: FONT, fontSize: 34, bold: true, color: "FFFFFF" });
+  slide.addText("Blue Karma Group  —  Sales Highlight", { x: MX, y: 6.9, w: 8, h: 0.3, fontFace: FONT, fontSize: 9, color: "9FB7BE" });
+}
+
+const ZEBRA = "F3F6F7";
 function addTable(slide: Slide, rows: Cell[][], y = 1.4, colW?: number[]) {
-  slide.addTable(rows, {
+  // Zebra-stripe the body rows (row 0 is the teal header) for readability, without
+  // overriding a cell that already sets its own fill (e.g. a TOTAL row).
+  const striped = rows.map((row, i) =>
+    i > 0 && i % 2 === 0
+      ? row.map((c) => ({ ...c, options: { ...c.options, fill: c.options?.fill ?? { color: ZEBRA } } }))
+      : row,
+  );
+  slide.addTable(striped, {
     x: MX,
     y,
     w: CW - 2 * MX,
@@ -100,7 +137,7 @@ function addNarrative(slide: Slide, text: string | null, y = 1.45) {
     x: MX,
     y,
     w: CW - 2 * MX,
-    h: 7.5 - y - 0.4,
+    h: 6.95 - y,
     fontFace: FONT,
     fontSize: 12,
     color: text && text.trim() ? INK : MUTE,
@@ -143,12 +180,27 @@ function revenueBar(pptx: Pptx, slide: Slide, labels: string[], actual: number[]
 // ── cover ───────────────────────────────────────────────────────────────────
 function coverSlide(pptx: Pptx, property: { name: string; area: string }, period: string) {
   const slide = pptx.addSlide();
-  slide.background = { color: "FFFFFF" };
-  slide.addText("Sales Highlight", { x: MX, y: 2.5, w: CW - 2 * MX, h: 0.6, fontFace: FONT, fontSize: 20, color: GOLD, bold: true, charSpacing: 2 });
-  slide.addText(property.name, { x: MX, y: 3.15, w: CW - 2 * MX, h: 1.1, fontFace: FONT, fontSize: 40, color: TEAL, bold: true });
-  slide.addShape(pptx.ShapeType.rect, { x: MX, y: 4.35, w: 2.2, h: 0.045, fill: { color: GOLD }, line: { type: "none" } });
-  slide.addText(`${periodLabel(period)}  ·  ${property.area}`, { x: MX, y: 4.55, w: CW - 2 * MX, h: 0.4, fontFace: FONT, fontSize: 16, color: INK });
-  slide.addText("Blue Karma Group", { x: MX, y: 6.7, w: CW - 2 * MX, h: 0.35, fontFace: FONT, fontSize: 12, color: MUTE });
+  slide.background = { color: TEAL };
+  // Thin gold frame accents, top and bottom.
+  slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: CW, h: 0.12, fill: { color: GOLD }, line: { type: "none" } });
+  slide.addShape(pptx.ShapeType.rect, { x: 0, y: 7.38, w: CW, h: 0.12, fill: { color: GOLD }, line: { type: "none" } });
+
+  slide.addText("SALES HIGHLIGHT", { x: MX, y: 2.35, w: CW - 2 * MX, h: 0.5, fontFace: FONT, fontSize: 18, color: GOLD, bold: true, charSpacing: 5 });
+  slide.addShape(pptx.ShapeType.rect, { x: MX + 0.03, y: 2.9, w: 1.8, h: 0.05, fill: { color: GOLD }, line: { type: "none" } });
+  slide.addText(property.name, { x: MX, y: 3.05, w: CW - 2 * MX, h: 1.3, fontFace: FONT, fontSize: 44, color: "FFFFFF", bold: true });
+  slide.addText(`${periodLabel(period)}    ·    ${property.area}`, { x: MX, y: 4.45, w: CW - 2 * MX, h: 0.45, fontFace: FONT, fontSize: 18, color: "D7E3E6" });
+
+  slide.addText("Blue Karma Group", { x: MX, y: 6.72, w: 7, h: 0.35, fontFace: FONT, fontSize: 13, color: GOLD, bold: true });
+  slide.addText("Confidential — Internal Management Report", {
+    x: CW - MX - 5.5,
+    y: 6.74,
+    w: 5.5,
+    h: 0.3,
+    fontFace: FONT,
+    fontSize: 9,
+    color: "9FB7BE",
+    align: "right",
+  });
 }
 
 // ── section builders ─────────────────────────────────────────────────────────
@@ -480,10 +532,16 @@ export async function buildDeck(propertyCode: string, period: string, sectionIds
   pptx.company = "Blue Karma Group";
   pptx.title = `${property.name} — Sales Highlight ${periodLabel(period)}`;
 
+  defineMasters(pptx, `Blue Karma Group   ·   ${property.name}   ·   ${periodLabel(period)}`);
   coverSlide(pptx, property, period);
+
   const selected = sectionIds.length ? sectionIds : DEFAULT_SECTION_IDS;
+  let idx = 0;
   for (const s of DECK_SECTIONS) {
-    if (selected.includes(s.id)) await BUILDERS[s.id](pptx, propertyCode, period);
+    if (!selected.includes(s.id)) continue;
+    idx += 1;
+    dividerSlide(pptx, idx, s.label);
+    await BUILDERS[s.id](pptx, propertyCode, period);
   }
 
   const buffer = (await pptx.write({ outputType: "nodebuffer" })) as Buffer;
