@@ -383,14 +383,17 @@ function adsBlock(
 }
 
 /** The Tripadvisor block for a unit: rank/rating hero + a metrics grid with MoM. */
-function tripBlock(pptx: Pptx, titlePrefix: string, period: string, t: TripadvisorSummary) {
+function tripBlock(pptx: Pptx, titlePrefix: string, period: string, t: TripadvisorSummary, hideZero = false) {
   const slide = contentSlide(pptx, `${titlePrefix} — Tripadvisor`, periodLabel(period));
   slide.addText(
     `${t.rank != null ? "#" + t.rank : "—"}${t.totalInMarket != null ? " of " + num(t.totalInMarket) : ""} ${t.noun} in ${t.area}${t.rating != null ? "   ·   " + t.rating.toFixed(1) + " / 5" : ""}`,
     { x: MX, y: 1.4, w: CONTENT_W, h: 0.35, fontFace: FONT, fontSize: 13, bold: true, color: TEAL },
   );
+  // Match the dashboard TripadvisorBlock: when hideZero, drop metrics that are 0
+  // with no reported MoM (so an empty listing doesn't render a wall of zeros).
+  const metrics = hideZero ? t.metrics.filter((m) => m.value !== 0 || m.mom != null) : t.metrics;
   const rows: Cell[][] = [[head("Metric"), head("Value", "right"), head("MoM", "right")]];
-  for (const m of t.metrics) rows.push([td(m.label), td(num(m.value), "right"), td(m.mom != null ? svar(m.mom) : "—", "right", varColor(m.mom))]);
+  for (const m of metrics) rows.push([td(m.label), td(num(m.value), "right"), td(m.mom != null ? svar(m.mom) : "—", "right", varColor(m.mom))]);
   addTable(slide, rows, 1.95, undefined, 9);
 }
 
@@ -588,17 +591,23 @@ async function roomsSection(pptx: Pptx, code: string, period: string) {
     narrativeSlide(pptx, "Room Type Analysis", period, rt.narrative?.content);
   } else noData(rtSlide);
 
-  // Guests: nationality (paginated) + LOS
-  const g = await getGuestsPageData(code, period);
+  // Guests. Nationality is scope-driven on the dashboard (MTD/YTD toggle), so
+  // emit both — matching how Market Segment is dual-emitted. LOS is not
+  // scope-filtered, so it's drawn once from the MTD fetch.
   const natHeader = [head("#"), head("Nationality"), head("Room Nights", "right"), head("Share", "right"), head("vs LY", "right"), head("Rank", "right")];
-  const natBody: Cell[][] = [];
-  if (g && g.hasData) {
-    for (const n of g.nationalities) {
-      const mom = n.lastYearRoomNights == null ? null : momChange(n.roomNights, n.lastYearRoomNights);
-      natBody.push([td(String(n.rank)), td(n.countryName), td(num(n.roomNights), "right"), td(`${n.sharePct.toFixed(1)}%`, "right"), td(mom == null ? "—" : svar(mom), "right", varColor(mom)), td(rankMove(n.rankMovement), "right", varColor(n.rankMovement))]);
+  let g: Awaited<ReturnType<typeof getGuestsPageData>> = null;
+  for (const scope of ["MTD", "YTD"] as const) {
+    const gs = await getGuestsPageData(code, period, scope);
+    if (scope === "MTD") g = gs;
+    const natBody: Cell[][] = [];
+    if (gs && gs.hasData) {
+      for (const n of gs.nationalities) {
+        const mom = n.lastYearRoomNights == null ? null : momChange(n.roomNights, n.lastYearRoomNights);
+        natBody.push([td(String(n.rank)), td(n.countryName), td(num(n.roomNights), "right"), td(`${n.sharePct.toFixed(1)}%`, "right"), td(mom == null ? "—" : svar(mom), "right", varColor(mom)), td(rankMove(n.rankMovement), "right", varColor(n.rankMovement))]);
+      }
     }
+    paginatedTable(pptx, `Nationality Mix — ${scope}`, period, natHeader, natBody, 18, [0.5, 4.4, 2.2, 1.5, 2.0, 1.5]);
   }
-  paginatedTable(pptx, "Nationality Mix", period, natHeader, natBody, 18, [0.5, 4.4, 2.2, 1.5, 2.0, 1.5]);
 
   // Length of Stay (own slide so the LY comparison + chips have room).
   const losSlide = contentSlide(pptx, "Length of Stay", periodLabel(period));
@@ -632,13 +641,14 @@ async function marketingSection(pptx: Pptx, code: string, period: string) {
         { text: `ROAS ${a.roasPct != null ? a.roasPct.toFixed(0) + "%" : "—"}`, options: { bold: true, color: GOLD } },
         { text: a.roasRatio != null ? ` (every Rp 1 → Rp ${a.roasRatio.toFixed(2)})    ` : "    ", options: { color: MUTE } },
         { text: `Clicks ${num(a.totalClicks)}`, options: { bold: true, color: TEAL } },
-        { text: a.totalConversions != null ? `    Conversions ${num(a.totalConversions)}` : "", options: { bold: true, color: TEAL } },
       ],
       { x: MX, y: 1.4, w: CONTENT_W, h: 0.4, fontFace: FONT, fontSize: 11.5 },
     );
-    const rows: Cell[][] = [[head("Platform"), head("Spend", "right"), head("Impr.", "right"), head("Clicks", "right"), head("Reach", "right"), head("Conv.", "right"), head("CTR", "right"), head("CPC", "right"), head("Revenue", "right")]];
+    // Hotel-unit ads mirror the marketing page: Spend/Impr/Clicks/Reach/CTR/CPC/Revenue
+    // (the page shows no conversions here — unlike the restaurant/spa AdsBlock).
+    const rows: Cell[][] = [[head("Platform"), head("Spend", "right"), head("Impr.", "right"), head("Clicks", "right"), head("Reach", "right"), head("CTR", "right"), head("CPC", "right"), head("Revenue", "right")]];
     for (const p of a.platforms) {
-      rows.push([td(adsLabel(p.platform)), td(money(p.spend), "right"), td(num(p.impressions), "right"), td(num(p.clicks), "right"), td(p.reach != null ? num(p.reach) : "—", "right"), td(p.conversions != null ? num(p.conversions) : "—", "right"), td(p.ctr != null ? formatPercent(p.ctr) : "—", "right"), td(money(p.cpc), "right"), td(money(p.trackedRevenue), "right")]);
+      rows.push([td(adsLabel(p.platform)), td(money(p.spend), "right"), td(num(p.impressions), "right"), td(num(p.clicks), "right"), td(p.reach != null ? num(p.reach) : "—", "right"), td(p.ctr != null ? formatPercent(p.ctr) : "—", "right"), td(money(p.cpc), "right"), td(money(p.trackedRevenue), "right")]);
     }
     addTable(adsSlide, rows, 2.0, undefined, 9);
     const spendByPlatform = a.platforms.filter((p) => p.spend > 0);
@@ -789,46 +799,49 @@ async function restaurantSection(pptx: Pptx, code: string, period: string) {
   }
   narrativeSlide(pptx, `${title} — Customer Acquisition Breakdown`, period, d.acquisitionNarrative?.content);
 
-  // Chope — funnel + sources split + revenue, daily chart, narrative.
-  if (d.chope) {
-    const c = d.chope;
+  // Chope — funnel + sources split + revenue, with the daily chart. The daily
+  // chart and the CHOPE_SUMMARY narrative follow the dashboard: each renders on
+  // its own trigger (daily rows / saved text), independent of the report row.
+  if (d.chope || d.chopeDaily.length > 0) {
     const ch = contentSlide(pptx, `${title} — Chope Reservations`, periodLabel(period));
-    ch.addText(
-      [
-        { text: `Revenue ${money(c.revenue)}`, options: { bold: true, color: TEAL } },
-        { text: c.pctOfRestaurantRevenue != null ? ` (${c.pctOfRestaurantRevenue.toFixed(1)}% of restaurant)` : "", options: { color: MUTE } },
-        { text: c.averagePartySize != null ? `    Avg Party Size ${c.averagePartySize.toFixed(1)}` : "", options: { bold: true, color: TEAL } },
-      ],
-      { x: MX, y: 1.35, w: CONTENT_W, h: 0.35, fontFace: FONT, fontSize: 11.5 },
-    );
-    const funnel: Cell[][] = [[head("Status"), head("Bookings", "right"), head("Covers", "right")]];
-    funnel.push([td("Fulfilled"), td(num(c.fulfilledBookings), "right"), td(num(c.fulfilledCovers), "right")]);
-    funnel.push([td("Cancelled"), td(num(c.cancelledBookings), "right"), td(num(c.cancelledCovers), "right")]);
-    funnel.push([td("No Show"), td(num(c.noShows), "right"), td(num(c.noShowCovers), "right")]);
-    funnel.push([td("Upcoming"), td(num(c.upcomingBookings), "right"), td(num(c.upcomingCovers), "right")]);
-    funnel.push([td("Walk-ins"), td(num(c.walkinBookings), "right"), td(num(c.walkinCovers), "right")]);
-    addTable(ch, funnel, 1.85, [3.0, 1.6, 1.6]);
-    ch.addText("Booking Sources", { x: 6.9, y: 1.78, w: 5.8, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
-    const srcT: Cell[][] = [[head("Source"), head("Bookings", "right"), head("Covers", "right")]];
-    srcT.push([td("Chope / Grab platform"), td(num(c.platformBookings), "right"), td(num(c.platformCovers), "right")]);
-    srcT.push([td("Restaurant direct"), td(num(c.directBookings), "right"), td(num(c.directCovers), "right")]);
-    ch.addTable(srcT.map((r, i) => (i > 0 && i % 2 === 0 ? r.map((cc) => ({ ...cc, options: { ...cc.options, fill: { color: ZEBRA } } })) : r)), { x: 6.9, y: 2.05, w: 5.8, colW: [3.0, 1.4, 1.4], border: { type: "solid", color: LINE, pt: 0.5 }, valign: "middle", fontFace: FONT, fontSize: 9.5, color: INK, autoPage: false });
+    if (d.chope) {
+      const c = d.chope;
+      ch.addText(
+        [
+          { text: `Revenue ${money(c.revenue)}`, options: { bold: true, color: TEAL } },
+          { text: c.pctOfRestaurantRevenue != null ? ` (${c.pctOfRestaurantRevenue.toFixed(1)}% of restaurant)` : "", options: { color: MUTE } },
+          { text: c.averagePartySize != null ? `    Avg Party Size ${c.averagePartySize.toFixed(1)}` : "", options: { bold: true, color: TEAL } },
+        ],
+        { x: MX, y: 1.35, w: CONTENT_W, h: 0.35, fontFace: FONT, fontSize: 11.5 },
+      );
+      const funnel: Cell[][] = [[head("Status"), head("Bookings", "right"), head("Covers", "right")]];
+      funnel.push([td("Fulfilled"), td(num(c.fulfilledBookings), "right"), td(num(c.fulfilledCovers), "right")]);
+      funnel.push([td("Cancelled"), td(num(c.cancelledBookings), "right"), td(num(c.cancelledCovers), "right")]);
+      funnel.push([td("No Show"), td(num(c.noShows), "right"), td(num(c.noShowCovers), "right")]);
+      funnel.push([td("Upcoming"), td(num(c.upcomingBookings), "right"), td(num(c.upcomingCovers), "right")]);
+      funnel.push([td("Walk-ins"), td(num(c.walkinBookings), "right"), td(num(c.walkinCovers), "right")]);
+      addTable(ch, funnel, 1.85, [3.0, 1.6, 1.6]);
+      ch.addText("Booking Sources", { x: 6.9, y: 1.78, w: 5.8, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
+      const srcT: Cell[][] = [[head("Source"), head("Bookings", "right"), head("Covers", "right")]];
+      srcT.push([td("Chope / Grab platform"), td(num(c.platformBookings), "right"), td(num(c.platformCovers), "right")]);
+      srcT.push([td("Restaurant direct"), td(num(c.directBookings), "right"), td(num(c.directCovers), "right")]);
+      ch.addTable(srcT.map((r, i) => (i > 0 && i % 2 === 0 ? r.map((cc) => ({ ...cc, options: { ...cc.options, fill: { color: ZEBRA } } })) : r)), { x: 6.9, y: 2.05, w: 5.8, colW: [3.0, 1.4, 1.4], border: { type: "solid", color: LINE, pt: 0.5 }, valign: "middle", fontFace: FONT, fontSize: 9.5, color: INK, autoPage: false });
+    }
     if (d.chopeDaily.length > 0) {
       ch.addText("Traffic by Online Booking Sources (daily)", { x: MX, y: 4.3, w: CONTENT_W, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
       lineChart(pptx, ch, d.chopeDaily.map((p) => String(p.day)), [{ name: "Platform", values: d.chopeDaily.map((p) => p.platformBookings) }, { name: "Direct", values: d.chopeDaily.map((p) => p.directBookings) }], 4.58, 2.3, [TEAL, GOLD]);
     }
-    narrativeSlide(pptx, `${title} — Chope Booking Performance Summary`, period, d.chopeNarrative?.content);
   }
+  narrativeSlide(pptx, `${title} — Chope Booking Performance Summary`, period, d.chopeNarrative?.content);
 
   // Gokai CRM (metrics + summary) and the overview narrative.
   gokaiBlock(pptx, title, period, d.gokai, d.gokaiNarrative?.content);
 
-  // Restaurant Ads + Tripadvisor (unit = RESTAURANT).
+  // Restaurant Ads + Tripadvisor (unit = RESTAURANT). The narrative renders
+  // whenever it's written (the dashboard shows it even without a listing row).
   if (d.ads) adsBlock(pptx, title, period, d.ads, d.spendRevenue);
-  if (d.tripadvisor) {
-    tripBlock(pptx, title, period, d.tripadvisor);
-    narrativeSlide(pptx, `${title} — Tripadvisor Performance Summary`, period, d.tripadvisorNarrative?.content);
-  }
+  if (d.tripadvisor) tripBlock(pptx, title, period, d.tripadvisor);
+  narrativeSlide(pptx, `${title} — Tripadvisor Performance Summary`, period, d.tripadvisorNarrative?.content);
 
   narrativeSlide(pptx, `${title} — Overview Narrative`, period, overviewContentToText(d.narrative?.content ?? null) || null);
 }
@@ -884,9 +897,10 @@ async function spaSection(pptx: Pptx, code: string, period: string) {
     rows.push(segRow("TOTAL", cA, cB, avgCheck(rA, cA), avgCheck(rB, cB), rA, rB, true));
     addTable(ov, rows, 1.95, cols, 8);
 
-    // Auto-insight (dashboard segInsight) — which segment beat budget and why.
+    // Auto-insight (dashboard segInsight) — only when a segment actually beat
+    // budget (revenue variance > 0); otherwise the dashboard shows no claim.
     const beat = [...d.segments].map((s) => ({ s, v: variancePct(s.revenueActual, s.revenueBudget) ?? 0 })).sort((a, b) => b.v - a.v)[0];
-    if (beat) {
+    if (beat && beat.v > 0) {
       const seg = beat.s;
       const cvV = variancePct(seg.coversActual, seg.coversBudget);
       const acV = seg.avgCheckActual != null && seg.avgCheckBudget != null ? variancePct(seg.avgCheckActual, seg.avgCheckBudget) : null;
@@ -906,12 +920,11 @@ async function spaSection(pptx: Pptx, code: string, period: string) {
   // Gokai (metrics + summary + hotel-level fallback note).
   gokaiBlock(pptx, title, period, d.gokai, d.gokaiNarrative?.content);
 
-  // Spa Ads + Tripadvisor (unit = SPA).
+  // Spa Ads + Tripadvisor (unit = SPA). The spa listing hides zero-value
+  // metrics (hideZeroMetrics) and the narrative renders even without a row.
   if (d.ads) adsBlock(pptx, title, period, d.ads, d.spendRevenue);
-  if (d.tripadvisor) {
-    tripBlock(pptx, title, period, d.tripadvisor);
-    narrativeSlide(pptx, `${title} — Tripadvisor Performance Summary`, period, d.tripadvisorNarrative?.content);
-  }
+  if (d.tripadvisor) tripBlock(pptx, title, period, d.tripadvisor, true);
+  narrativeSlide(pptx, `${title} — Tripadvisor Performance Summary`, period, d.tripadvisorNarrative?.content);
 
   narrativeSlide(pptx, `${title} — Overview Narrative`, period, overviewContentToText(d.narrative?.content ?? null) || null);
 }
@@ -923,6 +936,15 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
     return;
   }
   let any = false;
+  let anyNarr = false;
+  // Section narratives render on the dashboard even when the sibling data block
+  // is empty (so a saved write-up is never orphaned) — emit each unconditionally.
+  const narr = (t: string, c: string | null | undefined) => {
+    if (c && c.trim()) {
+      narrativeSlide(pptx, t, period, c);
+      anyNarr = true;
+    }
+  };
 
   // Market Area Update — Booking.com property vs market: room-nights (bars) + ADR (lines).
   if (d.marketArea.length > 0) {
@@ -933,8 +955,8 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
     groupedBar(pptx, s, labels, "Room nights", d.marketArea.map((m) => m.propertyRoomNights), "Market", d.marketArea.map((m) => m.marketRoomNights), 1.62, 2.4, [TEAL, LTTEAL]);
     s.addText("Average daily rate (IDR) — property vs market", { x: MX, y: 4.15, w: CONTENT_W, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
     lineChart(pptx, s, labels, [{ name: "ADR", values: d.marketArea.map((m) => m.propertyAdr) }, { name: "Market ADR", values: d.marketArea.map((m) => m.marketAdr) }], 4.42, 2.4, [ORANGE, GOLD]);
-    narrativeSlide(pptx, "Market Area — Summary", period, d.marketAreaNarrative?.content);
   }
+  narr("Market Area — Summary", d.marketAreaNarrative?.content);
 
   // Booking Window — advance-booking lead-time, property vs market.
   const bw = d.bookingWindow;
@@ -945,8 +967,8 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
     const rows: Cell[][] = [[head("Lead time"), head("Property share", "right"), head("Market share", "right"), head("Property ADR", "right"), head("Market ADR", "right")]];
     for (const b of bw.buckets) rows.push([td(b.bucket), td(sharePct(b.propertySharePct), "right"), td(sharePct(b.marketSharePct), "right"), td(money(b.propertyAdr), "right"), td(money(b.marketAdr), "right")]);
     addTable(s, rows, 1.5);
-    narrativeSlide(pptx, "Booking Window — Summary", period, d.bookingWindowNarrative?.content);
   }
+  narr("Booking Window — Summary", d.bookingWindowNarrative?.content);
 
   // Booking.com Overview — search → page → booking funnel vs market + availability trend.
   const bo = d.bookingOverview;
@@ -968,8 +990,8 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
       s.addText("Availability for Search — your availability vs market", { x: MX, y: 4.45, w: CONTENT_W, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
       lineChart(pptx, s, bo.availability.map((a) => a.monthLabel), [{ name: "Your availability", values: bo.availability.map((a) => a.yourPct) }, { name: "Market", values: bo.availability.map((a) => a.marketPct) }], 4.72, 2.25, [TEAL, LTTEAL]);
     }
-    narrativeSlide(pptx, "Booking.com Overview — Summary", period, d.bookingOverviewNarrative?.content);
   }
+  narr("Booking.com Overview — Summary", d.bookingOverviewNarrative?.content);
 
   // Sojern Market Overview — flight & hotel travel-intent index vs baseline.
   const sj = d.sojern;
@@ -988,10 +1010,10 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
       s.addText("Hotel Volume Index (% vs baseline)", { x: MX, y: hasFlight ? 4.15 : 1.35, w: CONTENT_W, h: 0.25, fontFace: FONT, fontSize: 10, bold: true, color: MUTE });
       lineChart(pptx, s, sj.hotel.map((r) => r.month), sj.years.map((y) => ({ name: String(y), values: sj.hotel.map((r) => yr(r, y)) })), hasFlight ? 4.42 : 1.62, hasFlight ? 2.4 : 5.0);
     }
-    narrativeSlide(pptx, "Sojern Market Overview — Summary", period, d.sojernNarrative?.content);
   }
+  narr("Sojern Market Overview — Summary", d.sojernNarrative?.content);
 
-  if (!any) noData(contentSlide(pptx, "Market & Forecast", periodLabel(period)));
+  if (!any && !anyNarr) noData(contentSlide(pptx, "Market & Forecast", periodLabel(period)));
 }
 
 async function plansSection(pptx: Pptx, code: string, period: string) {
