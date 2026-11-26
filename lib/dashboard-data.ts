@@ -2509,11 +2509,21 @@ export interface PlanSectionBlocks {
   previous: NarrativeBlock | null;
 }
 
+export interface PromoImageRow {
+  id: string;
+  unit: string;
+  imageUrl: string;
+  caption: string | null;
+  sortOrder: number;
+}
+
 export interface PlansPageData {
   property: { code: string; name: string; area: string; restaurantName: string; spaName: string };
   period: string;
   hasData: boolean;
   sections: Record<string, PlanSectionBlocks>;
+  /** Ongoing-promotion images grouped by unit (ROOMS / RESTAURANT / SPA / WELLNESS). */
+  promoImages: Record<string, PromoImageRow[]>;
 }
 
 const PLAN_SECTIONS = [
@@ -2543,6 +2553,7 @@ export async function getPlansPageData(
         take: 2,
         include: {
           narrativeContent: { where: { section: { in: [...PLAN_SECTIONS] } } },
+          promotionImages: { orderBy: { sortOrder: "asc" } },
         },
       },
     },
@@ -2575,7 +2586,18 @@ export async function getPlansPageData(
     };
   }
 
-  return { ...base, hasData: !!current, sections };
+  const promoImages: Record<string, PromoImageRow[]> = {};
+  for (const img of current?.promotionImages ?? []) {
+    (promoImages[img.unit] ??= []).push({
+      id: img.id,
+      unit: img.unit,
+      imageUrl: img.imageUrl,
+      caption: img.caption ?? null,
+      sortOrder: img.sortOrder,
+    });
+  }
+
+  return { ...base, hasData: !!current, sections, promoImages };
 }
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────

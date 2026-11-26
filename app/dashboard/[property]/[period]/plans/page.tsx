@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { Images } from "lucide-react";
 
 import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { PlanSectionPanel } from "@/components/dashboard/plan-section-panel";
 import { SectionCard } from "@/components/dashboard/section-card";
+import { PromoGalleries } from "@/components/sales/promo-gallery";
+import { canEditProperty, getCurrentUser } from "@/lib/auth-helpers";
 import { GROUP_CODE, getPlansPageData } from "@/lib/dashboard-data";
 import { periodLabel } from "@/lib/labels";
 
@@ -34,7 +35,10 @@ export default async function PlansPage({
     );
   }
 
-  const { property, sections } = data;
+  const me = await getCurrentUser();
+  const canEdit = canEditProperty(me, params.property);
+
+  const { property, sections, promoImages } = data;
   const panel = (section: string, emptyText?: string) => (
     <PlanSectionPanel
       blocks={sections[section]!}
@@ -95,21 +99,14 @@ export default async function PlansPage({
         {panel("PR", "No media features recorded for this period yet.")}
       </SectionCard>
 
-      <SectionCard title="Ongoing Promotions" description="Active offers by unit — image galleries">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {promoUnits.map((u) => (
-            <div key={u.key} className="rounded-lg border border-border p-4">
-              <p className="text-sm font-semibold text-foreground">{u.label}</p>
-              <div className="mt-3 flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-border bg-secondary/40">
-                <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
-                  <Images className="h-5 w-5" aria-hidden />
-                  Promo images
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">Image upload &amp; drag-to-reorder arrive with the admin/auth phase.</p>
+      <SectionCard title="Ongoing Promotions" description="Active offers by unit — upload each promotion's image + caption">
+        <PromoGalleries
+          property={params.property}
+          period={params.period}
+          units={promoUnits}
+          images={promoImages}
+          canEdit={canEdit}
+        />
         {panel("PROMOTIONS", "No promotions written for this period yet.")}
       </SectionCard>
     </div>

@@ -207,6 +207,7 @@ model ReportPeriod {
   narrativeContent   NarrativeContent[]
   narrativeVersions  NarrativeVersion[]
   influencerCollabs  InfluencerCollab[]
+  promotionImages    PromotionImage[]
 
   @@unique([propertyId, period])
   @@map("report_periods")
@@ -906,6 +907,23 @@ model InfluencerCollab {
   @@unique([periodId, handle])
   @@index([periodId])
   @@map("influencer_collabs")
+}
+
+/// Ongoing-promotion images for the Action Plans page, grouped by unit
+/// (ROOMS / RESTAURANT / SPA / WELLNESS). Each is a stored image + optional caption.
+model PromotionImage {
+  id        String  @id @default(cuid())
+  periodId  String
+  unit      String
+  imageUrl  String
+  imageKey  String
+  caption   String?
+  sortOrder Int     @default(0)
+
+  period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId])
+  @@map("promotion_images")
 }
 
 // ─── Auth, roles & audit (Phase 16) ──────────────────────────────────────────
