@@ -432,7 +432,8 @@ async function marketingSection(pptx: Pptx, code: string, period: string) {
     const roas = d.roasTrend.filter((r) => r.roasPct != null);
     if (roas.length >= 2) {
       const rt = contentSlide(pptx, "Digital Ads — 6-Month ROAS Trend", periodLabel(period));
-      lineChart(pptx, rt, d.roasTrend.map((r) => periodLabel(r.month)), [{ name: "ROAS %", values: d.roasTrend.map((r) => r.roasPct) }], 1.6, 4.6, [GOLD]);
+      // r.month is already a short label ("Jun", "Oct") — don't re-wrap in periodLabel.
+      lineChart(pptx, rt, d.roasTrend.map((r) => r.month), [{ name: "ROAS %", values: d.roasTrend.map((r) => r.roasPct) }], 1.6, 4.6, [GOLD]);
     }
   } else noData(adsSlide, "No ad data for this period.");
 
