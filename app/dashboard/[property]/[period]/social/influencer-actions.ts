@@ -27,8 +27,13 @@ function periodDate(period: string): Date | null {
   return d.toISOString().slice(0, 7) === period ? d : null;
 }
 
+const INT4_MAX = 2_147_483_647;
+/** Clamp to a non-negative 32-bit int so the `followers` Int column can't overflow. */
+const clampInt = (n: number): number => (Number.isFinite(n) ? Math.min(Math.max(0, Math.round(n)), INT4_MAX) : 0);
+
 /** Parse a follower count that may be plain ("10600"), with separators, or
- *  compact ("10.6K", "106K", "1.2M"). Returns a whole number, 0 on nonsense. */
+ *  compact ("10.6K", "106K", "1.2M"). Returns a whole number in [0, INT4_MAX],
+ *  0 on nonsense — never a value that would overflow the Int column. */
 function parseFollowers(raw: string): number {
   const t = raw.trim().replace(/,/g, "");
   if (!t) return 0;
@@ -37,10 +42,14 @@ function parseFollowers(raw: string): number {
     const base = Number(m[1]);
     const suf = (m[2] ?? "").toLowerCase();
     const mult = suf === "k" ? 1_000 : suf === "m" ? 1_000_000 : suf === "b" ? 1_000_000_000 : 1;
-    return Number.isFinite(base) ? Math.round(base * mult) : 0;
+    return clampInt(base * mult);
   }
-  const n = Number(t);
-  return Number.isFinite(n) ? Math.round(n) : 0;
+  return clampInt(Number(t));
+}
+
+/** True for a Prisma unique-constraint violation (duplicate handle). */
+function isUniqueViolation(e: unknown): boolean {
+  return !!e && typeof e === "object" && "code" in e && (e as { code?: unknown }).code === "P2002";
 }
 
 /** Normalise a handle to a single @handle token (or ""). */
@@ -109,51 +118,60 @@ export async function addInfluencerCollab(formData: FormData): Promise<Influence
   if (existingPeriod?.status === "FINAL") {
     return { ok: false, message: "This report period is FINAL and locked — reopen it to edit." };
   }
-  const periodId =
-    existingPeriod?.id ??
-    (await prisma.reportPeriod.create({ data: { propertyId: prop.id, period: date, status: "DRAFT" }, select: { id: true } })).id;
 
-  // Reject a duplicate handle before writing the image, so we don't orphan a file.
-  const dup = await prisma.influencerCollab.findUnique({
-    where: { periodId_handle: { periodId, handle } },
-    select: { id: true },
-  });
-  if (dup) return { ok: false, message: `${handle} is already in this month's collaborations.` };
-
-  if (file instanceof File && file.size > 0) {
-    const ext = EXT[file.type] ?? "png";
-    const key = `social/influencer/${property}/${periodStr}/${randomUUID()}.${ext}`;
-    const buf = Buffer.from(await file.arrayBuffer());
-    const url = await uploadObject(key, buf);
-    if (!url) return { ok: false, message: "Could not store the image." };
-    uploaded = { url, key };
-  }
-
-  const count = await prisma.influencerCollab.count({ where: { periodId } });
-  let row: { id: string };
-  try {
-    row = await prisma.influencerCollab.create({
-      data: {
-        periodId,
-        handle,
-        name: name || handle,
-        followers,
-        origin: origin || "—",
-        notes: notes || null,
-        imageUrl: uploaded?.url ?? null,
-        imageKey: uploaded?.key ?? null,
-        sortOrder: count,
-      },
+  // Fast duplicate check when the period already exists (so we don't upload for an
+  // obvious dup). A race is still caught by the unique constraint inside the txn.
+  if (existingPeriod) {
+    const dup = await prisma.influencerCollab.findUnique({
+      where: { periodId_handle: { periodId: existingPeriod.id, handle } },
       select: { id: true },
     });
-  } catch (e) {
-    if (uploaded) await deleteObject(uploaded.key).catch(() => {});
-    return { ok: false, message: e instanceof Error ? e.message : "Could not add the collaboration." };
+    if (dup) return { ok: false, message: `${handle} is already in this month's collaborations.` };
   }
 
-  await logAudit("social_influencer_add", `${property} ${periodStr}`, { handle });
-  revalidatePath(`/dashboard/${property}/${periodStr}/social`);
-  return { ok: true, id: row.id };
+  // Upload (if any) and the row+period write are a single unit: the period is
+  // created and the row inserted in ONE transaction, so a failed insert rolls the
+  // period back (no orphan empty period); any failure deletes the uploaded file.
+  try {
+    if (file instanceof File && file.size > 0) {
+      const ext = EXT[file.type] ?? "png";
+      const key = `social/influencer/${property}/${periodStr}/${randomUUID()}.${ext}`;
+      const buf = Buffer.from(await file.arrayBuffer());
+      const url = await uploadObject(key, buf);
+      if (!url) return { ok: false, message: "Could not store the image." };
+      uploaded = { url, key };
+    }
+
+    const id = await prisma.$transaction(async (tx) => {
+      const periodId =
+        existingPeriod?.id ??
+        (await tx.reportPeriod.create({ data: { propertyId: prop.id, period: date, status: "DRAFT" }, select: { id: true } })).id;
+      const count = await tx.influencerCollab.count({ where: { periodId } });
+      const row = await tx.influencerCollab.create({
+        data: {
+          periodId,
+          handle,
+          name: name || handle,
+          followers,
+          origin: origin || "—",
+          notes: notes || null,
+          imageUrl: uploaded?.url ?? null,
+          imageKey: uploaded?.key ?? null,
+          sortOrder: count,
+        },
+        select: { id: true },
+      });
+      return row.id;
+    });
+
+    await logAudit("social_influencer_add", `${property} ${periodStr}`, { handle });
+    revalidatePath(`/dashboard/${property}/${periodStr}/social`);
+    return { ok: true, id };
+  } catch (e) {
+    if (uploaded) await deleteObject(uploaded.key).catch(() => {});
+    if (isUniqueViolation(e)) return { ok: false, message: `${handle} is already in this month's collaborations.` };
+    return { ok: false, message: "Could not add the collaboration — please try again." };
+  }
 }
 
 /** Editor/admin: edit an existing collaboration's details + summary. */
