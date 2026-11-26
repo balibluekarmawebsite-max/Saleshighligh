@@ -4,9 +4,10 @@ import { ComingSoon } from "@/components/dashboard/coming-soon";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { SocialUnitTabs } from "@/components/dashboard/social-unit-tabs";
+import { InfluencerUploader } from "@/components/sales/influencer-uploader";
 import { SocialSyncPanel, type UnitBrandInit } from "@/components/sales/social-sync-panel";
 import { canEditProperty, getCurrentUser, isAdmin } from "@/lib/auth-helpers";
-import { GROUP_CODE, getSocialPageData } from "@/lib/dashboard-data";
+import { GROUP_CODE, getSocialPageData, type InfluencerRow } from "@/lib/dashboard-data";
 import { formatNumber } from "@/lib/format";
 import { periodLabel } from "@/lib/labels";
 import { getUnitBlogId, isMetricoolConfigured } from "@/lib/weekly/metricool";
@@ -21,6 +22,35 @@ function compactFollowers(n: number): string {
   if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return formatNumber(n);
+}
+
+/** One influencer collaboration as a card: the original screenshot + its details. */
+function InfluencerCard({ inf }: { inf: InfluencerRow }) {
+  const clean = inf.handle.replace(/^@/, "");
+  return (
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+      {inf.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={inf.imageUrl} alt={inf.name} className="max-h-80 w-full bg-secondary/20 object-contain" />
+      )}
+      <div className="space-y-1 p-4">
+        <p className="font-semibold text-foreground">{inf.name}</p>
+        <a
+          href={`https://instagram.com/${clean}`}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="text-sm text-primary hover:underline"
+        >
+          @{clean}
+        </a>
+        <p className="text-xs text-muted-foreground">
+          Followers: {compactFollowers(inf.followers)}
+          {inf.origin && inf.origin !== "—" ? ` · Origin: ${inf.origin}` : ""}
+        </p>
+        {inf.notes && <p className="pt-1 text-sm leading-relaxed text-muted-foreground">{inf.notes}</p>}
+      </div>
+    </div>
+  );
 }
 
 export default async function SocialPage({
@@ -97,46 +127,24 @@ export default async function SocialPage({
       </SectionCard>
 
       {/* Influencer collaborations */}
-      <SectionCard title="Influencer Collaborations" description="Creators hosted or partnered with this month">
+      <SectionCard title="Influencer Collaborations" description="Creators hosted or partnered with this month — screenshot + a short summary">
+        {canEdit && (
+          <div className="mb-4">
+            <InfluencerUploader property={params.property} period={params.period} entries={influencers} />
+          </div>
+        )}
         {influencers.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border text-xs font-medium text-muted-foreground">
-                  <th className="px-3 py-2 text-left">Handle</th>
-                  <th className="px-3 py-2 text-left">Name</th>
-                  <th className="px-3 py-2 text-right">Followers</th>
-                  <th className="px-3 py-2 text-left">Origin</th>
-                  <th className="px-3 py-2 text-left">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {influencers.map((inf) => {
-                  const clean = inf.handle.replace(/^@/, "");
-                  return (
-                    <tr key={inf.handle} className="border-b border-border/60">
-                      <td className="px-3 py-2 font-medium">
-                        <a
-                          href={`https://instagram.com/${clean}`}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          className="text-primary hover:underline"
-                        >
-                          @{clean}
-                        </a>
-                      </td>
-                      <td className="px-3 py-2 text-foreground">{inf.name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-foreground">{compactFollowers(inf.followers)}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{inf.origin}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{inf.notes ?? "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {influencers.map((inf) => (
+              <InfluencerCard key={inf.id} inf={inf} />
+            ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No influencer collaborations recorded for this period yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {canEdit
+              ? "No collaborations yet — add one above."
+              : "No influencer collaborations recorded for this period yet."}
+          </p>
         )}
       </SectionCard>
     </div>

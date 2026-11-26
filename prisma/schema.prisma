@@ -896,10 +896,15 @@ model InfluencerCollab {
   followers Int
   origin    String
   notes     String?
+  /// Screenshot of the collaboration post (stored on local disk via lib/storage).
+  imageUrl  String?
+  imageKey  String?
+  sortOrder Int     @default(0)
 
   period ReportPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
 
   @@unique([periodId, handle])
+  @@index([periodId])
   @@map("influencer_collabs")
 }
 

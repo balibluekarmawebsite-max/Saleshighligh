@@ -2244,11 +2244,13 @@ export interface SocialUnitData {
 }
 
 export interface InfluencerRow {
+  id: string;
   handle: string;
   name: string;
   followers: number;
   origin: string;
   notes: string | null;
+  imageUrl: string | null;
 }
 
 export interface SocialPageData {
@@ -2486,8 +2488,16 @@ export async function getSocialPageData(
   });
 
   const influencers: InfluencerRow[] = [...current.influencerCollabs]
-    .sort((a, b) => b.followers - a.followers)
-    .map((c) => ({ handle: c.handle, name: c.name, followers: c.followers, origin: c.origin, notes: c.notes ?? null }));
+    .sort((a, b) => a.sortOrder - b.sortOrder || b.followers - a.followers)
+    .map((c) => ({
+      id: c.id,
+      handle: c.handle,
+      name: c.name,
+      followers: c.followers,
+      origin: c.origin,
+      notes: c.notes ?? null,
+      imageUrl: c.imageUrl ?? null,
+    }));
 
   return { ...base, hasData: true, units, influencers };
 }
