@@ -290,6 +290,43 @@ function doughnut(pptx: Pptx, slide: Slide, title: string, labels: string[], val
   });
 }
 
+/**
+ * Flow a long narrative into two side-by-side columns within a box. Paragraph
+ * blocks (separated by blank lines) are distributed between the columns balanced
+ * by length; a single-block text falls back to splitting on line breaks.
+ */
+function twoColumnText(slide: Slide, text: string, x: number, y: number, w: number, h: number, maxFont = 9) {
+  const gap = 0.35;
+  const colW = (w - gap) / 2;
+  const sep = /\n\s*\n/.test(text) ? "\n\n" : "\n";
+  const blocks = text.split(sep === "\n\n" ? /\n\s*\n/ : /\n/).map((b) => b.replace(/\s+$/, "")).filter((b) => b.trim());
+  // Pick the split point that most evenly balances the two columns by weight
+  // (block length + a per-block constant for its heading/spacing cost), so one
+  // column never overflows while the other sits half-empty.
+  const weights = blocks.map((b) => b.length + 24);
+  const totalW = weights.reduce((s, n) => s + n, 0);
+  let leftW = 0;
+  let split = blocks.length;
+  let bestDiff = Infinity;
+  for (let i = 1; i < blocks.length; i += 1) {
+    leftW += weights[i - 1]!;
+    const diff = Math.abs(leftW - (totalW - leftW));
+    if (diff < bestDiff) { bestDiff = diff; split = i; }
+  }
+  const left = blocks.slice(0, split).join(sep);
+  const right = blocks.slice(split).join(sep);
+  // Auto-fit: shrink the font so the taller column's lines fit the box height,
+  // counting an extra wrapped line for any that overruns a column's width.
+  const CPL = Math.max(10, Math.floor(colW / 0.062)); // ~chars per line at ~9pt
+  const linesOf = (s: string) => s.split("\n").reduce((n, ln) => n + Math.max(1, Math.ceil(ln.length / CPL)), 0);
+  const colLines = Math.max(linesOf(left), linesOf(right), 1);
+  let font = Math.min(maxFont, (h / colLines) * 72 / 1.16);
+  font = Math.max(7, Math.floor(font * 2) / 2); // round down to 0.5, floor 7pt
+  const opts = { fontFace: FONT, fontSize: font, color: INK, align: "left" as const, valign: "top" as const, lineSpacingMultiple: 1.06 };
+  slide.addText(left, { x, y, w: colW, h, ...opts });
+  if (right.trim()) slide.addText(right, { x: x + colW + gap, y, w: colW, h, ...opts });
+}
+
 /** Read a stored upload (by its /uploads/<key> URL) as a base64 data URI for
  *  embedding. Returns null when the URL isn't a local upload or the file is gone. */
 function imageData(imageUrl: string | null | undefined): string | null {
@@ -958,17 +995,27 @@ async function marketSection(pptx: Pptx, code: string, period: string) {
   }
   narr("Market Area — Summary", d.marketAreaNarrative?.content);
 
-  // Booking Window — advance-booking lead-time, property vs market.
+  // Booking Window — advance-booking lead-time, property vs market. The table
+  // and its summary share one slide: table on top, summary in two columns below.
   const bw = d.bookingWindow;
+  const bwNarr = d.bookingWindowNarrative?.content;
   if (bw && bw.buckets.length > 0) {
     any = true;
     const subParts = [bw.windowLabel, bw.dataAsOf ? `Data as of ${fmtDate(bw.dataAsOf)}` : null, `${num(bw.totalBookedRooms)} booked rooms`].filter(Boolean);
     const s = contentSlide(pptx, "Booking Window", subParts.join("  ·  ") || periodLabel(period));
-    const rows: Cell[][] = [[head("Lead time"), head("Property share", "right"), head("Market share", "right"), head("Property ADR", "right"), head("Market ADR", "right")]];
-    for (const b of bw.buckets) rows.push([td(b.bucket), td(sharePct(b.propertySharePct), "right"), td(sharePct(b.marketSharePct), "right"), td(money(b.propertyAdr), "right"), td(money(b.marketAdr), "right")]);
-    addTable(s, rows, 1.5);
+    const rows: Cell[][] = [[head("Lead time", "left", 8.5), head("Property share", "right", 8.5), head("Market share", "right", 8.5), head("Property ADR", "right", 8.5), head("Market ADR", "right", 8.5)]];
+    for (const b of bw.buckets) rows.push([td(b.bucket, "left", INK, 8.5), td(sharePct(b.propertySharePct), "right", INK, 8.5), td(sharePct(b.marketSharePct), "right", INK, 8.5), td(money(b.propertyAdr), "right", INK, 8.5), td(money(b.marketAdr), "right", INK, 8.5)]);
+    addTable(s, rows, 1.4, undefined, 8.5);
+    if (bwNarr && bwNarr.trim()) {
+      const yTop = 1.4 + rows.length * 0.245 + 0.14;
+      s.addText("Summary", { x: MX, y: yTop, w: CONTENT_W, h: 0.24, fontFace: FONT, fontSize: 10, bold: true, color: TEAL });
+      const textY = yTop + 0.3;
+      twoColumnText(s, bwNarr, MX, textY, CONTENT_W, 6.82 - textY, 9);
+      anyNarr = true;
+    }
+  } else {
+    narr("Booking Window — Summary", bwNarr);
   }
-  narr("Booking Window — Summary", d.bookingWindowNarrative?.content);
 
   // Booking.com Overview — search → page → booking funnel vs market + availability trend.
   const bo = d.bookingOverview;
