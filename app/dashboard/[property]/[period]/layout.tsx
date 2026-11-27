@@ -30,7 +30,7 @@ export default async function DashboardLayout({
       period={params.period}
       userEmail={me?.email ?? null}
       header={
-        <Suspense fallback={<div className="h-16 border-b border-border bg-white" />}>
+        <Suspense fallback={<div className="glass-bar h-16 border-b border-glass-border" />}>
           <ContextBar
             properties={shell.properties}
             periodsByProperty={shell.periodsByProperty}

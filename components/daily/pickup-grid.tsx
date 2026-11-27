@@ -24,11 +24,11 @@ export function PickupGrid({ report }: { report: PickupReport }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <div className="overflow-x-auto rounded-xl border border-glass-border">
       <table className="w-full border-collapse text-right text-sm">
         <thead>
-          <tr className="bg-brand-teal text-white">
-            <th className="sticky left-0 z-10 bg-brand-teal px-3 py-2 text-left font-semibold">Date</th>
+          <tr className="bg-[var(--glass-strong)] text-foreground backdrop-blur">
+            <th className="sticky left-0 z-10 bg-[var(--glass-strong)] px-3 py-2 text-left font-semibold">Date</th>
             {columns.map((c) => (
               <th key={c.key} className="px-3 py-2 font-semibold">{c.label}</th>
             ))}
@@ -36,7 +36,7 @@ export function PickupGrid({ report }: { report: PickupReport }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.snapshotDate} className="border-b border-border/60 hover:bg-muted/40">
+            <tr key={r.snapshotDate} className="border-b border-hairline transition-colors hover:bg-[var(--accent-tint)]">
               <td className="sticky left-0 z-10 bg-card px-3 py-1.5 text-left font-medium text-muted-foreground">
                 {r.day}
               </td>

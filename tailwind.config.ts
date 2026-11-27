@@ -54,6 +54,13 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Glass surfaces (full-value tokens in globals.css)
+        glass: {
+          DEFAULT: "var(--glass-bg)",
+          strong: "var(--glass-strong)",
+          border: "var(--glass-border)",
+        },
+        hairline: "var(--hairline)",
         // Blue Karma brand palette (fixed hex, use for charts and accents)
         brand: {
           teal: "#0F4C5C",
@@ -63,16 +70,26 @@ const config: Config = {
           "gold-light": "#DDBE5A",
           "gold-dark": "#9E7F1B",
         },
-        // Semantic variance colors (negative red / positive green)
+        // Semantic variance colors — soft, theme-aware (tokens in globals.css)
         variance: {
-          positive: "#15803D",
-          negative: "#B91C1C",
+          positive: "hsl(var(--pos))",
+          negative: "hsl(var(--neg))",
         },
       },
       borderRadius: {
+        card: "var(--radius-card)",
+        xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        glass: "var(--shadow-glass)",
+        soft: "var(--shadow-soft)",
+        lift: "var(--shadow-lift)",
+      },
+      backdropBlur: {
+        glass: "var(--glass-blur)",
       },
       keyframes: {
         "accordion-down": {

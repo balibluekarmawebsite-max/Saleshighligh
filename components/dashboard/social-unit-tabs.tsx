@@ -108,15 +108,15 @@ export function SocialUnitTabs({ units }: { units: SocialUnitData[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex w-fit gap-1 rounded-lg border border-border p-1">
+      <div className="seg w-fit">
         {units.map((u) => (
           <button
             key={u.unit}
             type="button"
             onClick={() => setActive(u.unit)}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              active === u.unit ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              "seg-item px-3 py-1.5 text-sm",
+              active === u.unit ? "seg-item-active" : "",
             )}
           >
             {UNIT_LABEL[u.unit] ?? u.unit}

@@ -3,82 +3,118 @@
 @tailwind utilities;
 
 /*
- * BK Sales Dashboard design system.
+ * BK Sales Dashboard — soft glassmorphism design system.
  *
- * Palette: white background, deep teal (#0F4C5C) primary, gold (#C9A227) accent.
- * Tokens follow the shadcn/ui convention (HSL channels, no hsl() wrapper) so the
- * Tailwind `bg-primary`, `text-muted-foreground`, etc. utilities resolve here.
+ * A calm, luxury-hospitality look: frosted translucent panels on a quiet warm-
+ * neutral ground with two faint brand-tinted blobs. Deep teal (#0F4C5C) is the
+ * single accent; gold (#C9A227) marks active rails. Variance colours are soft.
+ *
+ * shadcn/ui HSL channel tokens still drive bg-primary / text-muted-foreground /
+ * etc.; the glass look is layered on with full-value tokens (--glass-*, shadows,
+ * radii) and the .glass-panel / .glass-bar / .seg-* utilities below.
  */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 200 18% 14%;
+    --background: 213 24% 96%; /* warm neutral base */
+    --foreground: 196 26% 14%;
 
     --card: 0 0% 100%;
-    --card-foreground: 200 18% 14%;
+    --card-foreground: 196 26% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 200 18% 14%;
+    --popover-foreground: 196 26% 14%;
 
     /* Deep teal #0F4C5C */
     --primary: 193 72% 21%;
     --primary-foreground: 0 0% 100%;
 
-    /* Soft teal tint used for subtle surfaces */
-    --secondary: 193 30% 96%;
+    --secondary: 196 30% 95%;
     --secondary-foreground: 193 72% 21%;
 
-    --muted: 210 20% 96%;
-    --muted-foreground: 215 14% 45%;
+    --muted: 210 24% 94%;
+    --muted-foreground: 205 12% 42%;
 
-    /* Light teal for hover / active surfaces */
-    --accent: 193 42% 94%;
+    --accent: 193 40% 93%;
     --accent-foreground: 193 72% 21%;
 
-    --destructive: 0 72% 45%;
+    --destructive: 0 62% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 210 20% 90%;
-    --input: 210 20% 90%;
-    --ring: 193 72% 21%;
+    --border: 210 22% 88%;
+    --input: 210 22% 86%;
+    --ring: 193 60% 30%;
 
-    /* Gold #C9A227 — exposed for accent details (indicators, logo mark). */
+    /* Gold #C9A227 — exposed for accent details (active rail, logo mark). */
     --brand-gold: 46 67% 47%;
 
-    --radius: 0.5rem;
+    /* Soft variance colours (theme-aware) */
+    --pos: 150 38% 40%;
+    --neg: 5 48% 53%;
+
+    --radius: 0.75rem; /* inner radius ≈ 12px */
+
+    /* ── Glass tokens (full values) ── */
+    --glass-bg: rgba(255, 255, 255, 0.64);
+    --glass-strong: rgba(255, 255, 255, 0.78);
+    --glass-border: rgba(255, 255, 255, 0.55);
+    --glass-blur: 18px;
+    --hairline: rgba(17, 24, 39, 0.08);
+    --shadow-glass: 0 8px 32px rgba(17, 24, 39, 0.06);
+    --shadow-soft: 0 2px 12px rgba(17, 24, 39, 0.05);
+    --shadow-lift: 0 10px 28px rgba(15, 76, 92, 0.14);
+    --radius-card: 18px;
+    --accent-tint: rgba(15, 76, 92, 0.06);
+    --accent-soft: rgba(15, 76, 92, 0.1);
+    --blob-teal: rgba(15, 76, 92, 0.12);
+    --blob-sand: rgba(201, 162, 39, 0.1);
   }
 
   .dark {
-    --background: 200 30% 8%;
-    --foreground: 0 0% 98%;
+    --background: 196 28% 7%;
+    --foreground: 200 10% 92%;
 
-    --card: 200 28% 11%;
-    --card-foreground: 0 0% 98%;
+    --card: 198 22% 12%;
+    --card-foreground: 200 10% 92%;
 
-    --popover: 200 28% 11%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 198 22% 12%;
+    --popover-foreground: 200 10% 92%;
 
-    --primary: 193 55% 55%;
-    --primary-foreground: 200 30% 8%;
+    --primary: 191 46% 59%;
+    --primary-foreground: 198 40% 8%;
 
-    --secondary: 200 20% 18%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 198 18% 18%;
+    --secondary-foreground: 200 10% 92%;
 
-    --muted: 200 20% 18%;
-    --muted-foreground: 210 12% 65%;
+    --muted: 198 16% 18%;
+    --muted-foreground: 205 10% 62%;
 
-    --accent: 200 22% 20%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 193 30% 22%;
+    --accent-foreground: 200 10% 92%;
 
-    --destructive: 0 62% 50%;
+    --destructive: 0 55% 55%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 200 18% 22%;
-    --input: 200 18% 22%;
-    --ring: 193 55% 55%;
+    --border: 200 14% 24%;
+    --input: 200 14% 24%;
+    --ring: 191 46% 59%;
 
-    --brand-gold: 46 67% 55%;
+    --brand-gold: 46 62% 58%;
+
+    --pos: 142 40% 59%;
+    --neg: 6 62% 70%;
+
+    --glass-bg: rgba(23, 31, 35, 0.6);
+    --glass-strong: rgba(27, 36, 40, 0.74);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --hairline: rgba(255, 255, 255, 0.09);
+    --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.38);
+    --shadow-soft: 0 2px 12px rgba(0, 0, 0, 0.3);
+    --shadow-lift: 0 10px 28px rgba(0, 0, 0, 0.45);
+    --accent-tint: rgba(95, 183, 204, 0.09);
+    --accent-soft: rgba(95, 183, 204, 0.16);
+    --blob-teal: rgba(31, 122, 142, 0.2);
+    --blob-sand: rgba(201, 162, 39, 0.12);
   }
 }
 
@@ -88,8 +124,59 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    /* Quiet layered ground: two faint brand blobs over a warm-neutral gradient. */
+    background-image:
+      radial-gradient(1100px 680px at 82% -8%, var(--blob-teal), transparent 60%),
+      radial-gradient(900px 640px at -6% 108%, var(--blob-sand), transparent 58%);
+    background-attachment: fixed;
     font-feature-settings:
       "rlig" 1,
       "calt" 1;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* A frosted translucent panel — cards, sidebars, section containers. */
+  .glass-panel {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-glass);
+  }
+  /* A stronger frosted surface for the rail and sticky bars. */
+  .glass-bar {
+    background: var(--glass-strong);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+  }
+
+  /* Soft segmented glass control (MTD/YTD, Draft, tabs). */
+  .seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--accent-tint);
+    border: 1px solid var(--glass-border);
+  }
+  .seg-item {
+    border-radius: 999px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    transition:
+      background 0.16s ease,
+      color 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .seg-item:hover {
+    color: hsl(var(--foreground));
+  }
+  .seg-item-active {
+    background: var(--glass-strong);
+    color: hsl(var(--primary));
+    box-shadow: var(--shadow-soft);
   }
 }

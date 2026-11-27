@@ -56,7 +56,7 @@ export function ContextBar({
   ];
 
   return (
-    <header className="flex min-h-16 flex-col gap-3 border-b border-border bg-white px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+    <header className="glass-bar flex min-h-16 flex-col gap-3 border-b border-glass-border px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex items-center gap-2">
         <h1 className="text-base font-semibold text-foreground">
           {sectionTitle(rel)}
@@ -65,7 +65,7 @@ export function ContextBar({
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Property switcher */}
-        <div className="inline-flex items-center gap-1 rounded-md border border-border bg-card p-1">
+        <div className="seg items-center">
           <Building2 className="mx-1 h-4 w-4 text-muted-foreground" aria-hidden />
           {switcher.map((p) => {
             const targetPeriod =
@@ -80,10 +80,8 @@ export function ContextBar({
                 href={href}
                 aria-current={p.code === property ? "page" : undefined}
                 className={cn(
-                  "rounded px-2.5 py-1 text-sm font-medium transition-colors",
-                  p.code === property
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground",
+                  "seg-item px-2.5 py-1 text-sm",
+                  p.code === property ? "seg-item-active" : "",
                 )}
               >
                 {p.label}
@@ -97,7 +95,7 @@ export function ContextBar({
           <select
             value={period}
             onChange={(e) => router.push(build(property, e.target.value))}
-            className="h-9 appearance-none rounded-md border border-border bg-card pl-3 pr-8 text-sm text-foreground"
+            className="h-9 appearance-none rounded-full border border-glass-border bg-glass-strong pl-3 pr-8 text-sm text-foreground shadow-soft backdrop-blur"
             aria-label="Report month"
           >
             {periods.length === 0 && <option value={period}>{monthLabel(period)}</option>}
@@ -110,23 +108,21 @@ export function ContextBar({
           <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-muted-foreground" />
         </div>
         {currentStatus && (
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+          <span className="rounded-full border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/10 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--brand-gold))]">
             {currentStatus === "FINAL" ? "Final" : "Draft"}
           </span>
         )}
 
         {/* MTD / YTD toggle */}
-        <div className="inline-flex rounded-md border border-border bg-card p-1">
+        <div className="seg">
           {(["MTD", "YTD"] as const).map((s) => (
             <Link
               key={s}
               href={build(property, period, s)}
               aria-current={scope === s ? "page" : undefined}
               className={cn(
-                "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                scope === s
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                "seg-item px-2.5 py-1 text-xs",
+                scope === s ? "seg-item-active" : "",
               )}
             >
               {s}

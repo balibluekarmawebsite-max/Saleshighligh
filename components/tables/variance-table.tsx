@@ -86,8 +86,10 @@ export function VarianceTable({
       <tr
         key={row.label}
         className={cn(
-          "border-b border-border/60",
-          isTotal && "border-t-2 border-border font-semibold",
+          "border-b border-hairline transition-colors",
+          isTotal
+            ? "border-t-2 border-border font-semibold"
+            : "hover:bg-[var(--accent-tint)]",
         )}
       >
         <td className="py-2 pr-4 text-foreground">{row.label}</td>
@@ -114,8 +116,8 @@ export function VarianceTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <th className="py-2 pr-4 font-medium">{firstColumnHeader}</th>
+          <tr className="border-b border-glass-border bg-[var(--accent-tint)] text-left text-xs uppercase tracking-wide text-muted-foreground [&>th:first-child]:rounded-l-lg [&>th:last-child]:rounded-r-lg">
+            <th className="py-2 pl-3 pr-4 font-medium">{firstColumnHeader}</th>
             <th className="py-2 pr-4 text-right font-medium">Actual</th>
             <th className="py-2 pr-4 text-right font-medium">Budget</th>
             {showLastYear && (

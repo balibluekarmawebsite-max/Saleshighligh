@@ -40,7 +40,7 @@ export function WeeklyContextBar({
   const currentStatus = weeks.find((w) => w.week === week)?.status;
 
   return (
-    <header className="flex min-h-16 flex-col gap-3 border-b border-border bg-white px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+    <header className="glass-bar flex min-h-16 flex-col gap-3 border-b border-glass-border px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex items-center gap-2">
         <h1 className="text-base font-semibold text-foreground">
           {weeklySectionTitle(rel)}
@@ -49,7 +49,7 @@ export function WeeklyContextBar({
 
       <div className="flex flex-wrap items-center gap-2">
         {/* Property switcher */}
-        <div className="inline-flex items-center gap-1 rounded-md border border-border bg-card p-1">
+        <div className="seg items-center">
           <Building2 className="mx-1 h-4 w-4 text-muted-foreground" aria-hidden />
           {properties.map((p) => (
             <Link
@@ -57,10 +57,8 @@ export function WeeklyContextBar({
               href={weeklyHref(p.code, week, rel)}
               aria-current={p.code === property ? "page" : undefined}
               className={cn(
-                "rounded px-2.5 py-1 text-sm font-medium transition-colors",
-                p.code === property
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                "seg-item px-2.5 py-1 text-sm",
+                p.code === property ? "seg-item-active" : "",
               )}
             >
               {p.code}
@@ -77,7 +75,7 @@ export function WeeklyContextBar({
           <select
             value={week}
             onChange={(e) => router.push(weeklyHref(property, e.target.value, rel))}
-            className="h-9 appearance-none rounded-md border border-border bg-card pl-8 pr-8 text-sm text-foreground"
+            className="h-9 appearance-none rounded-full border border-glass-border bg-glass-strong pl-8 pr-8 text-sm text-foreground shadow-soft backdrop-blur"
             aria-label="Report week"
           >
             {options.map((w) => (
@@ -93,7 +91,7 @@ export function WeeklyContextBar({
         </div>
 
         {currentStatus && (
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium capitalize text-secondary-foreground">
+          <span className="rounded-full border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/10 px-2.5 py-0.5 text-xs font-semibold capitalize text-[hsl(var(--brand-gold))]">
             {currentStatus.replace(/_/g, " ").toLowerCase()}
           </span>
         )}

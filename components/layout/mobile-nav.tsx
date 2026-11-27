@@ -43,7 +43,7 @@ export function MobileNav({
         : dashHref(property, period, relPath);
 
   return (
-    <nav className="flex gap-2 overflow-x-auto border-b border-border bg-white px-4 py-2 lg:hidden">
+    <nav className="glass-bar flex gap-2 overflow-x-auto border-b border-glass-border px-4 py-2 lg:hidden">
       {navItems.map((item) => {
         const active =
           rel !== null &&
@@ -60,8 +60,8 @@ export function MobileNav({
             className={cn(
               "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               active
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border text-muted-foreground",
+                ? "border-glass-border bg-accent text-accent-foreground shadow-soft"
+                : "border-glass-border text-muted-foreground hover:text-foreground",
             )}
           >
             {item.label}
