@@ -108,7 +108,7 @@ export function ContextBar({
           <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-muted-foreground" />
         </div>
         {currentStatus && (
-          <span className="rounded-full border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/10 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--brand-gold))]">
+          <span className="rounded-full border border-[hsl(var(--brand-gold))]/40 bg-[hsl(var(--brand-gold))]/10 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--gold-ink))]">
             {currentStatus === "FINAL" ? "Final" : "Draft"}
           </span>
         )}

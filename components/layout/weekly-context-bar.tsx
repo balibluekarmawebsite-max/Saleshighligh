@@ -91,7 +91,7 @@ export function WeeklyContextBar({
         </div>
 
         {currentStatus && (
-          <span className="rounded-full border border-[hsl(var(--brand-gold))]/30 bg-[hsl(var(--brand-gold))]/10 px-2.5 py-0.5 text-xs font-semibold capitalize text-[hsl(var(--brand-gold))]">
+          <span className="rounded-full border border-[hsl(var(--brand-gold))]/40 bg-[hsl(var(--brand-gold))]/10 px-2.5 py-0.5 text-xs font-semibold capitalize text-[hsl(var(--gold-ink))]">
             {currentStatus.replace(/_/g, " ").toLowerCase()}
           </span>
         )}

@@ -48,9 +48,11 @@
     /* Gold #C9A227 — exposed for accent details (active rail, logo mark). */
     --brand-gold: 46 67% 47%;
 
-    /* Soft variance colours (theme-aware) */
-    --pos: 150 38% 40%;
-    --neg: 5 48% 53%;
+    /* Soft variance colours (theme-aware; light values clear WCAG AA on glass) */
+    --pos: 150 42% 33%;
+    --neg: 4 56% 44%;
+    /* Readable amber for the Draft/Final badge text (gold hue, AA on the tint) */
+    --gold-ink: 40 60% 29%;
 
     --radius: 0.75rem; /* inner radius ≈ 12px */
 
@@ -103,6 +105,7 @@
 
     --pos: 142 40% 59%;
     --neg: 6 62% 70%;
+    --gold-ink: 46 60% 72%;
 
     --glass-bg: rgba(23, 31, 35, 0.6);
     --glass-strong: rgba(27, 36, 40, 0.74);
