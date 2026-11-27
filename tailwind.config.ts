@@ -70,10 +70,12 @@ const config: Config = {
           "gold-light": "#DDBE5A",
           "gold-dark": "#9E7F1B",
         },
-        // Semantic variance colors — soft, theme-aware (tokens in globals.css)
+        // Semantic variance colors — soft, theme-aware (tokens in globals.css).
+        // The <alpha-value> placeholder lets Tailwind inject opacity modifiers
+        // (e.g. bg-variance-positive/10) instead of ignoring them.
         variance: {
-          positive: "hsl(var(--pos))",
-          negative: "hsl(var(--neg))",
+          positive: "hsl(var(--pos) / <alpha-value>)",
+          negative: "hsl(var(--neg) / <alpha-value>)",
         },
       },
       borderRadius: {
